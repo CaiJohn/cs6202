@@ -1,0 +1,169 @@
+.. -*- mode: rst -*-
+
+.. index::
+   single: emacs
+
+.. _sec-emacs:
+
+GNU Emacs
+=========
+
+.. seealso::
+
+   `GNU Emacs <http://www.gnu.org/software/emacs/>`_
+     The official webpage for GNU Emacs.
+
+   `Getting started with GNU Emacs <http://zerny.dk/emacs/getting-started-with-emacs.html>`_
+     A brief history and introduction to Emacs used in past dProgSprog
+     courses.
+
+   `A tour of Emacs <http://www.gnu.org/software/emacs/tour/>`_
+     A more detailed tour covering most of the same.
+
+
+Installation
+------------
+
+The following sections briefly describe where and how to install Emacs
+on the most common systems. We recommend you install Emacs version 24.
+If your system is not listed here you might find help on installing
+Emacs in the official `Emacs documentation`__ or that of your host
+system.
+
+.. __: http://www.gnu.org/software/emacs/manual/html_node/emacs/index.html
+
+
+Windows
+^^^^^^^
+
+Windows users can use the `official windows binary`__.  Download the
+zip-file and unpack it to your desired install location. No further
+installation should be necessary. More information on installation and
+setup can be found in the `README`__ file.
+
+Try it out: Run ``bin/emacs.exe`` from the emacs installation
+folder. Emacs should open. Press :kbd:`Control + x`, :kbd:`Control +
+c` and answer `y` to close it again.
+To install Emacs shortcuts in your menu run ``bin/addpm.exe``.
+
+.. removing alternative, since it behaved odd on some machines
+   Alternatively you can use a specially packaged EmacsW32__
+   distribution.
+
+.. __: http://ftp.gnu.org/pub/gnu/emacs/windows/
+.. __: http://ftp.gnu.org/pub/gnu/emacs/windows/README
+.. .. __: http://ourcomments.org/Emacs/EmacsW32.html
+
+
+
+Max OS X
+^^^^^^^^
+
+OS X users can find a "vanilla" `Emacs for OS X`__ which we recommend
+using. Alternatively `Carbon Emacs`__ and `Aquamacs`__ are variants of Emacs
+customized specifically for OS X.
+
+.. __: http://emacsformacosx.com/
+.. __: http://homepage.mac.com/zenitani/emacs-e.html
+.. __: http://aquamacs.org/
+
+
+Linux etc.
+^^^^^^^^^^
+
+\*nix users should use the package manager of their host system.
+
+* Ubuntu and Debian based systems: ``sudo apt-get install emacs``
+* RedHat and Suse based systems: ``sudo yum install emacs``
+* etc...
+
+
+
+Setup
+^^^^^
+
+After installing Emacs, you should configure it by adding the
+following to `.emacs` which is your user configuration file for
+Emacs.
+
+* Open `~/.emacs` by pressing :kbd:`Control + x` and then
+  :kbd:`Control + f`.
+
+* Now type in exactly ``~/.emacs`` and hit return.
+
+This will open up your `.emacs` file which is most likely empty. Paste
+the following code into the buffer by pressing :kbd:`Control + y`::
+
+  (setq inhibit-startup-message t)  ; dont show the GNU splash screen
+  (transient-mark-mode t)           ; show selection from mark
+  (setq visible-bell 1)             ; turn off bip warnings
+  (show-paren-mode t)               ; turn on highlight paren mode
+  (fset 'yes-or-no-p 'y-or-n-p)     ; use y and n for questions
+  (global-font-lock-mode t)         ; enable syntax highlighting
+  (iswitchb-mode 1)                 ; better buffer switching
+
+Now save the file by pressing :kbd:`Control + x` and then
+:kbd:`Control + s`.  From now on we will refer to the above sequence
+as :kbd:`C-x C-s`, or in short :kbd:`C-x-s`.
+
+
+
+Scheme Mode for Emacs
+---------------------
+
+Emacs ships with an editing mode for Scheme files. If your Emacs is
+older then version 22 we recommend you upgrade it. (You can get the
+version with :kbd:`M-x version RET`, ie, :kbd:`Alt + x`, type version
+and hit return).
+
+
+Setup
+^^^^^
+
+The following assumes that you have installed Scheme as described in
+:ref:`sec-petite`.
+
+Save the `scheme-setup.el <_static/scheme-setup.el>`_ file to your
+system and copy-paste the following into your ``~/.emacs`` file::
+
+  (setq scheme-program-name "petite")
+  (load-file                "C:/path/to/scheme-setup.el")
+
+The ``/path/to/`` should be updated to the actual location of the
+petite executable and the scheme-setup.el file and it should use
+forward slashes ``/`` to separate directories.
+
+After setup you should restart Emacs for the changes to take
+effect. (Or if you would rather not restart, run: :kbd:`M-x load-file
+RET ~/.emacs RET`.)
+
+Usage
+^^^^^
+
+To start Scheme inside Emacs run: :kbd:`M-x run-scheme RET`
+[#meta]_. This should open a new window with a running Scheme
+interpreter::
+
+  Petite Chez Scheme Version 8.4
+  Copyright (c) 1985-2011 Cadence Research Systems
+  
+  > 
+
+If you do not see the banner and the prompt above, there is an error
+in your installation.
+
+The Schemed mode defines several useful features for programming
+Scheme.  Here is a quick listing:
+
+* :kbd:`C-c C-b` --- send entire buffer to the Scheme interpreter
+* :kbd:`C-c d`   --- send preceding definition to the Scheme interpreter
+* :kbd:`C-M-f`   --- move forward one S-expression
+* :kbd:`C-M-b`   --- move backward one S-expression
+* :kbd:`C-M-k`   --- kill the next S-expression (:kbd:`C-y` to yank it)
+* :kbd:`C-M-t`   --- transpose the next S-expression with the previous one
+
+More can be found through the help system with :kbd:`C-h m`.
+
+
+.. [#meta] ``M`` refers the *Alt*-key and is pronounced *meta*.
+           ``RET`` refers to the enter or return key.

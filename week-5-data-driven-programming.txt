@@ -1,0 +1,683 @@
+.. -*- mode: rst -*-
+
+Note for Week 5 about data-driven programming
+=============================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+None.
+
+
+Optional exercises
+------------------
+
+.. epigraph::
+
+  | Well, daaah.
+
+  -- Alfrothul, Brynja, and Harald
+
+All of them.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-5-data-driven-programming.scm>`_
+  (latest version: 08 Sep 2015).
+
+
+Goal
+----
+
+The goal of this lecture note is to illustrate data-driven programming
+with a concrete example that is directly relevant for your forthcoming
+self-applicable syntax checker for Scheme.
+
+When a data structure is defined inductively, this data structure
+determines the control structure of a program that traverses it:
+this program is structurally recursive.  Let us illustrate this point
+one more time with lists,  by considering in turn:
+
+0. the grammar specifying the data,
+
+1. a unit-test procedure specifying a sample of input and expected output, and
+
+2. the procedure implementing the traversal,
+
+which we will then submit to the unit-test procedure.  Our running
+example is to check the well-formedness of
+
+* a proper list of numbers,
+
+* a proper list of distinct numbers, and
+
+* a list (possibly proper, possibly improper) of numbers,
+
+* a list (possibly proper, possibly improper) of distinct numbers.
+
+(Note: a similar well-formedness check is required in your
+self-applicable syntax checker for formal parameters of
+lambda-abstractions.)
+
+
+Verifying whether a Scheme value is a proper list of numbers
+------------------------------------------------------------
+
+.. epigraph::
+
+   | An onion by any other name...
+
+Here is a BNF for proper lists of numbers.  A proper list of numbers
+is either the empty list or it is the result of consing a number to
+another proper list of numbers:
+
+.. bnf:: 
+   :noindex:
+   :namespace: proper-list-of-numbers
+
+   <proper-list-of-numbers> ::= () | (<number> . <proper-list-of-numbers>)
+
+   <number>  ::= ...any Scheme number...
+
+
+.. epigraph::
+
+   | Seriously?
+
+   -- Harald the Bold (harumphing)
+
+Therefore, a procedure implementing a predicate checking whether its
+argument is a proper list of numbers should return ``#t`` when applied
+to a proper list of numbers and ``#f`` when applied to another Scheme
+value.  Here is a sample of such possible input, together with the
+expected result:
+
+.. code-block:: scheme
+
+  (define test-proper-list-of-numbers?
+    (lambda (candidate)
+      (and ;;; proper lists of numbers:
+           (equal? (candidate '())
+                   #t)
+           (equal? (candidate '(1))
+                   #t)
+           (equal? (candidate '(1 2))
+                   #t)
+           (equal? (candidate '(1 1 1))
+                   #t)
+           ;;; any other Scheme value:
+           (equal? (candidate 'DAIMI)
+                   #f)
+           (equal? (candidate 42)
+                   #f)
+           (equal? (candidate '(1 "2" 3 4))
+                   #f)
+           (equal? (candidate '(1 2 3 . 4))
+                   #f)
+           ;;;
+           )))
+  
+As for the procedure, its control structure is determined by the
+data structure of its input.  Here is its template:
+
+.. code-block:: scheme
+
+  (define proper-list-of-numbers?
+    (lambda (v_init)
+      (letrec ([visit (lambda (v)
+                        (cond
+                          [(null? v)
+                           ...]
+                          [(pair? v)
+                           ... (car v) ... (visit (cdr v))...]
+                          [else
+                           ...]))])
+        (visit v_init))))
+
+Each conditional clause corresponds to the possible structure of a
+proper list: the empty list, a pair (and therefore something involving
+its car and its cdr), and something else.  Now we can fill the holes
+in this template:
+
+* The empty list is a proper list, and therefore the procedure should
+  yield ``#t`` in that case:
+
+  .. code-block:: scheme
+  
+    (define proper-list-of-numbers?
+      (lambda (v_init)
+        (letrec ([visit (lambda (v)
+                          (cond
+                            [(null? v)
+                             #t]        ;;; <---***---
+                            [(pair? v)
+                             ... (car v) ... (visit (cdr v))...]
+                            [else
+                             ...]))])
+          (visit v_init))))
+
+* Something that is not empty and not a pair is not a proper list, and
+  therefore the procedure should yield ``#f`` in that case:
+
+  .. code-block:: scheme
+  
+    (define proper-list-of-numbers?
+      (lambda (v_init)
+        (letrec ([visit (lambda (v)
+                          (cond
+                            [(null? v)
+                             #t]
+                            [(pair? v)
+                             ... (car v) ... (visit (cdr v))...]
+                            [else
+                             #f]))])    ;;; <---***---
+          (visit v_init))))
+
+* A pair is a proper list of numbers if its car is a number and if its
+  cdr is a proper list of numbers, and therefore the procedure should
+  return the conjunction of these two conditions:
+
+  .. code-block:: scheme
+  
+    (define proper-list-of-numbers?
+      (lambda (v_init)
+        (letrec ([visit (lambda (v)
+                          (cond
+                            [(null? v)
+                             #t]
+                            [(pair? v)
+                             (and (number? (car v))
+                                  (visit (cdr v)))]
+                            [else
+                             #f]))])
+          (visit v_init))))
+
+This procedure passes the unit test::
+
+  > (test-proper-list-of-numbers? proper-list-of-numbers?)
+  #t
+  > 
+
+
+Exercise 1
+----------
+
+.. epigraph::
+
+   | Thank you.
+
+   -- Harald the Bold
+
+Be nice to Harald the Bold and re-implement the unit test for
+``proper-list-of-numbers?`` `the way he did it two weeks ago
+<week-3-lists-and-defensive-programming.html#information-content-in-unit-tests>`_:
+
+.. code-block:: scheme
+
+  (define try-candidate
+    (lambda (candidate input expected-output name)
+      (or (equal? (candidate input)
+                  expected-output)
+          (errorf name "error for ~s" input))))
+  
+Verify that ``proper-list-of-numbers?`` still passes the unit test,
+and try the unit test on an incorrect procedure to put it to work, as
+Harald did last week.
+
+
+Verifying whether a Scheme value is a proper list of distinct numbers
+---------------------------------------------------------------------
+
+.. epigraph::
+
+   | Really?
+
+   -- Alfrothul the Resplendent
+
+Let us first adjust the unit-test procedure to feature proper lists of
+distinct numbers.  All these lists should be mapped to ``#t``, whereas
+any other Scheme value should be mapped to ``#f``: proper lists of
+numbers with a repeated number, proper lists containing something else
+than a number, improper lists, and values constructed with something
+else than ``cons``.  The classical (yes, really) unit-test procedure
+reads as follows:
+
+.. code-block:: scheme
+
+  (define test-proper-list-of-distinct-numbers?
+    (lambda (candidate)
+      (and ;;; proper lists of distinct numbers:
+           (equal? (candidate '())
+                   #t)
+           (equal? (candidate '(1))
+                   #t)
+           (equal? (candidate '(1 2))
+                   #t)
+           ;;; any other Scheme value:
+           (equal? (candidate '(1 1 1))
+                   #f)
+           (equal? (candidate 'DAIMI)
+                   #f)
+           (equal? (candidate 42)
+                   #f)
+           (equal? (candidate '(1 "2" 3 4))
+                   #f)
+           (equal? (candidate '(1 2 3 . 4))
+                   #f)
+           (equal? (candidate '(0 1 2 3 4 5 6 7 8 9 0))
+                   #f)
+           ;;;
+           )))
+
+To check whether a list contains distinct elements, we can test
+whether each of its successive cars occurs in the corresponding cdr.
+This test is conveniently achieved using the predefined procedure
+``member``:
+
+.. code-block:: scheme
+
+  (define proper-list-of-distinct-numbers?_v0
+    (lambda (v_init)
+      (letrec ([visit (lambda (v)
+                        (cond
+                          [(null? v)
+                           #t]
+                          [(pair? v)
+                           (and (number? (car v))
+                                (if (member (car v) (cdr v))
+                                    #f
+                                    (visit (cdr v))))]
+                          [else
+                           #f]))])
+        (visit v_init))))
+
+The resulting procedure, however, does not pass the unit test because
+``member`` expects a proper list as its second argument::
+
+  > (test-proper-list-of-distinct-numbers? proper-list-of-distinct-numbers?)
+  
+  Exception in member: improper list (2 3 . 4)
+  Type (debug) to enter the debugger.
+  > 
+
+.. epigraph::
+
+   | Here is a simpler alternative:
+   | just comment out the offending test in the unit-test procedure.
+   | After all, ``proper-list-of-distinct-numbers?``
+   | _is_ supposed to be applied to proper lists.
+   | And then it would pass the unit test, as is.
+
+   -- `Ve and Vili <http://en.wikipedia.org/wiki/Valhalla_(comics)#Album_titles_and_summaries>`_
+
+So we need to adjust something in the procedure: for example, we could
+equip ``visit`` with an accumulator holding the prefix of the list (in
+reverse order) so far, and check whether the current car occurs in
+this prefix instead of in the current cdr; alternatively we could
+modify ``member`` to operate on improper lists.  Let us consider these
+two adjustments in turn.
+
+* Here is the version with an accumulator.  The accumulator is
+  initialized with the empty list.  In the inductive case, if the car
+  of the list is a number, we check whether it occurs before in the
+  list, by applying ``member`` to this number and to the accumulator.
+  If the test is negative, then we recurse on the cdr, consing the car
+  to the accumulator.  All in all, given any ``v_init``, ``v``, and
+  ``a``, for any call ``(visit v a)``, the following invariant holds:
+  concatenating ``(reverse a)`` and ``v`` always yields ``v_init``.
+
+  Here is the procedure:
+
+  .. code-block:: scheme
+
+    (define proper-list-of-distinct-numbers?_v1
+      (lambda (v_init)
+        (letrec ([visit (lambda (v a)
+                          (cond
+                            [(null? v)
+                             #t]
+                            [(pair? v)
+                             (and (number? (car v))
+                                  (if (member (car v) a)
+                                      #f
+                                      (visit (cdr v) (cons (car v) a))))]
+                            [else
+                             #f]))])
+          (visit v_init '()))))
+
+  This procedure passes the unit test::
+
+    > (test-proper-list-of-distinct-numbers? proper-list-of-distinct-numbers?_v1)
+    #t
+    > 
+
+* Alternatively to allocating a prefix of the list, we can define a
+  new version of ``member`` to check whether a value occurs as one of
+  the successive cars of a (not necessarily proper) list, or as its
+  last cdr, if it is not a proper list.
+
+  .. epigraph::
+  
+     | Harumph.
+     | (Blame it on the weather in Skagen.)
+  
+     -- Alfrothul the Resplendent
+
+  Let us first set up a classical unit test, to account for all these cases:
+
+  .. code-block:: scheme
+
+    (define test-member?
+      (lambda (candidate)
+        (and ;;; an element occurs as a car or as the last cdr:
+             (equal? (candidate 1 '(0 1 2 3))
+                     #t)
+             (equal? (candidate 1 '(0 1 2 3 . 4))
+                     #t)
+             (equal? (candidate 4 '(0 1 2 3 . 4))
+                     #t)
+             (equal? (candidate 1 '(0 "42" 1))
+                     #t)
+             (equal? (candidate 1 '(0 "42" . 1))
+                     #t)
+             (equal? (candidate 1 1)
+                     #t)
+             ;;; an element does not occur as a car or as the last cdr:
+             (equal? (candidate 1 '())
+                     #f)
+             (equal? (candidate 4 '(0 1 2 3))
+                     #f)
+             (equal? (candidate 4 '(0 1 2 . 3))
+                     #f)
+             (equal? (candidate 1 2)
+                     #f)
+             ;;; corny corner cases:
+             (equal? (candidate '() '(1 () 3))
+                     #t)
+             (equal? (candidate '() '(1 3))
+                     #f)
+             ;;;
+             )))
+    
+  We can then define ``member?`` as a predicate testing whether a
+  value occurs as one of the successive cars of a (not necessarily
+  proper) list, or as its last cdr, if it is not a proper list:
+
+  .. code-block:: scheme
+
+    (define member?
+      (lambda (x xs_init)
+        (letrec ([visit (lambda (xs)
+                          (cond
+                            [(null? xs)
+                             #f] 
+                           [(pair? xs)
+                            (or (equal? x (car xs))
+                                (visit (cdr xs)))]
+                            [else
+                             (equal? x xs)]))])
+          (visit xs_init))))
+
+  This procedure passes the unit test::
+
+    > (test-member? member?)
+    #t
+    > 
+
+  Thus equipped, we can check whether a value is a proper list of
+  distinct numbers by testing whether any of its successive cars
+  occurs in the corresponding cdr.  This test is achieved using the
+  new procedure ``member?``:
+
+  .. code-block:: scheme
+  
+    (define proper-list-of-distinct-numbers?_v2
+      (lambda (v_init)
+        (letrec ([visit (lambda (v)
+                          (cond
+                            [(null? v)
+                             #t]
+                            [(pair? v)
+                             (and (number? (car v))
+                                  (if (member? (car v) (cdr v))
+                                      #f
+                                      (visit (cdr v))))]
+                            [else
+                             #f]))])
+          (visit v_init))))
+  
+  This procedure passes the unit test::
+  
+    > (test-proper-list-of-distinct-numbers? proper-list-of-distinct-numbers?)
+    #t
+    > 
+
+
+Exercise 2
+----------
+
+.. epigraph::
+
+   | Thank you.
+
+   -- Alfrothul the Resplendent
+
+Be nice to Alfrothul the Resplendent and re-implement the unit tests
+for ``proper-list-of-distinct-numbers?`` and for ``member?`` in `the
+manner he is doing this week
+<week-5-sequencing.html#resilience-in-unit-tests>`_:
+
+.. code-block:: scheme
+
+  (define try-candidate-transparently
+    (lambda (candidate input expected-output name)
+      (or (equal? (candidate input)
+                  expected-output)
+          (begin
+            (printf "~s: error for ~s~n" name input)
+            #f))))
+  
+  (define and-all
+    (lambda bs_init
+      (letrec ([visit (lambda (bs)
+                        (or (null? bs)
+                            (and (car bs)
+                                 (visit (cdr bs)))))])
+        (visit bs_init))))
+
+Verify that both versions of ``proper-list-of-distinct-numbers?``
+still pass the unit test, and try the unit tests on incorrect
+procedures to put them to work, as Alfrothul did last week.
+
+
+Exercise 3
+----------
+
+Sigtryg the Square, from a Viking tribe of Central Jutland, is
+intrigued by the corner cases in the unit test for ``member?``.  If
+``(member? '() '(1 () 3))`` evaluates to ``#t``, shouldn't ``(member?
+'() '(1 3))`` also evaluate to ``#t``, since ``()`` occurs as the last
+cdr of ``(1 3)``?
+
+* Modify the definition of ``member?`` so that it tests whether its
+  first argument occurs as one of the successive cars *or as one of
+  the successive cdrs* of its second argument.
+
+* Verify that with your new definition of ``member?``, ``(member? '()
+  '(1 3))`` now evaluates to ``#t``.
+
+* Estimate whether ``(member? '(1 2 3) '(0 1 2 3))`` should evaluate
+  to ``#t`` or to ``#f``, and check how your implementation behaves.
+
+* Conclude with Sigtryg on the design value of overloading termination
+  markers for lists (namely the empty list) with elements in these
+  lists.
+
+
+Verifying whether a Scheme value is a list of numbers
+-----------------------------------------------------
+
+Here is a BNF for lists of numbers, possibly improper.  A list of
+numbers is either the empty list, a number, or it is the result of
+consing a number to another list of numbers:
+
+.. bnf:: 
+   :noindex:
+   :namespace: list-of-numbers
+
+   <list-of-numbers> ::= () | <number> | (<number> . <list-of-numbers>)
+
+   <number>  ::= ...any Scheme number...
+
+
+.. epigraph::
+
+   | Good job!
+
+   -- Loki
+
+Since the BNF for lists of numbers is a superset of the BNF for proper
+lists of numbers, all we need to do is to add two well-formed cases --
+one for an "empty" improper list of numbers, and one for a non-empty
+improper list of numbers -- and two ill-formed cases -- one for an
+ill-formed "empty" improper list of numbers, and one for an ill-formed
+non-empty improper list of numbers:
+
+.. code-block:: scheme
+
+  (define test-list-of-numbers?
+    (lambda (candidate)
+      (and-all
+       ;;; lists of numbers:
+       (try-candidate-transparently candidate '() #t 'list-of-numbers?)
+       (try-candidate-transparently candidate '(1) #t 'list-of-numbers?)
+       (try-candidate-transparently candidate '(1 2) #t 'list-of-numbers?)
+       (try-candidate-transparently candidate '(1 1 1) #t 'list-of-numbers?)
+       (try-candidate-transparently candidate '42 #t 'list-of-numbers?)
+       (try-candidate-transparently candidate '(1 2 3 . 4) #t 'list-of-numbers?)
+       ;;; any other Scheme value:
+       (try-candidate-transparently candidate '(1 "2" 3 4) #f 'list-of-numbers?)
+       (try-candidate-transparently candidate '(1 2 . "3") #f 'list-of-numbers?)
+       (try-candidate-transparently candidate 'DAIM #f 'list-of-numbers?)
+       ;;;
+       )))
+
+As for the procedure, its control structure is still determined by the
+data structure of its input:
+
+.. code-block:: scheme
+
+  (define list-of-numbers?
+    (lambda (v_init)
+      (letrec ([visit (lambda (v)
+                        (cond
+                          [(null? v)
+                           #t]
+                          [(number? v)
+                           #t]
+                          [(pair? v)
+                           (and (number? (car v))
+                                (visit (cdr v)))]
+                          [else
+                           #f]))])
+        (visit v_init))))
+
+This procedure passes the unit test::
+
+  > (test-list-of-numbers? list-of-numbers?)
+  #t
+  > 
+
+
+Verifying whether a Scheme value is a list of distinct numbers
+--------------------------------------------------------------
+
+Let us first adjust the unit-test procedure to feature lists of
+distinct numbers.  All we need to do is to move a case from
+well-formed to ill-formed, and to add a couple of lists of distinct
+numbers:
+
+.. code-block:: scheme
+
+  (define test-list-of-distinct-numbers?
+    (lambda (candidate)
+      (and-all
+       ;;; lists of numbers:
+       (try-candidate-transparently candidate '() #t 'list-of-numbers?)
+       (try-candidate-transparently candidate '(1) #t 'list-of-numbers?)
+       (try-candidate-transparently candidate '(1 2) #t 'list-of-numbers?)
+       (try-candidate-transparently candidate '42 #t 'list-of-numbers?)
+       (try-candidate-transparently candidate '(1 2 3 . 4) #t 'list-of-numbers?)
+       ;;; any other Scheme value:
+       (try-candidate-transparently candidate '(1 1 1) #f 'list-of-numbers?)
+       (try-candidate-transparently candidate '(1 . 1) #f 'list-of-numbers?)
+       (try-candidate-transparently candidate '(1 "2" 3 4) #f 'list-of-numbers?)
+       (try-candidate-transparently candidate '(1 2 . "3") #f 'list-of-numbers?)
+       (try-candidate-transparently candidate 'DAIM #f 'list-of-numbers?)
+       ;;;
+       )))
+
+All we need to do now is to add an extra base case to the definition
+of ``proper-list-of-distinct-numbers?_v2``:
+
+.. code-block:: scheme
+
+  (define list-of-distinct-numbers?
+    (lambda (v_init)
+      (letrec ([visit (lambda (v)
+                        (cond
+                          [(null? v)
+                           #t]
+                          [(number? v)
+                           #t]
+                          [(pair? v)
+                           (and (number? (car v))
+                                (if (member? (car v) (cdr v))
+                                    #f
+                                    (visit (cdr v))))]
+                          [else
+                           #f]))])
+        (visit v_init))))
+
+This procedure passes the unit test::
+
+  > (test-list-of-distinct-numbers? list-of-distinct-numbers?)
+  #t
+  > 
+
+This test concludes this section on data-driven programming.
+Ostensibly, it reminded the reader about inductive data, structurally
+recursive programs, and unit tests.  In practice,
+``list-of-distinct-numbers?`` can be adapted immediately to check
+whether a list of formal parameters contains distinct variables,
+should anyone need to write a syntax checker for Scheme.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-5-data-driven-programming.scm>`_
+  (latest version: 08 Sep 2015).
+
+
+Version
+-------
+
+Fixed some chronology,
+thanks to Arch Wilhes's eagle eye
+[29 Oct 2015]
+
+Created
+[08 Sep 2015]

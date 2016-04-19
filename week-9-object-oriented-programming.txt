@@ -1,0 +1,387 @@
+.. -*- mode: rst -*-
+
+Note for Week 9 about object-oriented-programming
+=================================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+None.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-9-object-oriented-programming.scm>`_
+  (latest version: 03 Oct 2015).
+
+
+Goal
+----
+
+The goal of this lecture note is to simulate simple objects using two
+features of Scheme: lexical scope and mutable bindings.
+
+
+.. index:: objects
+.. index:: programming (object-oriented)
+
+.. _programming-simple-objects-in-scheme:
+
+Programming simple objects in Scheme
+------------------------------------
+
+Objects are entities that have a local state and that answer messages.
+
+Here is the definition of an object maker, where the object is a
+counter.  It answers to the messages ``val``, ``inc``, ``dec``, and ``init?``:
+
+* ``val``: what is the current value of the counter?
+
+* ``inc``: increment the current value of the counter
+
+* ``dec``: decrement the current value of the counter
+
+* ``init?``: is the current value of the counter the same as the initial one?
+
+The answers are in a list: an empty list means that there is no answer.
+
+.. code-block:: scheme
+
+  (define make-counter
+    (lambda (init)
+      (let ([counter init])
+        (lambda (message)
+          (case message
+            [(val)
+             (list counter)]
+            [(inc)
+             (begin
+               (set! counter (1+ counter))
+               (list))]
+            [(dec)
+             (begin
+               (set! counter (1- counter))
+               (list))]
+            [(init?)
+             (list (= counter init))]
+            [else
+             (list "What was that?")])))))
+
+Here is a scenario where we define a counter and interact with it by
+sending it messages::
+
+  > (define c1 (make-counter 10))
+  > (c1 'val)
+  (10)
+  > (c1 'inc)
+  ()
+  > (c1 'inc)
+  ()
+  > (c1 'val)
+  (12)
+  > 
+
+The two ``inc`` messages make the counter denoted by ``c1`` change its
+internal state::
+
+  > (c1 'init?)
+  (#f)
+  > (c1 'dec)
+  ()
+  > (c1 'dec)
+  ()
+  > (c1 'init?)
+  (#t)
+  > 
+
+Let us define another counter::
+
+  > (define c2 (make-counter 20))
+  > (c2 'dec)
+  ()
+  > 
+
+The two counters are independent of each other,
+even though they were defined with the same code::
+
+  > (list (c1 'val) (c2 'val))
+  ((10) (19))
+  > 
+
+
+.. _exercise-extend-make-counter-with-reset:
+
+Exercise 1
+----------
+
+Extend ``make-counter`` so that objects also answer the message ``reset``:
+
+* ``reset``: resets the current value of the counter to the initial one.
+
+Test your extension.
+
+
+.. _exercise-swap-let-and-lambda-in-make-counter:
+
+Exercise 2
+----------
+
+Compared to the definition of ``make-counter`` above,
+the following definition swaps ``let ([counter init])`` and ``lambda
+(message)``.  Does it still do the job?  Why?
+
+.. code-block:: scheme
+
+  (define make-counter_alt
+    (lambda (init)
+      (lambda (message)       ;;; <---***---
+        (let ([counter init]) ;;; <---***---
+          (case message
+            [(val)
+             (list counter)]
+            [(inc)
+             (begin
+               (set! counter (1+ counter))
+               (list))]
+            [(dec)
+             (begin
+               (set! counter (1- counter))
+               (list))]
+            [(init?)
+             (list (= counter init))]
+            [else
+             (list "What was that?")])))))
+
+
+Parameterizing messages
+-----------------------
+
+Suppose that we want to define counters that are adjustable with
+variable increments and decrements.  A simple way to do that is to
+make the object answer to a fixed message with a procedure expecting
+the rest of the message:
+
+.. code-block:: scheme
+
+  (define make-adjustable-counter
+    (lambda (init)
+      (let ([counter init])
+        (lambda (message)
+          (case message
+            [(val)
+             (list counter)]
+            [(inc)
+             (lambda (increment)
+               (begin
+                 (set! counter (+ counter increment))
+                 (list)))]
+            [(dec)
+             (lambda (decrement)
+               (begin
+                 (set! counter (- counter decrement))
+                 (list)))]
+            [(init?)
+             (list (= counter init))]
+            [else
+             (list "What was that?")])))))
+
+In the following scenario, we define an adjustable counter and
+interact with it by sending it messages::
+
+  > (define c3 (make-adjustable-counter 10))
+  > (c3 'val)
+  (10)
+  > ((c3 'inc) 100)
+  ()
+  > (c3 'val)
+  (110)
+  > 
+
+
+.. _exercise-extend-make-adjustable-counter-with-reset:
+
+Exercise 3
+----------
+
+Extend ``make-adjustable-counter`` so that objects also answer the message ``reset``:
+
+* ``reset``: resets the current value of the counter to the initial one.
+
+Test your extension.
+
+
+Extending objects
+-----------------
+
+Say that we want to embellish an object with a color.  We can do that
+by wrapping it into another object that answers to the ``color``
+message and otherwise transmits all the other messages to the object
+it wraps:
+
+.. code-block:: scheme
+
+  (define colorize
+    (lambda (object initial-color)
+      (let ([current-color initial-color])
+        (lambda (message)
+          (case message
+            [(color)
+             (list current-color)]
+            [else
+             (object message)])))))
+
+In the following scenario, we interact with a colored adjustable
+counter.  We first ask it its color, we consult its current value, and
+we increment it by ``10``::
+
+  > (define c4 (make-adjustable-counter 4))
+  > (define red-c4 (colorize c4 'red))
+  > (red-c4 'color)
+  (red)
+  > (red-c4 'val)
+  (4)
+  > ((red-c4 'inc) 10)
+  ()
+  > (red-c4 'val)
+  (14)
+  > (red-c4 'color)
+  (red)
+  > 
+
+This colorization provides views of the same counter, witness the
+following continued interaction with ``c4``.  We increment it by
+``1000``, and we verify this increment by sending the ``val`` message
+to ``c4`` and then to ``red-c4``::
+
+  > ((c4 'inc) 1000)
+  ()
+  > (c4 'val)
+  (1014)
+  > (red-c4 'val)
+  (1014)
+  > 
+
+Likewise, coloring a counter with another color gives a shared view
+of the same counter, which we illustrate by decrementing it by ``10000``::
+
+  > (define blue-c4 (colorize c4 'blue))
+  > (blue-c4 'color)
+  (blue)
+  > (blue-c4 'val)
+  (1014)
+  > (red-c4 'color)
+  (red)
+  > (red-c4 'val)
+  (1014)
+  > ((c4 'inc) -10000)
+  ()
+  > (c4 'val)
+  (-8986)
+  > (blue-c4 'val)
+  (-8986)
+  > (red-c4 'val)
+  (-8986)
+  > 
+
+
+Exercise 4
+----------
+
+Extend ``colorize`` so that objects also answer the messages
+``change`` and ``reset``:
+
+* ``change``: changes the current color to another one.
+
+* ``reset``: resets the current value of the color to the initial one.
+
+Test your extension.
+
+
+Exercise 5
+----------
+
+Program a variant of ``colorize`` that yields colored counters whose
+current value can only be consulted, not incremented or decremented::
+
+  > (define green-c4
+      (read-only-colorize c4 'green))
+  > (green-c4 'color)
+  (green)
+  > (green-c4 'val)
+  (-8986)
+  > ((green-c4 'inc) 123)
+  ("What was that?")
+  > (green-c4 'val)
+  (-8986)
+  > ((c4 'inc) 123)
+  ()
+  > (c4 'val)
+  (-8863)
+  > (green-c4 'val)
+  (-8863)
+  > 
+
+Does your procedure work:
+
+* only for unadjustable counters?
+
+* only for adjustable counters?
+
+* for both?
+
+
+Relevant exam questions about object-oriented programming
+---------------------------------------------------------
+
+* Questions 82 to 86 in the June exam of 2014,
+  `with solutions`__ and `without solutions`__.
+
+.. __: http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-June-2014.pdf
+.. __: http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014/exam-dProgSprog-June-2014.pdf
+
+* Questions 66 to 69 in the June exam June 2013,
+  `with solutions`__ and `without solutions`__.
+
+.. __: http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-June-2013.pdf
+.. __: http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014/exam-dProgSprog-June-2013.pdf
+
+* Questions 19 to 25 in the August exam of 2012,
+  `with solutions`__ and `without solutions`__.
+
+.. __: http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-August-2012.pdf
+.. __: http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014/exam-dProgSprog-August-2012.pdf
+
+
+* Questions 49 to 51 in the June exam of 2010,
+  `with solutions`__ and `without solutions`__.
+
+.. __: http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-June-2010.pdf
+.. __: http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014/exam-dProgSprog-June-2010.pdf
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-9-object-oriented-programming.scm>`_
+  (latest version: 03 Oct 2015).
+
+
+Version
+-------
+
+Added the goal section
+[04 Oct 2015]
+
+Created
+[03 Oct 2015]

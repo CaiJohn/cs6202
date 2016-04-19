@@ -1,0 +1,142 @@
+.. -*- mode: rst -*-
+
+Real-life people
+================
+
+In addition to R. Kent Dybvig, Scheme programmer extraordinaire and
+author, architect, and implementer of Petite Chez Scheme:
+
+
+Computer Scientists in Denmark
+------------------------------
+
+* Michael Glad
+
+* Jeppe Welling Hansen
+
+* Randi Katrine Hillerøe
+
+* Neil D. Jones
+
+* Peter Naur
+
+* Ian Zerny
+
+
+Computer Scientists abroad
+--------------------------
+
+* William H. Burge
+
+* Edsger W. Dijkstra
+
+* Richard P. Feynman
+
+* Daniel P. Friedman
+
+* Mayer Goldberg
+
+* Robert W. Harper
+
+* Steve Jobs
+
+* Dilly Knox
+
+* Peter J. Landin
+
+* David B. MacQueen
+
+* John McCarthy
+
+* Robin Milner
+
+* Steven Muchnick
+
+* Alan Perlis
+
+* John C. Reynolds
+
+* David A. Schmidt
+
+* Olin Shivers
+
+* Dorai Sitaram
+
+* Guy L. Steele
+
+* Christopher Strachey
+
+* Alan Turing
+
+* John von Neumann
+
+* Philip Wadler
+
+
+Before Computer Science
+-----------------------
+
+* Archilocus
+
+* Aristotle
+
+* Alonzo Church
+
+* Haskell Curry
+
+* Augustus De Morgan
+
+* Leonardo Fibonacci
+
+* Carl Friedrich Gauss
+
+* Giuseppe Peano
+
+
+Outside Computer Science
+------------------------
+
+* Nicolas Boileau
+
+* Victor Borge
+
+* Alexander Calder
+
+* Jorge Cham
+
+* Samuel Colt
+
+* Claude Débussy
+
+* Albert Einstein
+
+* Murray Gell-Mann
+
+* Yip Harburg
+
+* Émile Henriot
+
+* Piet Hein
+
+* Robert A. Heinlein
+
+* Søren Kierkegaard
+
+* Abraham Lincoln
+
+* Carolus Magnus
+
+* René Magritte
+
+* Elizabeth Moon
+
+* Barack Obama
+
+* George Orwell
+
+* Pink Floyd
+
+* Leo Rosten
+
+* Mae West
+

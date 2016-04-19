@@ -1,0 +1,785 @@
+.. -*- mode: rst -*-
+
+Supplementary note for Week 1 about induction proofs
+====================================================
+
+.. index::
+   single: Seldon, Hari
+
+.. epigraph::
+
+  | A mathematician is expected to sit at his computer and think.
+
+  -- `Hari Seldon <http://en.wikipedia.org/wiki/Hari_Seldon>`_
+
+
+Recommended exercises
+---------------------
+
+* :ref:`exercise-sum-of-first-even-numbers`:
+  summing the first successive even numbers
+
+* :ref:`exercise-sum-of-first-odd-numbers`:
+  summing the first successive odd numbers
+
+* :ref:`exercise-4-3`:
+  proving whether an algebraic property holds
+
+
+.. index:: algebraic laws
+.. index:: precedence (of algebraic operators)
+
+High-school algebraic laws for natural numbers
+----------------------------------------------
+
+* 0 is neutral for addition on the left::
+
+    for all natural numbers n: 0 + n = n
+
+* 0 is neutral for addition on the right::
+
+    for all natural numbers n: n + 0 = n
+
+* addition is commutative::
+
+    for all natural numbers n1 and n2: n1 + n2 = n2 + n1
+
+* addition is associative::
+
+    for all natural numbers n1, n2 and n3: (n1 + n2) + n3 = n1 + (n2 + n3)
+
+  We can therefore unambiguously omit parentheses::
+
+    n1 + (n2 + n3) = n1 + n2 + n3
+
+* 1 is neutral for multiplication on the left::
+
+    for all natural numbers n: 1 * n = n
+
+* 1 is neutral for multiplication on the right::
+
+    for all natural numbers n: n * 1 = n
+
+* 0 is absorbing for multiplication on the left::
+
+    for all natural numbers n: 0 * n = 0
+
+* 0 is absorbing for multiplication on the right::
+
+    for all natural numbers n: n * 0 = 0
+
+* multiplication is commutative::
+
+    for all natural numbers n1 and n2: n1 * n2 = n2 * n1
+
+* multiplication is associative::
+
+    for all natural numbers n1, n2 and n3: (n1 * n2) * n3 = n1 * (n2 * n3)
+
+  We can therefore unambiguously omit parentheses::
+
+    for all natural numbers n1, n2 and n3: n1 * (n2 * n3) = n1 * n2 * n3
+
+* multiplication distributes over addition on the left::
+
+    for all natural numbers n1, n2 and n3: n1 * (n2 + n3) = (n1 * n2) + (n1 * n3)
+
+  By notational convention, multiplication takes *precedence* over
+  addition, and therefore we can unambiguously omit some parentheses::
+
+    for all natural numbers n1, n2 and n3: (n1 * n2) + (n1 * n3) = n1 * n2 + n1 * n3
+
+* multiplication distributes over addition on the right::
+
+    for all natural numbers n1, n2 and n3: (n1 + n2) * n3 = (n1 * n3) + (n2 * n3)
+
+* regarding exponentiation, for all natural numbers ``x``, ``n1`` and ``n2``::
+
+    x^0 = 1
+
+    x^(n1 + n2) = x^n1 * x^n2
+
+    x^(n1 * n2) = (x^n1)^n2
+
+
+A simple proof
+--------------
+
+Question: is it true that for all natural numbers ``x``, ``n1`` and
+``n2``, the equality ``(x^n1)^n2 = (x^n2)^n1`` holds?
+
+Answer: yes, because we can go from the left-hand side of this
+equality to its right-hand side using the algebraic laws listed
+above.  The left-hand side reads::
+
+  (x^n1)^n2
+  = {rule of exponentiation}
+  x^(n1 * n2)
+  = {multiplication is commutative}
+  x^(n2 * n1)
+  = {rule of exponentiation}
+  (x^n2)^n1
+
+which is the right-hand side.
+
+
+.. index::
+   single: Gauss, Carl Friedrich
+.. _sum-of-the-first-natural-numbers:
+
+The canonical example of mathematical induction
+-----------------------------------------------
+
+Proposition (`Gauss`__):
+for all natural numbers ``n``,
+``0 + 1 + ... + (n - 1) + n = n * (n + 1) / 2``.
+
+.. __: http://en.wikipedia.org/wiki/Carl_Friedrich_Gauss
+
+Let us define a property and index it by a natural number ``n``::
+
+  for all n, S(n) is
+    0 + 1 + ... + (n - 1) + n
+    =
+    n * (n + 1) / 2
+
+Let us prove this property, i.e., that ``S(n)`` holds for any natural ``n``,
+by mathematical induction on ``n``:
+
+* **Base** **case:**
+
+  We need to show that ``S(0)`` holds, i.e., that the following
+  equality holds::
+
+    0 = 0 * (0 + 1) / 2
+
+  The left-hand side is ``0``.
+
+  The right-hand side is::
+
+    0 * (0 + 1) / 2
+    = {0 is absorbing for multiplication on the left}
+    0 / 2
+    = {definition of division}
+    0
+
+  which is also ``0``.
+
+  Since the left-hand side and the right-hand side are equal,
+  the equality holds, i.e., ``S(0)`` holds.
+  The base case is thus proved.
+
+* **Induction** **case:**
+
+  Under the *induction hypothesis* that ``S(k)`` holds
+  for some natural number ``k``, we need to show that ``S(k + 1)``
+  holds as well.
+
+  The induction hypothesis reads::
+
+    0 + 1 + ... + (k - 1) + k
+    =
+    k * (k + 1) / 2
+
+  We need to show that the following equality holds:: 
+
+    0 + 1 + ... + (k - 1) + k + (k + 1)
+    =
+    (k + 1) * (k + 2) / 2
+
+  Let us start from the left-hand side and reason our way towards
+  obtaining the right-hand side::
+
+    0 + 1 + ... + (k - 1) + k + (k + 1)
+    = {addition is associative}
+    (0 + 1 + ... + (k - 1) + k) + (k + 1)
+    = {by induction hypothesis}
+    (k * (k + 1) / 2) + (k + 1)
+    = {1 is neutral for multiplication on the left}
+    (k * (k + 1) / 2) + 1 * (k + 1)
+    = {factoring k + 1 on the right}
+    (k / 2 + 1) * (k + 1)
+    = 
+    (k / 2 + 2 / 2) * (k + 1)
+    =
+    ((k + 2) / 2) * (k + 1)
+    =
+    (k + 2) * (k + 1) / 2
+    = {multiplication is commutative}
+    (k + 1) * (k + 2) / 2
+
+  which coincides with the right-hand side.
+
+  Since the left-hand side and the right-hand side are equal,
+  the equality holds, i.e., ``S(k + 1)`` holds.
+  The induction case is thus proved.
+
+So we have shown that ``S(0)`` holds, and that for any natural number
+``k`` such that ``S(k)`` holds, ``S(k + 1)`` holds as well.  Therefore,
+the property ``S(n)`` holds for all natural numbers ``n``.
+
+Relevance for programming: computing the sum of the first n natural
+numbers can be done more efficiently than with n - 1 additions.
+It can be done in one increment, one multiplication, and one
+division by 2, i.e., in constant time, for any n.
+
+
+A more comfortable notation
+---------------------------
+
+Let us first define a more convenient notation for computing the sum
+of consecutive numbers.  Given a function ``f``, we shall write ``sum
+for i = 0 to n of f(i)`` to stand for ``f(0) + f(1) + ... + f(n-1) +
+f(n)``.  So for example,
+
+* (sum for i = 0 to 0 of f(i)) = f(0)
+
+* (sum for i = 0 to 1 of f(i)) = f(0) + f(1)
+
+* (sum for i = 0 to 2 of f(i)) = f(0) + f(1) + f(2)
+
+* etc.
+
+More generally, for any two natural numbers ``m`` and ``n`` such that
+``m`` is less than or equal to ``n``:
+
+* (sum for i = m to n of f(i)) = f(m) + f(m+1) + ... + f(n-1) + f(n)
+
+And by convention, for any two natural numbers ``m`` and ``n`` such that
+``m`` is strictly more than ``n``:
+
+* (sum for i = m to n of f(i)) = 0
+
+
+Food for thought
+----------------
+
+* How many natural numbers are enumerated here:
+
+  A. 0, 1, 2, ..., n - 2, n - 1, n
+  
+     for any natural number n,
+  
+  B. 0, 1, 2, ..., n - 2, n - 1
+  
+     for any positive natural number n,
+  
+  C. 1, 2, ..., n - 2, n - 1, n
+  
+     for any natural number n, and
+  
+  D. 1, 2, ..., n - 2, n - 1, n, n + 1
+  
+     for any positive natural number n.
+
+* What is the result of the following sums?
+
+  A. for any natural number n,
+
+    a. sum for i = 0 to n of 0
+
+    b. sum for i = 0 to n of 1
+
+    c. sum for i = 0 to n of 2
+
+    d. sum for i = 0 to n of 10
+
+  B. for any positive natural number n,
+  
+    a. sum for i = 0 to n - 1 of 0
+
+    b. sum for i = 0 to n - 1 of 1
+
+    c. sum for i = 0 to n - 1 of 2
+
+    d. sum for i = 0 to n - 1 of 10
+
+  C. for any natural number n,
+  
+    a. sum for i = 1 to n of 0
+
+    b. sum for i = 1 to n of 1
+
+    c. sum for i = 1 to n of 2
+
+    d. sum for i = 1 to n of 10
+
+  D. for any natural number n,
+
+    a. sum for i = 1 to n + 1 of 0
+
+    b. sum for i = 1 to n + 1 of 1
+  
+    c. sum for i = 1 to n + 1 of 2
+
+    d. sum for i = 1 to n + 1 of 10
+
+.. epigraph::
+
+  | Willow: Do you realize that these questions were at the exam in 2012?
+  | Xander: Yes.  What a shocking lack of imagination.
+
+
+A more comfortable notation (continued)
+---------------------------------------
+
+With this notation, ``S(n)`` is written more conveniently as::
+
+  sum for i = 0 to n of i
+  =
+  n * (n + 1) / 2
+
+Likewise, the induction proof is written more conveniently as follows:
+
+* **Base** **case:**
+
+  We need to show that ``S(0)`` holds, i.e., that the following
+  equality holds::
+
+    sum for i = 0 to 0 of i
+    =
+    0 * (0 + 1) / 2
+
+  Left-hand side::
+
+     sum for i = 0 to 0 of i
+     =
+     0
+
+  Right-hand side:: 
+
+     0 * (0 + 1) / 2
+     =
+     0 / 2
+     =
+     0
+
+  Since the left-hand side and the right-hand side are equal,
+  the equality holds, i.e., ``S(0)`` holds.
+  The base case is thus proved.
+
+* **Induction** **case:**
+
+  Under the *induction hypothesis* that ``S(k)`` holds
+  for some natural number ``k``, we need to show that ``S(k
+  + 1)`` holds as well.
+
+  The induction hypothesis reads::
+
+    sum for i = 0 to k of i
+    =
+    k * (k + 1) / 2
+
+  We need to show that the following equality holds::
+
+    sum for i = 0 to k + 1 of i
+    =
+    (k + 1) * (k + 2) / 2
+
+  Let us start with the left-hand side and reason our way towards
+  obtaining the right-hand side::
+
+    sum for i = 0 to k + 1 of i
+    = {by definition of a sum}
+    (sum for i = 0 to k of i) + (k + 1)
+    = {by induction hypothesis}
+    (k * (k + 1) / 2) + (k + 1)
+    = {because multiplication is commutative}
+    ((k + 1) * k / 2) + (k + 1)
+    = {because 1 is neutral for multiplication on the right}
+    ((k + 1) * k / 2) + (k + 1) * 1
+    = {by factoring (k + 1) on the left}
+    (k + 1) * (k / 2 + 1)
+    = 
+    (k + 1) * (k / 2 + 2 / 2)
+    = 
+    (k + 1) * ((k + 2) / 2)
+    =
+    (k + 1) * (k + 2) / 2
+
+  which coincides with the right-hand side.
+
+  Since the left-hand side and the right-hand side are equal,
+  the equality holds, i.e., ``S(k + 1)`` holds.
+  The induction case is thus proved.
+
+So we have shown that ``S(0)`` holds, and that for any natural number
+``k`` such that ``S(k)`` holds, ``S(k + 1)`` holds as well.  Therefore,
+the property ``S(n)`` holds for all natural numbers ``n``.
+
+
+.. _exercise-sum-of-first-even-numbers:
+
+Exercise 1
+----------
+
+In this recommended exercise, we consider the sum of the first successive
+even numbers.  You are being asked to prove that for all natural numbers
+``n``::
+
+  sum for i = 0 to n of 2 * i
+  =
+  n * (n + 1)
+
+What is the relevance of this exercise for programming?
+
+
+.. _exercise-sum-of-first-odd-numbers:
+
+Exercise 2
+----------
+
+In this recommended exercise, we consider the sum of the first successive
+odd numbers.  You are being asked to characterize this sum::
+
+  sum for i = 0 to n of 2 * i + 1
+
+Prove your characterization by mathematical induction on ``n``.
+
+Hint: compute the sum of the first odd number  (i.e., 1),
+and then the sum of the 2 first odd numbers (i.e., 1 + 3),
+and then the sum of the 3 first odd numbers (i.e., 1 + 3 + 5),
+and then the sum of the 4 first odd numbers (i.e., 1 + 3 + 5 + 7),
+and state a conjecture.  Then prove this conjecture by mathematical
+induction.  (The good news is that you have already established the
+base case.)
+
+What is the relevance of this exercise for programming?
+
+
+.. _exercise-conjoint-sum-of-first-even-numbers-and-of-first-odd-numbers:
+
+Exercise 3
+----------
+
+Above, we have established a simple way to compute the sum of the first
+successive natural numbers.  In
+:ref:`exercise-sum-of-first-even-numbers`, you have established a simple
+way to compute the sum of the first successive even natural numbers.  In
+:ref:`exercise-sum-of-first-odd-numbers`, you have established a simple
+way to compute the sum of the first successive odd natural numbers.  As a
+corollary, verify that your way of summing the first successive even
+numbers plus your way of summing the first successive odd numbers is
+compatible with the simple way of summing the first successive natural
+numbers.  (Hint: if you sum the first n+1 even numbers and the first n+1
+odd numbers, how many of the first natural numbers are you summing?)
+
+More explicitly,
+
+* for any natural number x, let E(x) be the sum of the first x+1 even
+  numbers, so that E(0) = 0, E(1) = 0 + 2, E(2) = 0 + 2 + 4, E(3) = 0 +
+  2 + 4 + 6, etc.,
+
+* for any natural number y, let O(y) be the sum of the first y+1 odd
+  numbers, so that O(0) = 1, O(1) = 1 + 3, O(2) = 1 + 3 + 5, O(3) = 1 +
+  3 + 5 + 7, etc., and
+
+* for any natural number z, let N(z) be the sum of the first z+1 natural
+  numbers, so that N(0) = 0, N(1) = 0 + 1, N(2) = 0 + 1 + 2, N(3) = 0 +
+  1 + 2 + 3, N(4) = 0 + 1 + 2 + 3 + 4, N(5) = 0 + 1 + 2 + 3 + 4 + 5, N(7)
+  = 0 + 1 + 2 + 3 + 4 + 5 + 6 + 7, etc.
+
+You are asked to verify that for any natural number n, E(n) + O(n) =
+N(...), where you first have to figure out the `ellipses
+<https://en.wikipedia.org/wiki/Ellipsis>`_.  (Hint: see the previous
+hint.  And should you need another hint, here is the `beginning of a train of
+thoughts <week-1-induction-proofs-beginning-of-a-train-of-thoughts.html>`_.)
+
+
+.. _exercise-distribute-multiplication-over-sum:
+
+Exercise 4
+----------
+
+Prove that given a function ``f`` that maps a number to another number,
+for any expression ``e`` that is independent of ``i``::
+
+  sum for i = 0 to n of e * f(i)
+  =
+  e * (sum for i = 0 to n of f(i))
+
+To this end, use mathematical induction.
+
+What is the relevance of this exercise for programming?
+
+For the same ``f`` and ``e`` as just above, consider the following
+equalities::
+
+  sum for i = 0 to n of (f(i) * e)
+  =
+  (sum for i = 0 to n of f(i)) * e
+
+  sum for i = 0 to n of (f(i) / e)
+  =
+  (sum for i = 0 to n of f(i)) / e
+
+  sum for i = 0 to n of e / f(i)
+  =
+  e * (sum for i = 0 to n of 1 / f(i))
+
+Do you think these equalities hold?
+Why?
+What is their relevance for programming?
+
+Reminder: for any integer ``x`` and non-zero integer ``y``::
+
+  x / y = x * (1 / y)
+
+
+.. _exercise-sum-of-first-even-numbers-corollary:
+
+Exercise 5
+----------
+
+As a corollary of :ref:`exercise-distribute-multiplication-over-sum`,
+verify the result of :ref:`exercise-sum-of-first-even-numbers` when 
+``e`` = ``2`` and ``f`` is the identity function, i.e., verify that::
+
+  sum for i = 0 to n of 2 * i
+  =
+  n * (n + 1)
+
+
+.. _exercise-reassociate-sum-of-addition:
+
+Exercise 6
+----------
+
+Prove that given two functions ``f`` and ``g`` that map numbers to numbers,
+for all natural numbers ``n``::
+
+  (sum for i = 0 to n of f (i) + g (i))
+  =
+  (sum for i = 0 to n of f (i)) + (sum for i = 0 to n of g (i))
+
+
+Exercise 7
+----------
+
+As a corollary of :ref:`exercise-reassociate-sum-of-addition`, verify
+the result of :ref:`exercise-sum-of-first-odd-numbers` when ``f`` is a
+function that doubles its argument and ``g`` is a constant function
+that always returns ``1``::
+
+  sum for i = 0 to n of 2 * i + 1
+
+
+.. _sum-of-the-cubes-of-the-first-natural-numbers:
+
+The case of the sum of the n first cubes
+----------------------------------------
+
+Proposition: The sum of the cubes of the first natural numbers is
+the square of the sum of these first natural numbers.
+
+Let us define a property and index it by a natural number::
+
+  for all n, C(n) is
+    sum for i = 0 to n of i^3
+    =
+    (sum for i = 0 to n of i)^2
+
+Let us prove that ``C(n)`` holds for any natural number ``n``, by
+induction on ``n``.
+
+* **Base** **case:**
+
+  We need to show that ``C(0)`` holds, i.e., that the following
+  equality holds::
+
+    sum for i = 0 to 0 of i^3
+    =
+    (sum for i = 0 to 0 of i)^2
+
+  The left-hand side is ``0`` and so is the right-hand side.
+  Since the left-hand side and the right-hand side are equal,
+  the equality holds, i.e., ``C(0)`` holds.
+  The base case is thus proved.
+
+* **Induction** **case:**
+
+  Assuming that ``C(k)`` holds for some natural number ``k``,
+  we need to show that ``C(k + 1)`` holds as well.
+
+  The induction hypothesis reads::
+
+    sum for i = 0 to k of i^3
+    =
+    (sum for i = 0 to k of i)^2.
+
+  We need to show that the following equality holds:: 
+
+    sum for i = 0 to k + 1 of i^3
+    =
+    (sum for i = 0 to k + 1 of i)^2
+
+  Let us start from the left-hand side and reason our way towards
+  obtaining the right-hand side::
+
+    sum for i = 0 to k + 1 of i^3
+    = {by definition of sum}
+    (sum for i = 0 to k of i^3) + (k + 1)^3
+    = {by induction hypothesis}
+    (sum for i = 0 to k of i)^2  + (k + 1)^3
+    = {as the sum of the first k + 1 natural numbers}
+    (k * (k + 1) / 2)^2 + (k + 1)^3
+    = {by distributing the squaring operation and factoring the cube}
+    k^2 * (k + 1)^2 / 2^2 + (k + 1) * (k + 1)^2
+    = {by factoring (k + 1)^2 on the left}
+    (k + 1)^2 * (k^2 / 2^2 + (k + 1))
+    = {since for any a, b, c: a/c + b = a/c + c*b/c}
+    (k + 1)^2 * (k^2 / 4 + 4 * (k + 1) / 4)
+    = {since for any a, b, c: a/c + b/c = (a+b)/c}
+    (k + 1)^2 * (k^2 + 4 * (k + 1)) / 4
+    = {distributing the multiplication by 4}
+    (k + 1)^2 * (k^2 + 4 * k + 4) / 4
+    = {to making the binomial expansion appear}
+    (k + 1)^2 * (k^2 + 2 * k * 2 + 2^2) / 2^2
+    = {folding the binomial expansion}
+    (k + 1)^2 * (k + 2)^2 / 2^2
+    = {by factorizing the squaring operation}
+    ((k + 1) * (k + 2) / 2)^2
+    = {as the sum of the first k + 2 natural numbers}
+    (sum for i = 0 to k + 1 of i)^2
+
+  which coincides with the right-hand side.
+
+  Since the left-hand side and the right-hand side are equal,
+  the equality holds, i.e., ``C(k + 1)`` holds.
+  The induction case is thus proved.
+
+So we have shown that ``C(0)`` holds, and that for any natural number
+``k`` such that ``C(k)`` holds, ``C(k + 1)`` holds as well.  Therefore,
+the property ``C(n)`` holds for all natural numbers ``n``.
+
+Relevance for programming: computing the sum of the n first cubes can
+be done with a constant number of arithmetic operations, not with a
+number of operations that is proportional to n.
+
+
+.. _exercise-sum-of-cubes-of-first-even-numbers:
+
+Exercise 8
+----------
+
+In this exercise, we consider the sum of the cubes of the first even
+numbers.  You are being asked to prove that for any natural number
+``n``::
+
+  sum for i = 0 to n of (2 * i)^3
+  =
+  2 * (sum for i = 0 to n of 2 * i)^2
+
+You can either proceed by mathematical induction, or by using the
+property proved in
+:ref:`exercise-distribute-multiplication-over-sum`, remembering that
+for any integers ``x`` and ``y``, and for any natural number ``n``::
+
+  (x * y)^n = x^n * y^n
+
+
+.. _exercise-sum-of-cubes-of-halves-of-first-natural-numbers:
+
+Exercise 9
+----------
+
+In this exercise, we consider the sum of the cubes of the halves of
+the first natural numbers.  You are being asked to prove that for any
+natural number ``n``::
+
+  sum for i = 0 to n of (i/2)^3
+  =
+  (sum for i = 0 to n of i/2)^2 / 2
+
+You can either proceed by mathematical induction, or by using the
+property proved in
+:ref:`exercise-distribute-multiplication-over-sum`, remembering that for any
+integer ``x``, non-zero integer ``y``, and natural number ``n``::
+
+  (x / y)^n = x^n / y^n
+
+
+.. _exercise-sum-of-cubes-of-first-odd-numbers:
+
+Exercise 10
+-----------
+
+Above, we have established a simple way to compute the sum of the
+cubes of the first successive natural numbers.  In
+:ref:`exercise-sum-of-cubes-of-first-even-numbers`, you have established a simple way
+to compute the sum of the cubes of the first successive even natural numbers.  In
+the manner of
+:ref:`exercise-conjoint-sum-of-first-even-numbers-and-of-first-odd-numbers`, calculate
+a formula that accounts for the sum of the cubes of the first successive odd
+natural numbers, and verify it by mathematical induction.
+
+More explicitly,
+
+* for any natural number x, let E3(x) be the sum of the cubes of the
+  first x+1 even natural numbers,
+
+* for any natural number y, let O3(y) be the sum of the cubes of the
+  first y+1 odd natural numbers, and
+
+* for any natural number z, let N3(z) be the sum of the cubes of the
+  first z+1 natural numbers.
+
+You are asked:
+
+1. to fill the ellipses in the equality E3(n) + O3(n) = N3(...), for any
+   natural number n;
+
+2. to calculate a formula for O3(n) that contains a constant number of
+   arithmetic operations; and
+
+3. to verify this formula by mathematical induction.
+
+
+.. _exercise-4-3:
+
+Exercise 11
+-----------
+
+In this recommended exercise, as a followup of the previous exercises,
+you are asked to prove whether for any natural number ``n``::
+
+    sum for i = 0 to n of i^4
+    =
+    (sum for i = 0 to n of i)^3
+
+.. epigraph::
+
+  | Egon: I have a plan to prove this theorem.
+  | Yvonne: Maybe so, but here is a counter-example.
+  | Egon: Never mind, I have another plan!
+
+What is the relevance of this exercise for programming?
+
+
+More about induction proofs
+---------------------------
+
+By popular demand, a supplementary note about induction proofs is
+available `here
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/more-about-induction-proofs.pdf>`_
+(Version of 22 April 2012).
+
+
+Version
+-------
+
+Added a hint in the statement of
+:ref:`exercise-conjoint-sum-of-first-even-numbers-and-of-first-odd-numbers`
+[03 Oct 2015]
+
+Lined up the statements of :ref:`exercise-sum-of-first-even-numbers` and
+:ref:`exercise-sum-of-first-odd-numbers`, and of
+:ref:`exercise-conjoint-sum-of-first-even-numbers-and-of-first-odd-numbers`
+and :ref:`exercise-sum-of-cubes-of-first-odd-numbers`
+[02 Oct 2015]
+
+Fixed a typo, thanks to Arch Wilhes's eagle eye
+[25 Sep 2015]
+
+Created
+[19 Aug 2015]

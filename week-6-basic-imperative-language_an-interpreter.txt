@@ -1,0 +1,94 @@
+.. -*- mode: rst -*-
+
+.. index:: interpreter (for a basic imperative language)
+
+Note for Week 6 about a basic imperative language: an interpreter
+=================================================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+--------------------
+
+None.
+
+
+Resources
+---------
+
+* The Scheme code for `the interpreter for this basic imperative
+  language
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-basic-imperative-language_an-interpreter.scm>`_
+  (latest version: 15 Sep 2015)
+
+
+Goal
+----
+
+The goal of this lecture note will be to illustrate how to go about
+implementing an interpreter for `the basic imperative language for
+which we designed a syntax checker
+<week-6-basic-imperative-language_a-syntax-checker.html>`_.
+
+
+BNF of the basic imperative language
+------------------------------------
+
+Like Scheme's, the syntax of the basic imperative language is fully
+parenthesized:
+
+.. bnf:: parenthesized basic imperative language
+   :noindex:
+   :namespace: pbil
+
+      <literal> ::= <boolean>
+                  | <integer>
+
+    <unary-operator> ::= not
+
+    <binary-operator> ::= + | - | * | / | < | <= | = | > | >= | and | or
+
+    <reference> ::= (location <natural-number>)
+
+   <expression> ::= (constant <literal>)
+                  | (dereference <reference>)
+                  | (unary-operation <unary-operator> <expression>)
+                  | (binary-operation <binary-operator> <expression> <expression>)
+
+      <command> ::= (skip)
+                  | (sequence <command> <command>)
+                  | (assign <reference> <expression>)
+                  | (conditional <expression> <command> <command>)
+                  | (while <expression> <command>)
+                  | (switch <expression> {[<literal> <command>]}* [otherwise <command>])
+
+      <program> ::= (top <command>)
+
+
+Resources
+---------
+
+.. epigraph::
+
+  | People who like this sort of thing 
+  | will find that this is the sort of thing they like.
+
+  -- `Abraham Lincoln <http://en.wikipedia.org/wiki/Abraham_Lincoln>`_ (allegedly)
+
+* The Scheme code for `the interpreter for this basic imperative
+  language
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-basic-imperative-language_an-interpreter.scm>`_
+  (latest version: 15 Sep 2015)
+
+
+Version
+-------
+
+Created
+[15 Sep 2015]

@@ -1,0 +1,1187 @@
+.. -*- mode: rst -*-
+
+Note for Week 5 about random programming
+========================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+* :ref:`exercise-monty-hall-problem`:
+  the Monty Hall problem
+
+
+
+Optional exercises
+------------------
+
+.. epigraph::
+
+  | Whatever.
+
+  -- popular saying
+
+Between 0 and 13.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-5-random-programming.scm>`_
+  (latest version: 08 Sep 2015).
+
+
+Goal
+----
+
+The goal of this lecture note is to describe the ``random`` procedure
+in Petite Chez Scheme and to illustrate its use.  We visualize and
+test the distribution of random numbers, and we simulate the fair flip of a
+coin based on a biased coin.
+
+
+.. index::
+   single: numbers (random)
+
+Petite Chez Scheme's random number generator
+--------------------------------------------
+
+Petite Chez Scheme's `predefined procedure`__ ``random``, when applied to
+a positive integer ``n``, returns a random non-negative integer smaller
+than ``n``::
+
+  > (random 5)
+  4
+  > (random 5)
+  0
+  > (random 5)
+  0
+  > (random 5)
+  3
+  > (random 5)
+  4
+  > (random 5)
+  1
+  > (random 5)
+  3
+  > 
+
+.. __: http://www.scheme.com/csug8/numeric.html#./numeric:s64
+
+In all cases, the results of evaluating ``(random 5)`` range between
+``0`` and ``4``.  And they range between ``0`` and ``1`` if we
+evaluate ``(random 2)``, as if we were flipping a coin.
+
+
+Application to unit testing
+---------------------------
+
+It is simple to compare two procedures that implement the factorial
+function -- just pick an input at random, apply each procedure to this
+input, and compare the results:
+
+.. code-block:: scheme
+
+  (define random-test-fac
+    (lambda (fac1 fac2 max)
+      (let ([n (random max)])
+        (or (= (fac1 n)
+               (fac2 n))
+            n))))
+
+A successful test yields ``#t``, and an unsuccessful test yields the
+differing input.
+
+We can also repeatedly compare two implementations of the factorial
+function:
+
+.. code-block:: scheme
+
+  (define random-test-fac-repeatedly
+    (lambda (fac1 fac2 max how-many-times)
+      (letrec ([visit (lambda (i)
+                        (if (= i 0)
+                            #t
+                            (let ([result (random-test-fac fac1 fac2 max)])
+                              (if (number? result)
+                                  result
+                                  (visit (1- i))))))])
+        (visit how-many-times))))
+
+A successful test yields ``#t``, and an unsuccessful test yields
+the first differing input.
+
+For example, consider the two following canonical implementations of
+the factorial function, one recursive and the other tail-recursive
+with an accumulator:
+
+.. code-block:: scheme
+
+  (define fac
+    (lambda (n)
+      (letrec ([visit (lambda (n)
+                        (if (zero? n)
+                            1
+                            (* n (visit (1- n)))))])
+        (visit n))))
+  
+  (define fac_alt
+    (lambda (n)
+      (letrec ([visit (lambda (n a)
+                        (if (zero? n)
+                            a
+                            (visit (1- n) (* n a))))])
+        (visit n 1))))
+
+Here is how to randomly sample numbers between 0 and 49 and test
+whether the two implementations agree on 20 of these numbers::
+
+  > (random-test-fac-repeatedly fac fac_alt 50 20)
+  #t
+  > 
+
+.. epigraph::
+
+  | I wonder whether Loki has heard of this random procedure.
+
+  -- Harald the Bold
+
+The two implementations agree.  Yay.
+
+
+.. _visualizing-the-distribution-of-random-numbers:
+
+Visualizing the distribution of random numbers
+----------------------------------------------
+
+Let us sample the distribution of the numbers yielded by ``random``
+and visualize it.  Given a non-negative integer, the following
+procedure, ``sample-random-2``,
+
+* repeatedly calls ``random`` to generate ``0`` and ``1`` based on the
+  integer, which specifies the size of the sample, i.e., how many
+  times ``random`` should be called,
+
+* tallies how many times each of ``0`` and ``1`` is generated, and
+
+* normalizes the two results as percentages of the size of the sample:
+
+.. code-block:: scheme
+
+  (define sample-random-2
+    (lambda (size-of-sample)
+      (letrec ([loop (lambda (i zeroes ones)
+                       (if (= i 0)
+                           (list (* (/ zeroes size-of-sample) 100.0)
+                                 (* (/ ones size-of-sample) 100.0))
+                           (let ([random-number (random 2)])
+                             (case random-number
+                               [(0)
+                                (loop (- i 1) (+ zeroes 1) ones)]
+                               [(1)
+                                (loop (- i 1) zeroes (+ ones 1))]
+                               [else
+                                (errorf 'sample-random-2
+                                        "~s is not an appropriate random number"
+                                        random-number)]))))])
+        (loop size-of-sample 0 0))))
+
+The following scenario visualizes this distribution, varying the
+size of the sample::
+
+  > (sample-random-2 10)
+  (50.0 50.0)
+  > (sample-random-2 100)
+  (53.0 47.0)
+  > (sample-random-2 1000)
+  (50.3 49.7)
+  > (sample-random-2 10000)
+  (49.38 50.62)
+  > (sample-random-2 100000)
+  (50.027 49.973)
+  > (sample-random-2 1000000)
+  (49.9981 50.0019)
+  > 
+
+To the naked eye, the distribution of ``0``'s and ``1``'s appears to
+be balanced.
+
+
+Exercise 1
+----------
+
+Write a similar sampling procedure ``testing-random-3`` that repeatedly calls
+``random`` to generate ``0``, ``1``, and ``2``, tallies how many times
+each of ``0``, ``1``, and ``2`` is generated, and normalizes the
+three results as percentages.  Does the distribution look balanced?
+
+
+Equality within a percent of the mean
+-------------------------------------
+
+Let us formalize the approximative equality of two numbers as *an
+equality within a percent of their arithmetic mean*.  For example, the
+distance between 99 and 101 is 2 and their arithmetic mean is 100.
+Two percent of this arithmetic mean is 2, which means that 99 and 101
+are equal within at least 2% of their mean, but not less, e.g., not
+within 1%.  This example can be materialized into unit tests:
+
+.. code-block:: scheme
+
+  (define positive-test-of-equality-within-a-percent-of-the-mean
+    (lambda (candidate)
+      (and (candidate 100 100 0)  ;;; 100 is equal to 100 within 0% of their mean
+  
+           (candidate 100 101 1)  ;;; 100 is equal to 101 within 1% of their mean
+           (candidate 101 100 1)  ;;; and vice-versa
+  
+           (candidate 100 102 2)  ;;; 100 is equal to 102 within 2% of their mean
+           (candidate 102 100 2)  ;;; and vice-versa
+  
+           (candidate 99 101 2)   ;;; 99 is equal to 101 within 2% of their mean
+           (candidate 101 99 2)   ;;; and vice-versa
+  
+           (candidate 99 101 3)   ;;; 99 is also equal to 101 within 3% of their mean
+           (candidate 101 99 3)   ;;; and vice-versa
+  
+           (candidate 49 51 4)    ;;; 49 is equal to 51 within 4% of their mean
+           (candidate 51 49 4)    ;;; and vice-versa
+  
+           (candidate 12345 12354 5)
+           ;;;
+           )))
+  
+  (define negative-test-of-equality-within-a-percent-of-the-mean
+    (lambda (candidate)
+      (not (or (candidate 99 101 1)   ;;; 99 is not equal to 101 within 1% of their mean
+               (candidate 101 99 1)   ;;; and vice-versa
+  
+               (candidate 100 102 1)  ;;; 100 is not equal to 102 within 1% of their mean
+               (candidate 102 100 1)  ;;; and vice-versa
+  
+               (candidate 100 103 2)  ;;; 100 is not equal to 103 within 2% of their mean
+               (candidate 103 100 2)  ;;; and vice-versa
+  
+               ;;; 49 is not equal to 51 within less than 2%:
+               (candidate 49 51 1)
+               (candidate 49 51 1.5)
+               (candidate 49 51 1.9)
+               (candidate 49 51 1.9999)
+  
+               ;;; and vice versa:
+               (candidate 51 49 1)
+               (candidate 51 49 1.5)
+               (candidate 51 49 1.9)
+               (candidate 51 49 1.9999)
+  
+               ;;;
+               ))))
+
+.. epigraph::
+
+   | Don't sweat it, just test it:
+   | this approximative equality is implemented just below.
+   | What are the chances for this kind of random stuff
+   | to be at the exam anyhow?
+   | Slim, my friend.  Very slim.
+
+   -- `Ve and Vili <http://en.wikipedia.org/wiki/Valhalla_(comics)#Album_titles_and_summaries>`_
+
+Food for thought:
+
+* So 100 and 101 are equal within 1% of their mean.  Do you think that
+  99 and 100 are also equal within 1% of their mean?
+
+* Do you think that 50 and 100 are equal within 50% of their mean?
+  Within 51%?  Within 75%?  Within 66%?  Within 67%?
+
+As a stepping stone, let us first characterize the arithmetic distance
+between two numbers:
+
+.. code-block:: scheme
+
+  (define test-arithmetic-distance
+    (lambda (candidate)
+      (and (= (candidate 3 5) 2)   ;;; the distance between 3 and 5 is 2
+           (= (candidate 5 3) 2)   ;;; and vice versa
+  
+           (= (candidate 1 7) 6)   ;;; the distance between 1 and 7 is 6
+           (= (candidate 7 1) 6)   ;;; and vice versa
+  
+           (= (candidate 2 2) 0)   ;;; the distance between 2 and 2 is 0
+           ;;;
+           )))
+
+This arithmetic distance between two numbers is the absolute value of
+their difference:
+
+.. code-block:: scheme
+
+  (define arithmetic-distance
+    (lambda (n1 n2)
+      (abs (- n1 n2))))
+
+where ``abs`` returns the absolute value of its argument.
+
+This implementation passes the unit test::
+
+  > (test-arithmetic-distance arithmetic-distance)
+  #t
+  > 
+
+The arithmetic mean of two numbers is the number that is at the same
+arithmetic distance (i.e., that is equidistant) from these two
+numbers:
+
+.. code-block:: scheme
+
+  (define test-arithmetic-mean
+    (lambda (candidate)
+      (and ;;; 4 is equidistant from 3 and 5 and vice-versa
+           (= (distance 3 4) (distance 4 5))
+           (= (candidate 3 5) 4)
+           (= (candidate 5 3) 4)
+           
+           ;;; 5 is equidistant from 2 and 8 and vice-versa
+           (= (distance 2 5) (distance 5 8))
+           (= (candidate 2 8) 5)
+           (= (candidate 8 2) 5)
+  
+           ;;; 2 is equidistant from itself
+           (= (distance 2 2) (distance 2 2))
+           (= (candidate 2 2) 2)
+
+           ;;;
+           )))
+
+.. index:: Rantanplan
+
+.. epigraph::
+
+  | Yes, yes.
+  | But which half?
+
+  -- `Rantanplan <https://en.wikipedia.org/wiki/Rantanplan>`_ (wondering)
+
+The arithmetic mean of two numbers is therefore half of their sum:
+
+.. code-block:: scheme
+
+  (define arithmetic-mean
+    (lambda (n1 n2)
+      (/ (+ n1 n2) 2)))
+  
+This implementation passes the unit test::
+
+  > (test-arithmetic-mean arithmetic-mean)
+  #t
+  > 
+
+So two numbers are equal within a percent of their arithmetic mean if
+their arithmetic distance is less than a percent of their arithmetic mean:
+
+.. code-block:: scheme
+
+  (define =_%
+    (lambda (n1 n2 percent)
+      (<= (arithmetic-distance n1 n2)
+          (* (arithmetic-mean n1 n2) (/ percent 100)))))
+
+This implementation passes the unit test::
+
+  > (positive-test-of-equality-within-a-percent-of-the-mean =_%)
+  #t
+  > (negative-test-of-equality-within-a-percent-of-the-mean =_%)
+  #t
+  > 
+
+
+.. _exercise-defensive-version-of-equality-within-a-percent-of-the-mean:
+
+Exercise 2
+----------
+
+Write a defensive version of ``=_%``.  You should check that the three
+arguments satisfy the ``real?`` predicate (i.e., are integers,
+rationals, or reals), and that the third lies between 0 and 100.
+If the checks succeed, just call the version of ``=_%`` that was
+defined just above.  Does your defensive version pass the same unit
+tests as ``=_%``?
+
+.. code-block:: scheme
+
+  (define defensive-=_%
+    (lambda (n1 n2 percent)
+      (errorf 'defensive-=_% "not implemented yet")))
+
+Food for thought:
+
+* Is your defensive version written with three nested if-expressions
+  with the call to ``=_%`` as the inner consequent branch and all the
+  error cases in the alternative branches, or with one flat
+  cond-expression with the call to ``=_%`` in the else clause, and all
+  the other tests negated?  What are the pros and cons of each
+  version?
+
+
+.. _exercise-variadic-equality-within-a-percent-of-the-mean:
+
+Exercise 3
+----------
+
+In connection with `the lecture note about variadic procedures
+<week-5-variadic-procedures.html>`_, write a version of ``=_%`` where
+the third argument is optional.  If only two arguments are supplied,
+the third should be ``0`` by default:
+
+.. code-block:: scheme
+
+  (define ==_%
+    (lambda (n1 n2 . optional)
+      (errorf '==_% "not implemented yet")))
+
+  (define extra-positive-test-of-equality-within-a-percent-of-the-mean
+    (lambda (candidate)
+      (and (candidate 1 1)
+           (candidate 10 10)
+           (candidate 100 100)
+           (candidate 1000 1000)
+           ;;;
+           )))
+
+Your procedure should pass the following unit tests:
+
+* ``positive-test-of-equality-within-a-percent-of-the-mean``,
+
+* ``negative-test-of-equality-within-a-percent-of-the-mean``, and
+
+* ``extra-positive-test-of-equality-within-a-percent-of-the-mean``.
+
+Food for thought:
+
+* How would you write a defensive version of ``==_%``?
+
+* Would your defensive version pass the same unit tests as ``==_%``?
+
+
+Solution for Exercise 3
+-----------------------
+
+When ``==_%`` is applied to more than two arguments, ``n1`` is bound
+to the first, ``n2`` is bound to the second, and ``optional`` is bound
+to a proper list of the remaining arguments.  In the present case,
+
+* if there are only two arguments, this list is empty, and therefore
+  we should supply the default value for the third argument of
+  ``=_%``;
+
+* if there are exactly three arguments, this list is a singleton list,
+  i.e., it contains exactly one element, and this element is the third
+  argument of ``=_%``; and
+
+* if there are more than three arguments, we are in an error case:
+
+.. code-block:: scheme
+
+  (define ==_%
+    (lambda (n1 n2 . optional)
+      (cond
+        [(null? optional)
+         (=_% n1 n2 0)]
+        [(null? (cdr optional))
+         (=_% n1 n2 (car optional))]
+        [else
+         (errorf '==_%
+                 "too many arguments: ~s"
+                 optional)])))
+
+This procedure passes the unit tests::
+
+  > (positive-test-of-equality-within-a-percent-of-the-mean ==_%)
+  #t
+  > (negative-test-of-equality-within-a-percent-of-the-mean ==_%)
+  #t
+  > (extra-positive-test-of-equality-within-a-percent-of-the-mean ==_%)
+  #t
+  > 
+
+A defensive version of ``==_%`` would just call the defensive version
+of ``=_%``.  And yes, it should pass the same unit tests as ``==_%``
+since all it does is to check the validity of its arguments.
+
+
+.. _exercise-approximative-equality-of-two-numbers-with-a-percentage-of-their-arithmetic-mean:
+
+Exercise 4
+----------
+
+As an alternative, formalize the approximative equality of two numbers
+with a percentage of their arithmetic mean, implement your equality
+with a Scheme procedure, and verify that it passes the following unit
+tests:
+
+.. code-block:: scheme
+
+  (define positive-test-of-percented-equality-with-respect-to-the-mean
+    (lambda (candidate)
+      (and (candidate 100 100 100)   ;;; 100 is 100% equal to 100
+  
+           (candidate 100 101 99)    ;;; 100 is 99% equal to 101
+           (candidate 101 100 99)    ;;; and vice-versa
+  
+           (candidate 100 102 98)    ;;; 100 is 98% equal to 102
+           (candidate 102 100 98)    ;;; and vice-versa
+  
+           (candidate 99 101 98)     ;;; 99 is 98% equal to 101
+           (candidate 101 99 98)     ;;; and vice-versa
+  
+           (candidate 99 101 97)     ;;; 99 is also 97% equal to 101
+           (candidate 101 99 97)     ;;; and vice-versa
+  
+           (candidate 49 51 96)      ;;; 49 is 96% equal to 51
+           (candidate 51 49 96)      ;;; and vice-versa
+  
+           ;;;
+           )))
+  
+  (define negative-test-of-percented-equality-with-respect-to-the-mean
+    (lambda (candidate)
+      (not (or (candidate 100 102 100)   ;;; 100 is not 100% equal to 102
+               (candidate 102 100 100)   ;;; and vice-versa
+  
+               (candidate 99 101 99)     ;;; 99 is not 99% equal to 101
+               (candidate 101 99 99)     ;;; and vice-versa
+  
+               (candidate 100 102 99)    ;;; 100 is not 99% equal to 102
+               (candidate 102 100 99)    ;;; and vice-versa
+  
+               (candidate 100 103 98)    ;;; 100 is not 98% equal to 105
+               (candidate 103 100 98)    ;;; and vice-versa
+  
+               (candidate 100 101 99.6)  ;;; 100 is not 99.6% equal to 101
+               (candidate 101 100 99.6)  ;;; and vice-versa
+  
+               ;;; 49 is not equal to 51 at less than 98%:
+               (candidate 49 51 99)
+               (candidate 49 51 98.5)
+               (candidate 49 51 98.1)
+               (candidate 49 51 98.00001)
+  
+               ;;; and vice versa:
+               (candidate 51 49 99)
+               (candidate 51 49 98.5)
+               (candidate 51 49 98.1)
+               (candidate 51 49 98.00001)
+  
+               ;;;
+               ))))
+
+  (define =^%
+    (lambda (n1 n2 percent)
+      (errorf '=^% "not implemented yet")))
+
+As a parallel to
+:ref:`exercise-variadic-equality-within-a-percent-of-the-mean`, write
+a version of ``=^%`` where the third argument is optional, and write a
+unit-test procedure for it.  How does this unit-test procedure differ
+from the unit-test procedure from
+:ref:`exercise-variadic-equality-within-a-percent-of-the-mean`?
+
+.. code-block:: scheme
+
+  (define ==^%
+    (lambda (n1 n2 . optional)
+      (errorf '==^% "not implemented yet")))
+
+
+Testing the distribution of random numbers
+------------------------------------------
+
+We are now in position to not just visualize, but test the
+distribution of random numbers, by equipping ``random-2`` in the
+section on :ref:`visualizing-the-distribution-of-random-numbers` with
+an approximative equality:
+
+.. code-block:: scheme
+
+  (define sample-random-2-within-a-percent-and-a-size-of-a-sample
+    (lambda (percent size-of-sample)
+      (letrec ([loop (lambda (i zeroes ones)
+                       (if (= i 0)
+                           (list (* (/ zeroes n) 100.0)
+                                 (* (/ ones n) 100.0)
+                                 (=_% zeroes ones percent))   ;;; <---***---
+                           (let ([random-number (random 2)])
+                             (case random-number
+                               [(0)
+                                (loop (- i 1) (+ zeroes 1) ones)]
+                               [(1)
+                                (loop (- i 1) zeroes (+ ones 1))]
+                               [else
+                                (errorf 'sample-random-2-within-a-percent-and-a-size-of-a-sample
+                                        "~s is not an appropriate random number"
+                                        random-number)]))))])
+        (loop size-of-sample 0 0))))
+
+The following scenario illustrates that evaluating ``(random 2)``
+generates ``0`` and ``1`` approximatively the same number of times,
+within 5%::
+
+  > (sample-random-2-within-a-percent-and-a-size-of-a-sample 5 10000)
+  (49.69 50.31 #t)
+  > (sample-random-2-within-a-percent-and-a-size-of-a-sample 5 100000)
+  (50.005 49.995 #t)
+  > (sample-random-2-within-a-percent-and-a-size-of-a-sample 5 1000000)
+  (50.0085 49.9915 #t)
+  > 
+
+
+.. _exercise-sample-random-2-within-a-percent-with-an-option:
+
+Exercise 5
+----------
+
+Define a default size of sample, and make the second argument of
+``sample-random-2-within-a-percent-and-a-size-of-a-sample`` optional:
+
+.. code-block:: scheme
+
+  (define global-size-of-sample 10000)
+
+  (define sample-random-2-within-a-percent
+    (lambda (percent . optional)
+      (errorf 'sample-random-2-within-a-percent "not implemented yet")))
+
+
+Exercise 6
+----------
+
+As a continuation of
+:ref:`exercise-approximative-equality-of-two-numbers-with-a-percentage-of-their-arithmetic-mean`,
+implement a procedure ``sample-random-2-up-to-a-percent`` that tests
+the distribution of random numbers with an approximative equality up
+to a percentage of the arithmetic mean::
+
+  > (sample-random-2-up-to-a-percent 95 10000)
+  (49.3 50.7 #t)
+  > (sample-random-2-up-to-a-percent 95 100000)
+  (49.968 50.032 #t)
+  > 
+
+It would be nice if you could make its second argument optional,
+as in :ref:`exercise-sample-random-2-within-a-percent-with-an-option`::
+
+  > (sample-random-2-up-to-a-percent 95)
+  (50.12 49.88 #t)
+  > (sample-random-2-up-to-a-percent 99)
+  (49.29 50.71 #f)
+  > 
+
+
+Testing the distribution of a flip procedure
+--------------------------------------------
+
+Let us abstract the generation of random numbers, in
+``sample-random-2-within-a-percent-and-a-size-of-a-sample``, with a
+given flip procedure that returns ``0`` or ``1``:
+
+.. code-block:: scheme
+
+  (define sample-flip-within-a-percent-given-a-size-of-sample
+    (lambda (flip percent size-of-sample)
+      (letrec ([loop (lambda (i zeroes ones)
+                       (if (= i 0)
+                           (list (* (/ zeroes size-of-sample) 100.0)
+                                 (* (/ ones size-of-sample) 100.0)
+                                 (=_% zeroes ones percent))
+                           (let ([random-number (flip)])   ;;; <---***---
+                             (case random-number
+                               [(0)
+                                (loop (- i 1) (+ zeroes 1) ones)]
+                               [(1)
+                                (loop (- i 1) zeroes (+ ones 1))]
+                               [else
+                                (errorf 'sample-flip-within-a-percent-given-a-size-of-sample
+                                        "~s is not an appropriate random number"
+                                        random-number)]))))])
+        (loop size-of-sample 0 0))))
+  
+  (define global-size-of-sample 10000)
+  
+  (define sample-flip-within-a-percent
+    (lambda (flip percent . optionals)
+      (let ([size-of-sample (cond
+                              [(null? optionals)
+                               global-size-of-sample]
+                              [(null? (cdr optionals))
+                               (car optionals)]
+                              [else
+                               (errorf 'sample-flip-within-a-percent
+                                       "too many arguments: ~s"
+                                       optionals)])])
+        (sample-flip-within-a-percent-given-a-size-of-sample flip percent size-of-sample))))
+
+Defining ``sample-random-2-within-a-percent-and-a-size-of-a-sample``
+now reduces to calling
+``sample-flip-within-a-percent-given-a-size-of-sample`` with a
+particular flip procedure:
+
+.. code-block:: scheme
+
+  (define sample-random-2-within-a-percent-and-a-size-of-a-sample_alt
+    (lambda (percent size-of-sample)
+      (sample-flip-within-a-percent-given-a-size-of-sample
+        (lambda ()
+          (random 2))
+        percent
+        size-of-sample)))
+
+Food for thought:
+
+* Could we similarly abstract the equality predicate with which to
+  test the number of zeroes and ones that have been sampled?
+
+
+.. _an-unfair-flip-of-a-coin:
+
+An unfair flip of a coin
+------------------------
+
+Given 100% of fairness, the following procedure throws a number randomly
+in a ball park:
+
+* if this number is in the first half of the ball park, the procedure
+  returns 0; and
+
+* if this number is in the second half of the ball park, the procedure
+  returns 1.
+
+Given a smaller degree of fairness, the procedure throws a number
+randomly (but fairly) in a *smaller* ball park than specified:
+
+* if this number is in the first half of the smaller ball park, the
+  procedure returns 0;
+
+* if this number is in the second half of the smaller ball park, the
+  procedure returns 1;
+
+* otherwise, the procedure returns 1.
+
+The more unfair, the smaller the actual ball park:
+
+.. code-block:: scheme
+
+  (define flip-with-a-given-fairness-in-a-given-ball-park
+    (lambda (fairness ball-park)
+      ;;; fairness: between 0% (exclusively) and 100% (inclusively)
+      ;;; ball-park: a positive integer
+      (let* ([size-decrease (* ball-park (/ (- 100 fairness) 100))]
+             [actual-ball-park (- ball-park size-decrease)])
+        (if (< (random ball-park)
+               (/ actual-ball-park 2))
+            0
+            1))))
+
+  (define defensive-flip-with-a-given-fairness-in-a-given-ball-park
+    (lambda (fairness ball-park)
+      (cond
+        [(not (and (real? fairness)
+                   (< 0 fairness)
+                   (<= fairness 100)))
+         (errorf 'flip-with-a-given-fairness-in-a-given-ball-park
+                 "illegal fairness: ~s"
+                 fairness)]
+        [(not (and (integer? ball-park)
+                   (positive? ball-park)))
+         (errorf 'flip-with-a-given-fairness-in-a-given-ball-park
+                 "not a positive integer: ~s"
+                 ball-park)]
+        [else
+         (flip-with-a-given-fairness-in-a-given-ball-park fairness ball-park)])))
+
+For convenience, let us agree on a default size for the ball park:
+
+.. code-block:: scheme
+
+  (define global-ball-park 1000)
+  
+Given a degree of fairness, ``make-flip`` returns a procedure that,
+every time it is applied, flips a coin with this given degree of
+fairness in the global ball park:
+
+.. code-block:: scheme
+
+  (define make-flip
+    (lambda (fairness)
+      (lambda ()
+        (defensive-flip-with-a-given-fairness-in-a-given-ball-park fairness global-ball-park))))
+
+Let us now sample the flip procedure with decreasing degrees of
+fairness, from 100% to 1%::
+
+  > (sample-flip-within-a-percent (make-flip 100) 10)
+  (50.42 49.58 #t)
+  > (sample-flip-within-a-percent (make-flip 90) 10)
+  (44.58 55.42 #f)
+  > (sample-flip-within-a-percent (make-flip 80) 10)
+  (40.0 60.0 #f)
+  > (sample-flip-within-a-percent (make-flip 70) 10)
+  (34.08 65.92 #f)
+  > (sample-flip-within-a-percent (make-flip 66.6666666) 10)
+  (33.36 66.64 #f)
+  > (sample-flip-within-a-percent (make-flip 60) 10)
+  (30.89 69.11 #f)
+  > (sample-flip-within-a-percent (make-flip 50) 10)
+  (24.5 75.5 #f)
+  > (sample-flip-within-a-percent (make-flip 40) 10)
+  (20.11 79.89 #f)
+  > (sample-flip-within-a-percent (make-flip 30) 10)
+  (15.07 84.93 #f)
+  > (sample-flip-within-a-percent (make-flip 20) 10)
+  (9.71 90.29 #f)
+  > (sample-flip-within-a-percent (make-flip 10) 10)
+  (4.9 95.1 #f)
+  > (sample-flip-within-a-percent (make-flip 5) 10)
+  (2.46 97.54 #f)
+  > (sample-flip-within-a-percent (make-flip 1) 10)
+  (0.52 99.48 #f)
+  > 
+
+We can see that the first number in the result is roughly half of the
+argument of ``make-flip``:
+
+* ``(make-flip 50)`` is fair 50% of the time (hence there are 25%/25%
+  of heads/tails), and the rest of the time (50%), it is completely
+  unfair.  Therefore, there are 25% of heads and 25%+50% = 75% of
+  tails in the result.
+
+* ``(make-flip 66)`` is fair 66% of the time (hence there are 33%/33%
+  of heads/tails), and the rest of the time (33%), it is completely
+  unfair.  Therefore, there are 33% of heads and 33%+33% = 66% of
+  tails in the result.
+
+* ``(make-flip 10)`` is fair 10% of the time (hence there are 10%/10%
+  of heads/tails), and the rest of the time (80%), it is completely
+  unfair.  Therefore, there are 10% of heads and 10%+80% = 90% of
+  tails in the result.
+
+* ``(make-flip 100)`` is fair 100% of the time (hence there are
+  50%/50% of heads/tails), and the rest of the time (0%), it is
+  completely unfair.  Therefore, there are 50% of heads and 50%+0% =
+  50% of tails in the result.
+
+
+NB. The narrative of this section is based on Randi Katrine Hillerøe's
+luminous computational characterization of throwing random numbers in
+ball parks (07 May 2015).
+
+
+Exercise 7
+----------
+
+Design a procedure that, given 100% of fairness, throws a number randomly
+in a ball park:
+
+* if this number is in the first half of the ball park, your procedure
+  returns 0; and
+
+* if this number is in the second half of the ball park, your procedure
+  returns 1.
+
+Given less fairness, your procedure should throw a number randomly in
+a *bigger* ball park than specified:
+
+* if this number is in the first half of the ball park, your procedure
+  returns 0;
+
+* if this number is in the second half of the ball park, your procedure
+  returns 1;
+
+* if this number is outside the ball park, your procedure returns 1.
+
+The more unfair, the bigger the actual ball park should be.
+
+.. code-block:: scheme
+
+  (define flip-with-a-given-fairness-in-a-given-ball-park_alt
+    (lambda (fairness ball-park)
+      ;;; fairness: between 0% (exclusively) and 100% (inclusively)
+      ;;; ball-park: a positive integer
+      (errorf 'flip-with-a-given-fairness-in-a-given-ball-park_alt
+              "not implemented yet")))
+
+Food for thought:
+
+* Play with the increasing factor.  Can you make sense of it?
+
+
+A collection of unfair coins
+----------------------------
+
+The following procedures, when applied, return ``0`` or ``1`` with a
+varied degree of fairness::
+
+  (define fair-flip
+    (make-flip 100))
+  
+  ;;; > (sample-flip-within-a-percent fair-flip 5)
+  ;;; (50.93 49.07 #t)
+  ;;; > (sample-flip-within-a-percent fair-flip 5)
+  ;;; (49.58 50.42 #t)
+  ;;; > 
+  
+  ;;; Because the house always wins:
+  
+  (define slightly-biased-flip
+    (make-flip 95))
+  
+  ;;; > (sample-flip-within-a-percent slightly-biased-flip 5)
+  ;;; (47.67 52.33 #f)
+  ;;; > (sample-flip-within-a-percent slightly-biased-flip 5)
+  ;;; (47.36 52.64 #f)
+  ;;; > (sample-flip-within-a-percent slightly-biased-flip 10)
+  ;;; (47.85 52.15 #t)
+  ;;; > (sample-flip-within-a-percent slightly-biased-flip 10)
+  ;;; (47.75 52.25 #t)
+  ;;; > 
+  
+  (define quite-biased-flip
+    (make-flip 90))
+  
+  ;;; > (sample-flip-within-a-percent quite-biased-flip 15)
+  ;;; (44.25 55.75 #f)
+  ;;; > (sample-flip-within-a-percent quite-biased-flip 15)
+  ;;; (45.25 54.75 #f)
+  ;;; > 
+  
+  (define seriously-biased-flip
+    (make-flip 80))
+  
+  (define horribly-biased-flip
+    (make-flip 66))
+  
+  (define monstruously-biased-flip
+    (make-flip 50))
+  
+  ;;; > (sample-flip-within-a-percent monstruously-biased-flip 5)
+  ;;; (24.25 75.75 #f)
+  ;;; > (sample-flip-within-a-percent monstruously-biased-flip 5)
+  ;;; (24.14 75.86 #f)
+  ;;; > (sample-flip-within-a-percent monstruously-biased-flip 100)
+  ;;; (24.61 75.39 #f)
+  ;;; > (sample-flip-within-a-percent monstruously-biased-flip 101)
+  ;;; (25.01 74.99 #t)
+  ;;; > (sample-flip-within-a-percent monstruously-biased-flip 101)
+  ;;; (26.12 73.88 #t)
+  ;;; > 
+  
+  (define hopelessly-biased-flip
+    (make-flip 5))
+  
+  ;;; > (sample-flip-within-a-percent hopelessly-biased-flip 100)
+  ;;; (2.42 97.58 #f)
+  ;;; > (sample-flip-within-a-percent hopelessly-biased-flip 100)
+  ;;; (2.52 97.48 #f)
+  ;;; > (sample-flip-within-a-percent hopelessly-biased-flip 200)
+  ;;; (2.28 97.72 #t)
+  ;;; > (sample-flip-within-a-percent hopelessly-biased-flip 200)
+  ;;; (2.48 97.52 #t)
+  ;;; > 
+
+
+.. index:: Von Neumann (simulation of a fair coin)
+
+A fair flip using a biased coin
+-------------------------------
+
+`Legend <https://en.wikipedia.org/wiki/Fair_coin>`_ (as in: `John von
+Neumann <https://en.wikipedia.org/wiki/John_von_Neumann>`_) has it
+that one can simulate a fair coin out of a biased coin with the
+following method:
+
+1. toss the coin twice;
+
+2. if the results are the same, then forget them and iterate the method;
+
+   otherwise, return the first one.
+
+In Scheme:
+
+.. code-block:: scheme
+
+  (define make-fair-flip-out-of-any-flip
+    (lambda (flip)
+      (lambda ()
+        (letrec ([loop (lambda ()
+                         (let* ([r1 (flip)]
+                                [r2 (flip)])
+                           (if (= r1 r2)
+                               (loop)
+                               r1)))])
+          (loop)))))
+
+Let's put the method to the test::
+
+  > (sample-flip-within-a-percent (make-fair-flip-out-of-any-flip monstruously-biased-flip) 5)
+  (49.45 50.55 #t)
+  > (sample-flip-within-a-percent (make-fair-flip-out-of-any-flip monstruously-biased-flip) 5)
+  (50.32 49.68 #t)
+  > (sample-flip-within-a-percent (make-fair-flip-out-of-any-flip hopelessly-biased-flip) 5)
+  (50.42 49.58 #t)
+  > (sample-flip-within-a-percent (make-fair-flip-out-of-any-flip hopelessly-biased-flip) 5)
+  (49.62 50.38 #t)
+  > 
+
+Det var godt.
+
+
+Exercise 8
+----------
+
+Would it still be a fair draw if ``make-fair-flip-out-of-any-flip``
+returned ``r2`` instead of ``r1``?
+
+
+Exercise 9
+----------
+
+Could we use a let-expression rather than a let*-expression in the
+definition of ``make-fair-flip-out-of-any-flip``?
+
+
+Exercise 10
+-----------
+
+Could we cleverly reuse the unused result of the previous iteration?
+
+.. code-block:: scheme
+
+  (define make-fair-flip-out-of-any-flip_optimized
+    (lambda (flip)
+      (lambda ()
+        (letrec ([loop (lambda (r1)
+                         (let ([r2 (flip)])
+                           (if (= r1 r2)
+                               (loop r2)
+                               r1)))])
+          (loop (flip))))))
+
+
+Exercise 11
+-----------
+
+Harald the Bold proposes the following definition.
+Do you concur with him?
+
+.. code-block:: scheme
+
+  (define make-fair-flip-out-of-any-flip_v3
+    (lambda (flip)
+      (lambda ()
+        (letrec ([loop (lambda ()
+                         (let ([r (flip)])
+                           (if (= r (flip))
+                               (loop)
+                               r)))])
+          (loop)))))
+
+
+Exercise 12
+-----------
+
+Alfrothul the Resplendent proposes the following definition.
+Do you concur with him?
+
+.. code-block:: scheme
+
+  (define make-fair-flip-out-of-any-flip_v4
+    (lambda (flip)
+      (letrec ([loop (lambda ()
+                       (let ([r (flip)])
+                         (if (= r (flip))
+                             (loop)
+                             r)))])
+        loop)))
+
+
+Number of iterations in von Neumann's simulation
+------------------------------------------------
+
+How long does it take to obtain a fair toss out of an unfair coin?
+Let's count the number of iterations in von Neumann's simulation and
+compute its average:
+
+.. code-block:: scheme
+
+  (define number-of-iterations-of-make-fair-flip-out-of-any-flip
+    (lambda (flip)
+      (lambda () 
+        (letrec ([loop (lambda (i)
+                         (let* ([r1 (flip)]
+                                [r2 (flip)])
+                           (if (= r1 r2)
+                               (loop (1+ i))
+                               i)))])
+          (loop 0)))))
+
+  (define average
+    (lambda (thunk how-many-times)
+      (letrec ([loop (lambda (n a)
+                       (if (= n 0)
+                           (* (/ a how-many-times) 1.0)
+                           (loop (1- n) (+ (thunk) a))))])
+        (loop how-many-times 0))))
+
+Actually, it doesn't take long at all to simulate a fair flip out of a
+slightly biased coin::
+
+  > (average (number-of-iterations-of-make-fair-flip-out-of-any-flip (make-flip 100)) 100000)
+  1.00199
+  > (average (number-of-iterations-of-make-fair-flip-out-of-any-flip (make-flip 90)) 100000)
+  1.02484
+  > 
+
+It takes an average of 2 iterations when the argument of ``make-flip``
+is 42, and it degrades for lower values.
+
+
+Exercise 13
+-----------
+
+How much does this average degrade for lower values?  How many
+iterations, on the average, does the simulation take when the argument
+of ``make-flip`` is 10?  5?  2?  1?  0.5?
+
+
+.. _exercise-monty-hall-problem:
+
+Exercise 14
+-----------
+
+In this mandatory exercise, you are asked to
+implement a simulation of `the Monty Hall problem`__.
+
+.. __: http://en.wikipedia.org/wiki/Monty_Hall_problem
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-5-random-programming.scm>`_
+  (latest version: 08 Sep 2015).
+
+
+Version
+-------
+
+Created
+[08 Sep 2015]

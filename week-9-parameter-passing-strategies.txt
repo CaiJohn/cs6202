@@ -1,0 +1,767 @@
+.. -*- mode: rst -*-
+
+Note for Week 9 about parameter-passing strategies
+==================================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercise
+------------------
+
+* :ref:`exercise-eager-and-lazy-lists`:
+  eager and lazy lists
+
+
+Recommended exercises
+---------------------
+
+Look at previous exams for plenty of questions about the material of
+this lecture note.
+
+
+Resources
+---------
+
+* The `zip file
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/interpreters-for-Scheme.zip>`_
+  containing three Scheme interpreters: one for a
+  call-by-value version of our subset of Scheme, one for a
+  call-by-name version of our subset of Scheme, and one for a
+  call-by-need version of our subset of Scheme
+  (latest version: 12 May 2015).
+
+* The file `lists.scm
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/lists.scm>`_
+  (latest version: 03 Oct 2015).
+
+* The file `fibonacci.scm
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/fibonacci.scm>`_
+  (latest version: 03 Oct 2015).
+
+
+Parameter-passing strategies
+----------------------------
+
+Please download `this zip file
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/interpreters-for-Scheme.zip>`_
+in your workspace.  (It contains three interpreters for versions of
+Scheme with specific parameter-passing strategies.  In what follows,
+you will then be asked to load one of these interpreters or another
+and experiment with it.)
+
+Reminder: In Scheme, user-defined procedures with fixed arity are
+declared with ``(lambda (<variable>*) <expression>)`` and they are
+applied with ``(<expression> <expression>*)``.  The starred variables
+are said to be the *formal parameters* and the starred expressions are
+said to be the *actual parameters*.
+
+Example::
+
+  Petite Chez Scheme Version 8.0
+  Copyright (c) 1985-2010 Cadence Research Systems
+  
+  > ((lambda (x y)
+       (- y x))
+     3
+     10)
+  7
+  > 
+
+In the scenario above, the formal parameters are ``x`` and ``y``, and the actual
+parameters are ``3`` and ``10``.  Ditto in the following scenario::
+
+  > (define foo
+      (lambda (x y)
+        (- y x)))
+  > (foo 3 10)
+  7
+  >     
+
+When there is no possible confusion, the word *argument* is often used to
+refer to actual parameters.
+
+
+.. index:: call by value
+
+Call by value
+-------------
+
+In Scheme, the actual parameters are evaluated *at the point of call*, i.e.,
+*before the procedure is applied*.
+
+This parameter-passing strategy is known as **call by value**.
+
+Let us illustrate it with an interpreter for Scheme that uses
+*left-to-right* call by value::
+
+    > (load "interpreter-for-Scheme-with-call-by-value.scm")
+    > (start-the-interpreter "by-value> ")
+    There we go again, in call by value.
+    by-value> (define bar
+                (lambda (x y z)
+                  (+ x (+ y y))))
+    by-value> 
+
+This procedure takes 3 arguments.  It adds its first argument to the
+result of adding its second argument to itself, and it ignores its third
+argument.
+
+Let us apply it to three actual parameters that print something
+meaningful before yielding the values ``10``, ``100``, and ``1000``::
+
+  by-value> (bar (begin
+                   (display "first")
+                   (newline)
+                   10)
+                 (begin
+                   (display "second")
+                   (newline)
+                   100)
+                 (begin
+                   (display "third")
+                   (newline)
+                   1000))
+  first
+  second
+  third
+  210
+  by-value> 
+
+The three arguments are evaluated before ``bar`` is called.  Another
+way to visualize the call is to trace ``bar``, back in Scheme, though
+in Scheme, the order of evaluation of sub-expressions in an
+application is unspecified (it could be from left to right, or from
+right to left, or any other order)::
+
+  by-value> (exit)
+  "So long."
+  > (define bar
+      (trace-lambda bar (x y z)
+        (+ x (+ y y))))
+  > (bar (begin
+           (display "first")
+           (newline)
+           10)
+         (begin
+           (display "second")
+           (newline)
+           100)
+         (begin 
+           (display "third")
+           (newline)
+           1000))
+  first
+  second
+  third
+  |(bar 10 100 1000)
+  |210
+  210
+  > 
+
+
+.. index:: call by name
+
+Call by name
+------------
+
+Assume a version of Scheme with another parameter-passing strategy: the
+arguments are passed unevaluated, and they are evaluated only when (and
+if) we need them::
+
+  > (load "interpreter-for-Scheme-with-call-by-name.scm")
+  > (start-the-interpreter "by-name> ")
+  There we go again, in call by name.
+  by-name> (define bar
+             (lambda (x y z)
+               (+ x (+ y y))))
+  bar
+  by-name> (bar (begin
+                  (display "first")
+                  (newline)
+                  10)
+                (begin
+                  (display "second")
+                  (newline)
+                  100)
+                (begin
+                  (display "third")
+                  (newline)
+                  1000))
+  first
+  second
+  second
+  210
+  by-name> 
+
+In this scenario, the first argument is evaluated once, since it is used
+once; the second argument is evaluated twice, since it is used twice; and
+the third argument is not evaluated at all, since it is not used.
+
+.. index:: copy rule
+
+This parameter-passing strategy is known as **call by name**.  It obeys the
+so-called *copy rule*, i.e., actual parameters can be substituted for
+formal parameters in the body of procedures, when reasoning about
+programs::
+
+  by-name> (+ (begin
+                (display "first")
+                (newline)
+                10)
+              (+ (begin
+                   (display "second")
+                   (newline)
+                   100)
+                 (begin
+                   (display "second")
+                   (newline)
+                   100)))
+  first
+  second
+  second
+  210
+  by-name> (exit)
+  "So long."
+  > 
+
+
+.. index:: call by need
+
+Call by need
+------------
+
+.. index:: memoization
+
+The call-by-name parameter-passing strategy can be optimized with a
+memoization capability which is such that it memoizes (i.e., remembers) the
+value computed the first time an argument is used.  If the argument is
+used again, it is not recomputed -- the memoized value is returned
+instead::
+
+  > (load "interpreter-for-Scheme-with-call-by-need.scm")
+  > (start-the-interpreter "by-need> ")
+  There we go again, in call by need.
+  by-need> (define bar
+             (lambda (x y z)
+               (+ x (+ y y))))
+  bar
+  by-need> (bar (begin
+                  (display "first")
+                  (newline)
+                  10)
+                (begin
+                  (display "second")
+                  (newline)
+                  100)
+                (begin
+                  (display "third")
+                  (newline)
+                  1000))
+  first
+  second
+  210
+  by-need> (exit)
+  "So long."
+  > 
+
+In this scenario, the first argument is evaluated once, since it is
+used once; the second argument is evaluated only once, even though it
+is used twice; and the third argument is not evaluated at all, since
+it is not used.
+
+This parameter-passing strategy is known as **call by need**.
+
+
+Other parameter-passing strategies
+----------------------------------
+
+There are many other `parameter-passing strategies`__, e.g., call by
+copy-restore and call by reference.
+
+.. __: http://en.wikipedia.org/wiki/Evaluation_strategy
+
+
+The core Scheme interpreter
+---------------------------
+
+In the zip file, the main file
+"interpreter-for-Scheme-with-thunks.scm" is a clone of the
+self-interpreter you used the first week, with one uniform change:
+
+* all variables now denote *thunks* (i.e., parameterless procedures),
+  and
+
+* looking them up forces the thunk they denote.
+
+The interpreter is parameterized with a procedure ``_delay``
+that maps a thunk to a thunk, and the evaluation of all actual parameters
+is now wrapped with a call to this procedure.
+
+A thunk is forced using the following procedure:
+
+.. code-block:: scheme
+
+  (define _force
+    (lambda (thunk)
+      (thunk)))
+
+
+Call by value
+-------------
+
+The procedure ``_delay`` maps a thunk into a constant thunk:
+
+.. code-block:: scheme
+
+  (define call-by-value_delay
+    (lambda (t)
+      (let ([v (t)])
+        (lambda ()
+          v))))
+
+
+Call by name
+------------
+
+The procedure ``_delay`` is defined as the identity function over thunks:
+
+.. code-block:: scheme
+
+  (define call-by-name_delay
+    (lambda (t)
+      t))
+
+
+Call by need
+------------
+
+.. index:: thunk (memo-)
+
+The procedure ``_delay`` maps a thunk into a memo-thunk (i.e., a thunk
+that memoizes the result of the computation it is delaying), using a
+set!-expression to carry out the memoization:
+
+.. code-block:: scheme
+
+  (define call-by-need_delay
+    (lambda (t)
+      (let ([flag #f]
+            [result "nothing yet"])
+        (lambda ()
+          (if flag
+              result
+              (begin
+                (set! result (t))
+                (set! flag #t)
+                (set! t (lambda ()
+                          (errorf 'call-by-need_delay
+                                  "this thunk was already forced")))
+                result))))))
+
+The first time the thunk is forced, it carries out the delayed
+computation and memoizes the result by mutating the binding of
+``result``.  The variable ``flag`` denotes a Boolean reflecting
+whether the thunk has been forced yet.  Initially, the Boolean is
+``#f``, and subsequently the binding of ``flag`` is mutated to
+``#t``.
+
+
+Illustration
+------------
+
+In the following scenario, we delay a thunk using call by value, and
+then using call by name, and then using call by need.
+
+* For call by value, the thunk is immediately forced and the resulting
+  thunk is the constant one yielding this value.
+
+* For call by name, the thunk is forced every time the resulting thunk
+  is forced.
+
+* And for call by need, the thunk is only forced the first time the
+  resulting thunk is forced.
+
+Each thunk displays a message on the screen, using the predefined
+procedures ``display`` and ``newline``::
+
+  > (define value
+      (call-by-value_delay (lambda ()
+                             (begin
+                               (display "hello valued world")
+                               (newline)
+                               "value"))))
+  hello valued world
+  > (string-append (_force value) " / " (_force value))
+  "value / value"
+  > (define name
+      (call-by-name_delay (lambda ()
+                            (begin
+                              (display "hello named world")
+                              (newline)
+                              "name"))))
+  > (string-append (_force name) " / " (_force name))
+  hello named world
+  hello named world
+  "name / name"
+  > (define need
+      (call-by-need_delay (lambda ()
+                            (begin
+                              (display "hello needed world")
+                              (newline)
+                              "need"))))
+  > (string-append (_force need) " / " (_force need))
+  hello needed world
+  "need / need"
+  > 
+
+Recommendation: make sure you understand this illustration.
+
+
+.. index:: stream (memo-)
+
+The inner workings of memo-streams
+----------------------------------
+
+Memo-streams are streams that memoize the results computed so far.
+Let us revisit the stream constructor from earlier, this time using
+``call-by-need_delay``:
+
+.. code-block:: scheme
+
+  (define make-traced-memo-stream
+    (lambda (seed next)
+      (letrec ([produce (trace-lambda produce (current)
+                          (cons current
+                                (call-by-need_delay
+                                 (lambda ()
+                                   (produce (next current))))))])
+        (produce seed))))
+
+The following scenario illustrates not only the demand-driven nature
+of computing with lazy data structures, but also its memoization
+effect: the stream is only constructed to the extent that we need
+something in it, but once part of it is constructed, that construction
+is remembered.  In the scenario,
+
+* we first define a traced memo-stream of natural numbers; the result
+  is a pair whose car is ``0`` and whose cdr is a thunk::
+
+    > (define traced-memo-stream-of-natural-numbers
+        (make-traced-memo-stream 0 1+))
+    |(produce 0)
+    |(0 . #<procedure>)
+   > 
+
+* we then probe this traced memo-stream to list its 5 first elements::
+
+    > (stream-head traced-memo-stream-of-natural-numbers 5)
+    |(produce 1)
+    |(1 . #<procedure>)
+    |(produce 2)
+    |(2 . #<procedure>)
+    |(produce 3)
+    |(3 . #<procedure>)
+    |(produce 4)
+    |(4 . #<procedure>)
+    |(produce 5)
+    |(5 . #<procedure>)
+    (0 1 2 3 4)
+   > 
+
+* we then probe this traced memo-stream to list its 3 first elements:: 
+
+    > (stream-head traced-memo-stream-of-natural-numbers 3)
+    (0 1 2)
+    > 
+
+* we finally probe this traced memo-stream to list its 7 first elements::
+
+    > (stream-head traced-memo-stream-of-natural-numbers 7)
+    |(produce 6)
+    |(6 . #<procedure>)
+    |(produce 7)
+    |(7 . #<procedure>)
+    (0 1 2 3 4 5 6)
+    > 
+
+In all cases, the trace indicates that the memo-stream is constructed
+on demand and that its intermediate results are memoized.
+
+.. epigraph::
+
+   | So with call by need,
+   | the second time you run your unit tests,
+   | they should go much quicker, I guess.
+
+   -- Sigtryg the Square (reflecting)
+
+
+The Scheme interpreters
+-----------------------
+
+Each of the three files "interpreter-for-Scheme-with-call-by-name.scm",
+"interpreter-for-Scheme-with-call-by-need.scm", and
+"interpreter-for-Scheme-with-call-by-value.scm"
+each have their own definition of ``_delay`` and otherwise use the code of
+"interpreter-for-Scheme-with-thunks.scm".
+
+Notes:
+
+1. Each interpreter is started by evaluating ``(start-the-interpreter <prompt>)``.
+
+2. They are not meant to be self-interpreters (and the core
+   interpreter is, well, not meant to be perused either; `caveat
+   emptor <https://en.wikipedia.org/wiki/Caveat_emptor>`_).
+
+
+.. _exercise-eager-and-lazy-lists:
+
+Exercise 1
+----------
+
+Assume that the following 3 definitions are in the file
+`lists.scm <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/lists.scm>`_:
+
+.. code-block:: scheme
+
+  (define list-a-ref
+    (lambda (xs n)
+      (if (zero? n)
+          (car xs)
+          (list-a-ref (cdr xs) (- n 1)))))
+
+  (define make-a-list
+    (lambda (seed next)
+      (letrec ([produce (lambda (current)
+                          (begin
+                            (display "producing ")
+                            (display current)
+                            (newline)
+                            (cons current
+                                  (produce (next current)))))])
+        (produce seed))))
+
+
+  (define make-a-list-of-nats
+    (lambda (n)
+      (make-a-list n
+                   (lambda (n)
+                     (+ n 1)))))
+
+Reproduce, complete, and explain the following scenarios.
+
+* Call-by-value scenario::
+
+    > (load "interpreter-for-Scheme-with-call-by-value.scm")
+    > (start-the-interpreter "by-value> ")
+    There we go again, in call by value.
+    by-value> (load "lists.scm")
+    by-value> (define my-list-of-nats
+                (make-a-list-of-nats 0))
+
+* Call-by-name scenario::
+
+    > (load "interpreter-for-Scheme-with-call-by-name.scm")
+    > (start-the-interpreter "by-name> ")
+    There we go again, in call by name.
+    by-name> (load "lists.scm")
+    by-name> (define my-list-of-nats
+               (make-a-list-of-nats 0))
+    by-name> (+ (list-a-ref my-list-of-nats 5)
+                (list-a-ref my-list-of-nats 3))
+
+* Call-by-need scenario::
+
+    > (load "interpreter-for-Scheme-with-call-by-need.scm")
+    > (start-the-interpreter "by-need> ")
+    There we go again, in call by need.
+    by-need> (load "lists.scm")
+    by-need> (define my-list-of-nats
+               (make-a-list-of-nats 0))
+    by-need> (+ (list-a-ref my-list-of-nats 5)
+                (list-a-ref my-list-of-nats 3))
+
+In each case, what do you observe?  How do you explain your
+observation(s)?
+
+
+On computing the stream of Fibonacci numbers
+--------------------------------------------
+
+Say we are given the file `fibonacci.scm
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/fibonacci.scm>`_:
+
+.. code-block:: scheme
+
+  ;;; The traditional Fibonacci procedure:
+
+  (define fib
+    (lambda (v)
+      (letrec ([visit (lambda (n)
+                        (case n
+                         [(0 1)
+                          n]
+                         [else
+                          (+ (visit (- n 1))
+                             (visit (- n 2)))]))])
+        (if (and (integer? v)
+                 (>= v 0))
+            (visit v)
+            (errorf 'fib "not a positive integer: ~s" v)))))
+
+  ;;; The Fibonacci numbers:
+
+  (define fibonacci-numbers
+    (letrec ([make-fibs (lambda (n)
+                          (cons (fib n)
+                                (make-fibs (1+ n))))])
+      (make-fibs 0)))
+  
+  ;;; end of fibonacci.scm
+
+Were we to load this file directly into Scheme, the computation of
+``fibonacci-numbers`` would diverge because Scheme follows call by
+value, and so the actual parameters of ``cons``, in the definition of
+``fibonacci-numbers``, would be evaluated eagerly.  In a call-by-name
+language or in a call-by-need language, the problem does not occur:
+``fibonacci-numbers`` does not denote a *list*, it denotes a *stream*.
+
+The following scenario illustrates the respective behaviors of call by name
+and of call by need over the stream of Fibonacci numbers::
+
+  > (load "interpreter-for-Scheme-with-call-by-name.scm")
+  > (start-the-interpreter "by name> ")
+  There we go again, in call by name.
+  by name> (load "fibonacci.scm")
+  by name> (time (list-ref fibonacci-numbers 10))
+  (time (_eval (car es) ...))
+      1 collection
+      86 ms elapsed cpu time, including 1 ms collecting
+      88 ms elapsed real time, including 0 ms collecting
+      4029552 bytes allocated, including 4082056 bytes reclaimed
+  55
+  by name> (time (list-ref fibonacci-numbers 10))
+  (time (_eval (car es) ...))
+      1 collection
+      86 ms elapsed cpu time, including 1 ms collecting
+      94 ms elapsed real time, including 1 ms collecting
+      4029616 bytes allocated, including 4520600 bytes reclaimed
+  55
+  by name> (exit)
+  "So long."
+  > (load "interpreter-for-Scheme-with-call-by-need.scm")
+  > (start-the-interpreter "by need> ")
+  There we go again, in call by need.
+  by need> (load "fibonacci.scm")
+  by need> (time (list-ref fibonacci-numbers 10))
+  (time (_eval (car es) ...))
+      no collections
+      12 ms elapsed cpu time
+      12 ms elapsed real time
+      531064 bytes allocated
+  55
+  by need> (time (list-ref fibonacci-numbers 10))
+  (time (_eval (car es) ...))
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      784 bytes allocated
+  55
+  by need> (exit)
+  "So long."
+  > 
+
+First of all, the scenario illustrates that the 11th Fibonacci number
+is 55.  It also illustrates that in call by name, we pay the cost of
+computing a Fibonacci number every time we need one, while in call by
+need, we only pay this cost once, since subsequently, this Fibonacci
+number is memoized.
+
+
+Do you understand lazy evaluation?
+----------------------------------
+
+Let us conclude this section with one more session about call by
+name and with call by need.  We start with call by need.  First, we
+verify that the variable ``1+`` denotes a procedure that increment
+its argument with 1, and we define our old friend the ``map1``
+procedure.  We then define a mystery stream::
+
+  > (load "interpreter-for-Scheme-with-call-by-need.scm")
+  > (start-the-interpreter "by need> ")
+  There we go again, in call by need.
+  by need> (1+ 10)
+  11
+  by-need> (define map1
+             (lambda (f xs)
+               (if (null? xs)
+                   '()
+                   (cons (f (car xs))
+                         (map1 f (cdr xs))))))
+  by need> (define mystery-stream
+             (cons 0
+                   (map1 1+
+                         mystery-stream)))
+  by need> 
+
+Questions:
+
+* What is the result of evaluating ``(list-ref mystery-stream 0)``?
+
+* What is the result of evaluating ``(list-ref mystery-stream 1)``?
+
+* What is the result of evaluating ``(list-ref mystery-stream 2)``?
+
+* What is the result of evaluating ``(list-ref mystery-stream 5)``?
+
+* Do you understand these results?
+
+More questions:
+
+* Evaluate ``(time (list-ref mystery-stream 10))`` several times in a row.
+  What do you observe?
+
+* Evaluate ``(time (list-ref mystery-stream 100))`` and then evaluate
+  ``(time (list-ref mystery-stream 50))``.  What do you observe?
+
+Closing questions:
+
+* Repeat the experiment above with the call-by-name interpreter.
+  (Recommendation: don't index the mystery stream with too big a
+  number.)
+
+* Repeat the experiment above with the call-by-value interpreter.
+  What do you observe?  Do you understand what is happening?
+
+
+Resources
+---------
+
+* The `zip file
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/interpreters-for-Scheme.zip>`_
+  containing three Scheme interpreters: one for a
+  call-by-value version of our subset of Scheme, one for a
+  call-by-name version of our subset of Scheme, and one for a
+  call-by-need version of our subset of Scheme
+  (latest version: 12 May 2015).
+
+* The file `lists.scm
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/lists.scm>`_
+  (latest version: 03 Oct 2015).
+
+* The file `fibonacci.scm
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/fibonacci.scm>`_
+  (latest version: 03 Oct 2015).
+
+
+Version
+-------
+
+Created
+[03 Oct 2015]

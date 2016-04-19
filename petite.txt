@@ -1,0 +1,40 @@
+.. -*- mode: rst -*-
+
+.. index::
+   single: Scheme (Petite Chez)
+
+.. _sec-petite:
+
+Petite Chez Scheme
+==================
+
+Petite Chez Scheme is an interpreter for `The Scheme programming
+language`__.
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Installation
+------------
+
+Download version 8 of `Petite Chez Scheme`__ for your host system.
+(ie, *pcsv82.exe* for windows, etc.) and run it. Petite Chez Scheme
+should install to some location which you should identify. (ie,
+something like ``C:/Program Files (x86)/Chez Scheme Version
+8.4/bin/i3nt/petite`` on windows).
+
+.. __: http://www.scheme.com/download/#sec:petitechezscheme
+
+Try it out: Run Petite Chez Scheme by invoking the ``petite``
+executable (``petite.exe`` on windows) from the Chez Scheme
+installation folder. You should be greeted by::
+
+  Petite Chez Scheme Version 8.4
+  Copyright (c) 1985-2011 Cadence Research Systems
+  
+  > 
+
+Now enter ``(+ 3 4)`` and press enter. The system should answer
+with 7. Then close the Scheme console by pressing ``(exit)`` and press
+enter.
+

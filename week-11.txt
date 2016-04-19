@@ -1,0 +1,47 @@
+.. -*- mode: rst -*-
+
+Note for Week 11
+================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+None yet.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-11.scm>`_
+  (latest version: 27 Oct 2015).
+
+
+Goal
+----
+
+The goal of this lecture note is to introduce continuation-passing style
+(CPS) and defunctionalization.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-11.scm>`_
+  (latest version: 27 Oct 2015).
+
+
+Version
+-------
+
+Created
+[27 Oct 2015]

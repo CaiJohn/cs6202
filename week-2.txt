@@ -1,0 +1,4238 @@
+.. -*- mode: rst -*-
+
+Note for Week 2
+===============
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+* :ref:`exercise-emacs-tutorial`:
+  going through the Emacs tutorial
+
+* :ref:`exercise-drawing-proof-trees-for-regexps`:
+  constructing a few proof trees
+
+* :ref:`exercise-multiplying-two-natural-numbers`:
+  multiplying two natural numbers
+
+* :ref:`exercise-trailing-zeroes`:
+  computing the number of trailing zeroes in a positive integer
+
+* :ref:`exercise-Fibonacci-function`:
+  computing Fibonacci numbers
+
+* :ref:`exercise-counting-the-number-of-pairs-in-a-Scheme-value`:
+  counting the number of pairs in a given Scheme value
+
+
+Resources
+---------
+
+* The Scheme code for
+  `the present lecture note for Week 2
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-2.scm>`_
+  (latest version: 27 Aug 2015).
+
+
+Recap
+-----
+
+.. index::
+   single: Magritte, René
+
+.. epigraph::
+
+   | `This is not a pipe. <http://en.wikipedia.org/wiki/The_Treachery_of_Images>`_
+
+   -- `Magritte <http://en.wikipedia.org/wiki/Magritte>`_
+
+So there are *things*, and there are *representations of things*.
+
+In computer science, our data are representations of information,
+and our programs process these data to perform a computation.
+Our programs are written using a programming language.
+Programming languages are notations to express computations.
+
+Data are specified grammatically by enumeration.  For example, a
+Boolean is either true or false.  Arbitrarily large data can also be
+specified grammatically by enumeration, using *induction*.  For example,
+
+.. index:: natural numbers (the inductive definition of)
+
+* a natural number is either zero (the base case) or, given another
+  natural number, it is the successor of this other number (the
+  induction case);
+
+.. index:: onion (the inductive definition of an)
+
+* very informally, an onion is either `no^H^Hsomething
+  <http://en.wikipedia.org/wiki/Backspace#.5EH>`_ (the base case) or,
+  given another onion, it is a leaf over this other onion (the
+  induction case);
+
+.. index:: lists (the inductive definition of)
+
+* a list of things is either empty (the base case) or, given a thing
+  and another list, it is a list of things whose first element is this
+  thing and whose rest is this other list (the induction case); and
+
+.. index:: binary trees (the inductive definition of)
+
+* a binary tree is either a leaf (the base case) or, given two binary
+  trees, it is a node containing these two binary trees as sub-trees
+  (the induction case).
+
+.. index::
+   single: Glad, Michael
+
+.. epigraph::
+
+   | Before talking about self-reference,
+   | `Glad <http://users-cs.au.dk/glad>`_ explains
+   | (1) what "semantics" means
+   | and (2) how to spell "syntax".
+
+   -- from the `Facts of Glad <http://users-cs.au.dk/gedefar/index.php?page=facts-of-glad>`_
+
+.. index:: recursion (structural)
+
+Inductive data are processed case by case, using *structural
+recursion*.  For example,
+
+.. index:: natural numbers (a recursive procedure over)
+
+* a procedure applied to a natural number tests whether this number is
+  zero (the base case) or the successor of another number (the
+  induction case); in the induction case, the procedure calls itself
+  over this other number;
+
+.. index:: onion (a recursive procedure over an)
+
+* very, very informally, a procedure applied to an onion tests, every
+  year, whether this onion is basically empty or a leaf over last
+  year's onion (the induction case); in the induction case, we turn a
+  leaf and apply the same procedure as last year;
+
+.. index:: lists (a recursive procedure over)
+
+* a procedure applied to a list of things tests whether this list is
+  empty (the base case) or it is a non-empty list with a first element
+  followed by the rest of the list (the induction case); in the
+  induction case, the procedure calls itself over the rest of this
+  list;
+
+.. index:: binary trees (a recursive procedure over)
+
+* a procedure applied to a binary tree tests whether this tree is a
+  leaf (the base case) or if it is a node with two sub-trees (the
+  induction case); in the induction case, the procedure calls itself
+  over each sub-tree.
+
+Programs can be data: they can be executed by a program (an
+*interpreter*) and translated from a source language to a target
+language by another program (a *compiler*).
+
+.. epigraph::
+
+   | Glad Likes `Acronymic <http://en.wikipedia.org/wiki/Acronym>`_ Descriptions
+
+   -- also from the `Facts of Glad <http://users-cs.au.dk/gedefar/index.php?page=facts-of-glad>`_
+
+Conversely, data can be programs, in which case their structure is the
+*syntax* of these programs.
+
+For example, an arithmetic expression can be represented by an
+abstract-syntax tree, itself specified with a grammar.  An interpreter
+recursively traverses this tree, performing arithmetic operations as
+it goes, and yields a result.  This result is a representation of the
+meaning of the arithmetic expression.  So all in all, the interpreter
+maps a representation of an arithmetic expression (its syntax) to a
+representation of its meaning (its semantics), namely a number or an
+error.  Alternatively, a compiler translates the abstract-syntax tree
+into another abstract-syntax tree which is then executed by another
+interpreter (e.g., a virtual machine) and yields a representation of
+the meaning of the given arithmetic expression.
+
+.. index:: interpreter (correctness of an)
+.. index:: compiler (correctness of a)
+.. index:: virtual machine (correctness of a)
+
+An interpreter, a compiler, and a virtual machine are correct relative
+to each other if and only if compiling any given program and then
+executing the compiled program always gives the same result as
+interpreting this program.  Pictorially:
+
+.. ditaa::
+
+  +-----------+ +---------------------------------+ +-----------+                  +-----------+
+  |           | |                                 | |           |                  |           |
+  |  source   | | source                 target   | |  compiled |                  |  source   |
+  |  program  | | language               language | |  program  |                  |  program  |
+  |           | |                                 | |           |                  |           |
+  |        {d}| |            compiler             | |        {d}|                  |       {d} |
+  +-----------+ +----------+           +----------+ +-----------+                  +-----------+
+                           |           |
+                           |           |            +-----------+        vs.       +-----------+
+                           |           |            |  target   |                  |  source   |
+                           |    x86    |            |  language |                  |  language |
+                           +-----------+            |           |                  |           |
+                                                    |           |                  |           |
+                           +-----------+            |  virtual  |                  |           |
+                           |    x86    |            |  machine  |                  |interpreter|
+                           |           |            |           |                  |           |
+                           |           |                                           |           |
+                           |  machine  |                                           |           |
+                           |           |                                           |    x86    |
+                                                                                   +-----------+
+  
+                                                                                   +-----------+
+                                                                                   |    x86    |
+                                                                                   |           |
+                                                                                   |           |
+                                                                                   |  machine  |
+                                                                                   |           |
+ 
+
+Or again, diagrammatically:
+
+.. ditaa::
+
+                          interpret
+        +--------------------------------------------+
+        |                                            |
+  +----------+             +----------+              |
+  | source   |   compile   | compiled |     run      v
+  | program  | ----------> | program  | ----------> 
+  |       {d}|             |       {d}|
+  +----------+             +----------+
+
+
+.. _exercise-emacs-tutorial:
+
+Exercise 0
+----------
+
+In this mandatory exercise, you are asked to go through the Emacs
+tutorial.
+(Hint: use the Emacs command :kbd:`C-h t`.)
+
+
+.. _a-bnf-for-regular-expressions:
+
+.. index:: expressions (regular)
+
+A BNF for regular expressions
+-----------------------------
+
+Here is a BNF for fully parenthesized `regular expressions
+<http://en.wikipedia.org/wiki/Regular_expression>`_:
+
+.. index:: regular expressions (BNF of)
+
+.. bnf:: regular expressions
+   :noindex:
+   :namespace: regular-expressions
+
+   <regexp> ::= (empty)
+              | (atom <atom>)
+              | (any)
+              | (seq <regexp> <regexp>)
+              | (disj <regexp> <regexp>)
+              | (star <regexp>)
+              | (plus <regexp>)
+              | (var <name>)
+ 
+   <atom> ::= ...any Scheme integer...
+ 
+   <name> ::= ...any Scheme identifier...
+
+.. index:: regular expressions (matching)
+
+Here, a regular expression finitely represents a set of lists of
+integers, and matching a regular expression against a given list
+either fails or returns an environment binding names to integers:
+
+* the constructor ``empty`` declares the empty regular expression;
+
+* the constructor ``atom`` declares a specific integer;
+
+* the constructor ``any`` specifies any integer;
+
+* the constructor ``seq`` declares a *sequence* of two regular
+  expressions;
+
+* the constructor ``disj`` declares the *disjunction* (sometime
+  called an *alternation*) of two regular expressions;
+
+* the constructor ``star`` declares the repetition (zero or more
+  times) of a regular expression;
+
+* the constructor ``plus`` declares the repetition (one or more
+  times) of a regular expression; and
+
+* the constructor ``var`` is unused for now, until next week.
+
+You can play online with this regular-expression matcher
+`here <http://users-cs.au.dk/zerny/dProgSprog/regexp-matcher.php>`_.
+
+For example, matching the regular expression ``(atom 10)`` against the
+list ``(10)`` succeeds, and matching it against any other list (i.e.,
+shorter, longer, or different) fails.  The abstract-syntax tree of
+this regular expression reads as follows::
+
+    <regexp>
+       |
+       |
+     (atom <atom>)
+              |
+              10
+
+
+For example, matching the regular expression ``(any)`` against any
+one-element list succeeds, and matching it against any other list
+(i.e., shorter or longer) fails.  The abstract-syntax tree of this
+regular expression reads as follows::
+
+    <regexp>
+       |
+       |
+     (any)
+
+For example, matching the regular expression ``(seq (any) (any))`` against any
+two-elements list succeeds, and matching it against any other list
+fails.  The abstract-syntax tree of this regular expression reads as
+follows::
+
+  <regexp>
+     |
+     |
+   (seq <regexp> <regexp>)
+           |        |
+         (any)    (any)
+
+For example, matching the regular expression ``(seq (atom 10) (any))``
+against any two-elements list whose first element is ``10`` succeeds,
+and matching it against any other list fails.  The abstract-syntax
+tree of this regular expression reads as follows::
+
+  <regexp>
+     |
+     |
+   (seq <regexp> <regexp>)
+          /         |
+         /          |
+   (atom <atom>)  (any)
+           |
+           10
+
+For example, matching the regular expression ``(seq (any) (atom 20))``
+against any two-elements list whose second element is ``20`` succeeds,
+and matching it against any other list fails.  The abstract-syntax
+tree of this regular expression reads as follows::
+
+  <regexp>
+     |
+     |
+   (seq <regexp> <regexp>)
+           |         \
+           |          \
+         (any)    (atom <atom>)
+                          |
+                          20
+
+For example, matching the regular expression ``(seq (seq (atom 1)
+(atom 2)) (seq (atom 3) (atom 4)))`` against the list ``(1 2 3 4)``
+succeeds, and matching it against any other list fails.  The
+abstract-syntax tree of this regular expression reads as follows::
+
+                    <regexp>
+                       |
+                       |
+                       |
+                    (seq <regexp> <regexp>)
+                            /          \
+                           /            \
+                          /              \
+   (seq <regexp> <regexp>)                (seq <regexp> <regexp>)
+          /          \                           /          \
+         /            \                         /            \
+        /              \                       /              \
+  (atom <atom>)   (atom <atom>)          (atom <atom>)    (atom <atom>)
+          |               |                      |                |
+          1               2                      3                4
+
+
+For example, matching the regular expression ``(disj (atom 10) (atom
+20))`` against the one-element list whose element is ``10`` succeeds,
+matching it against the one-element list whose element is ``20``
+succeeds, and matching it against any other list fails.  The
+abstract-syntax tree of this regular expression reads as follows::
+
+   <regexp>
+      |
+      |
+   (disj <regexp> <regexp>)
+           /          \
+          /            \
+    (atom <atom>)  (atom <atom>)
+            |              |
+            10             20
+
+
+For example, matching the regular expression ``(star (atom 10))``
+against any list whose only elements are ``10``, including the empty
+list, succeeds, and matching it against any other list fails.  The
+abstract-syntax tree of this regular expression reads as follows::
+
+  <regexp>
+     |
+     |
+  (star <regexp>)
+           |
+           |  
+        (atom <atom>)
+                |
+                10
+
+For example, matching the regular expression ``(plus (atom 10))``
+against any list whose only elements are ``10``, excluding the empty
+list, succeeds, and matching it against any other list fails.  The
+abstract-syntax tree of this regular expression reads as follows::
+
+  <regexp>
+     |
+     |
+  (plus <regexp>)
+           |
+           |  
+         (atom <atom>)
+                 |
+                 10
+
+For example, matching the regular expression ``(disj (empty) (atom
+10))`` against the empty list succeeds, matching it against the
+one-element list containing ``10`` succeeds, and matching it against
+any other list fails.    The abstract-syntax tree of this regular
+expression reads as follows::
+
+      <regexp>
+         |
+         |
+      (disj <regexp> <regexp>)
+               |        |
+               |        |
+            (empty)  (atom <atom>)
+                             |
+                             10
+
+For example, matching the regular expression ``(seq (plus (atom 10))
+(seq (star (any)) (plus (atom 20))))`` succeeds against any list
+starting with one or more occurrences of ``10`` and ending with one or
+more occurrences of ``20``.
+
+
+.. _exercise-drawing-abstract-syntax-trees-for-regexps:
+
+Exercise 1
+----------
+
+Draw abstract-syntax trees for the following regular expressions:
+
+* ``(seq (atom 1) (seq (atom 2) (seq (atom 3) (seq (atom 4) (empty)))))``
+
+* ``(seq (atom 1) (seq (atom 2) (seq (atom 3) (atom 4))))``
+
+* ``(seq (seq (empty) (seq (atom 1) (atom 2))) (seq (empty) (seq (atom 3) (atom 4))))``
+
+* ``(seq (seq (seq (atom 1) (atom 2)) (atom 3)) (atom 4))``
+
+* ``(seq (seq (seq (seq (empty) (atom 1)) (atom 2)) (atom 3)) (atom 4))``
+
+Which lists do these regular expressions match?
+
+Hint: use `the online regular-expression matcher
+<http://users-cs.au.dk/zerny/dProgSprog/regexp-matcher.php>`_ to
+answer this question.
+
+
+.. _exercise-writing-regexps-for-abstract-syntax-trees:
+
+Exercise 2
+----------
+
+Consider Questions 21 to 26 of the `June 2015 exam`__.
+
+.. __: http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014/exam-dProgSprog-June-2015.pdf
+
+
+.. _a-bnf-for-regular-expressions-logically:
+
+A BNF for regular expressions, logically
+----------------------------------------
+
+Here is an alternative rendering for the BNF for fully parenthesized
+regular expressions: using a judgment and conditional rules:
+
+* ``e`` is a valid regular expression whenever the following judgment
+  holds::
+
+    |-regexp e
+
+* The judgment is defined with the following proof rules::
+
+    EMPTY----------------
+         |-regexp (empty)
+  
+        n is a Scheme integer
+    ATOM---------------------
+        |-regexp (atom n)
+  
+    ANY--------------
+       |-regexp (any)
+  
+       |-regexp e1    |-regexp e2
+    SEQ--------------------------
+       |-regexp (seq e1 e2)
+  
+        |-regexp e1    |-regexp e2
+    DISJ--------------------------
+        |-regexp (disj e1 e2)
+  
+        |-regexp e
+    STAR-----------------
+        |-regexp (star e)
+  
+        |-regexp e
+    PLUS-----------------
+        |-regexp (plus e)
+  
+       x is a Scheme identifier
+    VAR------------------------
+       |-regexp (var x)
+
+  Let us review a few of these rules:
+
+  * The first rule (the one named ``EMPTY``) is unconditional, i.e.,
+    it is an axiom.  This axiom says that ``(empty)`` is a valid
+    regular expression.
+
+  * The second rule (the one named ``ATOM``) is conditional.  This
+    conditional rule says that if ``n`` is a Scheme integer, then
+    ``(atom n)`` is a valid regular expression.
+
+    (Reminder: the parts above the horizontal bar are called the
+    *premises*, and the part below the horizontal bar is called the
+    *conclusion*.  Here, there is only one premise.)
+
+  * The third rule (the one named ``ANY``) is an axiom.
+
+  * The fourth rule (the one named ``SEQ``) is conditional.  It says
+    that if ``e1`` and ``e2`` are valid regular expressions, then
+    ``(seq e1 e2)`` is also a valid regular expression.
+
+  * etc.
+
+.. index:: proof tree
+
+To verify the validity of a regular expression, we attempt to
+construct a *proof tree*, i.e., a tree that uses proof rules as
+constructors:
+
+* Example 1: ``(any)`` is a valid regular expression because we can
+  construct the following proof tree, using the axiom ``ANY``::
+
+    --------------
+    |-regexp (any)
+
+* Example 2: ``(star (any))`` is a valid regular expression because we
+  can construct the following proof tree::
+
+    --------------
+    |-regexp (any)
+    ---------------------
+    |-regexp (star (any))
+
+  Here is how to construct this proof tree: start from the goal (word
+  for the wise: at the bottom of a piece of paper), and then look for
+  rules whose conclusion match the goal (see below for an example).
+  If there are no such rules, the proof tree cannot be constructed.
+  If there are several such rules, try them one after the other until
+  you can construct a complete proof tree.  For a rule whose
+  conclusion matches the goal, instantiate its premises (see below for
+  an example).  The result is a collection of subgoals, one for each
+  premise.  Proceed with each subgoal as you did with the goal.
+
+  * So let's start from the goal::
+
+      ---------------------
+      |-regexp (star (any))
+
+  * Does there exist rules whose conclusion matches ``|-regexp (star
+    (any))``?  There is one (and only one), namely ``STAR``, that
+    matches ``|-regexp (star (any))`` for any variable ``e`` that
+    denotes ``(any)``.  The result of matching is therefore a
+    conditional yes, with the following constraint::
+
+      e = (any)
+
+  * We then instantiate the premise of the ``STAR`` rule, replacing
+    the occurrence of ``e`` by ``(any)``, and we write the result on
+    top of the horizontal bar::
+
+      |-regexp (any)
+      ---------------------
+      |-regexp (star (any))
+
+  * We then look for any rule whose conclusion matches ``|-regexp
+    (any)``.  There is one (and only one), namely ``ANY``, that
+    matches ``|-regexp (any)``.  The result of matching is therefore
+    an unconditional yes.
+
+  * We then instantiate the premise of the ``ANY`` rule (there isn't
+    any, since it is an axiom)::
+
+     --------------
+     |-regexp (any)
+     ---------------------
+     |-regexp (star (any))
+
+  The proof tree is complete, and therefore yes, ``(star (any))`` is a
+  valid regular expression.
+
+* Example 3: Is ``(seq (atom 10) (any))`` a valid regular expression?
+
+  * Let's start from the goal::
+
+      ------------------------------
+      |-regexp (seq (atom 10) (any))
+
+  * Does there exist rules whose conclusion matches ``|-regexp (seq
+    (atom 10) (any))``?  There is one (and only one), namely ``SEQ``,
+    that matches ``|-regexp (seq (atom 10) (any))`` for any variable
+    ``e1`` that denotes ``(atom 10)`` and for any variable ``e2`` that
+    denotes ``(any)``.  The result of matching is therefore a
+    conditional yes, with the following constraint::
+
+      e1 = (atom 10)
+      e2 = (any)
+
+  * Let us then instantiate the premise of the ``SEQ`` rule, replacing
+    the occurrence of ``e1`` by ``(atom 10)`` and the occurrence of
+    ``e2`` by ``(any)``.   We write the result on top of the
+    horizontal bar::
+
+      |-regexp (atom 10)        |-regexp (any)
+      ----------------------------------------
+      |-regexp (seq (atom 10) (any))
+
+    We now have two new subgoals.  Let us treat them in turn.
+
+  * Does there exist rules whose conclusion matches ``|-regexp (atom
+    10)``?  There is one (and only one), namely ``ATOM``, that matches
+    ``|-regexp (atom 10)`` for any variable ``n`` that denotes
+    ``10``.  The result of matching is therefore a conditional yes,
+    with the following constraint::
+
+      n = 10
+
+  * Let us instantiate the premise of the ``ATOM`` rule, replacing the
+    occurrence of ``n`` by ``10``.  We write the result on top of the
+    horizontal bar::
+
+      10 is a Scheme integer
+      ----------------------
+      |-regexp (atom 10)        |-regexp (any)
+      ----------------------------------------
+      |-regexp (seq (atom 10) (any))
+
+    We have one new subgoal, which is trivially satisfied since 10 is
+    a Scheme integer.  So let us turn to the other subgoal.
+
+  * Does there exist rules whose conclusion matches ``|-regexp
+    (any)``?  There is one (and only one), namely ``ANY``.   The
+    result of matching is therefore an unconditional yes.
+
+  * We then instantiate the premise of the ``ANY`` rule (there isn't
+    any, since it is an axiom)::
+
+      10 is a Scheme integer
+      ----------------------    --------------
+      |-regexp (atom 10)        |-regexp (any)
+      ----------------------------------------
+      |-regexp (seq (atom 10) (any))
+
+  The proof tree is complete, and therefore yes, ``(seq (atom 10)
+  (any))`` is a valid regular expression.
+
+* Likewise, the reader can check that ``(seq (any) (atom 20))`` is a
+  valid regular expression since the following proof tree can be
+  constructed::
+
+                        20 is a Scheme integer
+      --------------	----------------------
+      |-regexp (any)	|-regexp (atom 20)    
+      ----------------------------------------
+      |-regexp (seq (any) (atom 20))
+   
+* Question: is ``(seq (seq (atom 1) (atom 2)) (seq (atom 3) (atom
+  4)))`` a valid regular expression?
+
+  Hint: to answer this question, attempt to draw a proof tree.
+
+This principled method of constructing proof trees yields trees that
+are upside down compared to the abstract-syntax trees drawn above
+(i.e., with their root *down*, not at the top).  Otherwise, given any
+valid regular expression, its abstract-syntax tree and its proof tree
+have the same shape, i.e., they are isomorphic.
+
+
+.. _exercise-drawing-proof-trees-for-regexps:
+
+Exercise 3
+----------
+
+Draw a few proof trees for the same regular expressions as in
+:ref:`exercise-drawing-abstract-syntax-trees-for-regexps` and verify
+that they have the same shape as the abstract-syntax trees you drew in
+your solution of :ref:`exercise-drawing-abstract-syntax-trees-for-regexps`.
+
+
+Programming in Scheme
+---------------------
+
+Scheme is a programming language whose main syntactic unit is the
+*expression*.  The syntax of Scheme is `fully parenthesized
+<http://xkcd.com/297>`_ and its operations use the prefix notation.
+
+
+.. index:: operator (infix)
+.. index:: operator (prefix)
+.. index:: operator (postfix)
+
+Infix, prefix and postfix operators
+-----------------------------------
+
+In the standard notation of mathematics, binary operators are *infix*
+in that they are written *between* their two operands.  For example, to
+express the addition of 2 and 3, one writes::
+
+    2 + 3
+
+Operations are nested using parentheses::
+
+    (2 + 3) - 4
+
+In the *prefix* notation, operators are written *before* their
+operands.  For example, to express the addition of 2 and 3, one
+writes::
+
+    + 2 3
+
+Nested operations need no parentheses::
+
+    - + 2 3 4
+
+In the *postfix* notation, operators are written *after* their
+operands.  For example, to express the addition of 2 and 3, one
+writes::
+
+   2 3 +
+
+Nested operations need no parentheses::
+
+    2 3 + 4 -
+
+.. index:: Lisp
+
+Scheme uses the prefix notation, in a fully parenthesized way,
+like `Lisp <http://xkcd.com/224>`_::
+
+   (+ 2 3)
+
+   (- (+ 2 3) 4)
+
+So to say it again, parentheses in Scheme are not, ah, parenthetical
+as when writing algebraic expressions in mathematics, to disambiguate.
+They play an absolutely essential role to state expressions, and so
+you need to write *all of them*, systematically.  Think of commas at
+the beginning of non-parenthetical subordinate clauses in Danish --
+you don't want to mess with them, do you?  Good.  Moving on.
+
+
+A BNF for pure Scheme
+---------------------
+
+Note: in the following grammar, braces {...} are a meta-notation to
+group what is between "{" and "}".  When followed by a "+", it means
+"once or more", and when followed by a "*", it means "zero times or
+more".
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <program> ::= {<toplevel-form>}*
+ 
+   <toplevel-form> ::= <definition>
+                     | <expression>
+ 
+   <expression> ::= <number>
+                  | <boolean>
+                  | <character>
+                  | <string>
+                  | <variable>
+                  | <time-expression>
+                  | <if-expression>
+                  | <cond-expression>
+                  | <and-expression>
+                  | <or-expression>
+                  | <let-expression>
+                  | <letstar-expression>
+                  | <letrec-expression>
+                  | <quote-expression>
+                  | <lambda-abstraction>
+                  | <lambda-abstraction-with-trace>
+                  | <application>
+
+   <variable> ::= <identifier>
+                  excluding the following keywords: define
+                                                    time
+                                                    if
+                                                    cond
+                                                    else
+                                                    and
+                                                    or
+                                                    let
+                                                    let*
+                                                    letrec
+                                                    quote
+                                                    lambda
+                                                    trace-lambda
+
+   <identifier> ::= ...
+
+An identifier is written with letters, digits, and most funky
+characters on your keyboard (``-``, ``*``, ``?``, ``!``, etc.),
+excluding quote, backquote, and comma as well as ``#`` in first
+position.  You can `Read The Friendly Manual`__ (the 4 first
+paragraphs) for detail, but this level of detail won't be at the exam.
+
+.. epigraph::
+
+   | The interviewer: Do you use semi-colons a lot in Scheme?
+   | Michael Glad: No comment.
+
+
+.. __: http://www.scheme.com/tspl4/intro.html#./intro:h1
+
+
+.. index:: comment
+
+Scheme comments
+---------------
+
+Scheme comments start with a semi-colon (i.e., ``;``) and go until the
+end of the line.
+
+
+.. epigraph::
+
+   | The interviewer: And parentheses?  You must use them a lot, don't you?
+   | Michael Glad: I am sorry.  Parentheses?  Which parentheses?
+
+
+This lecture note
+-----------------
+
+Most of this lecture note illustrates part of the BNF above through an
+interactive session with Petite Chez Scheme::
+
+    Petite Chez Scheme Version 8.4
+    Copyright (c) 1985-2011 Cadence Research Systems
+    
+    > 
+
+For further precisions and details, look at `Kent Dybvig's textbook`__
+(and use its `index`__, as well as the `index`__ of the `Chez Scheme
+Version 8 User's Guide`__).  The rest of the BNF is the topic of the
+next lecture.
+
+.. __: http://www.scheme.com/tspl4/
+.. __: http://scheme.com/tspl4/tspl_1.html#./tspl:h0
+.. __: http://scheme.com/csug8.html
+.. __: http://scheme.com/csug8/csug_1.html#./csug:h0
+
+
+.. index:: numbers (in Scheme)
+
+Ground expressions: numbers
+---------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <number> ::= <integer> | <rational> | <real>
+
+
+Example of integers::
+
+    > 33
+    33
+    > -22
+    -22
+    > +11
+    11
+    > 0
+    0
+    > +0
+    0
+    > -0
+    0
+    > 
+
+NB. Natural numbers are represented as non-negative integers, and
+positive natural numbers are represented as positive integers.
+
+Example of rationals::
+
+    > 1/2
+    1/2
+    > 4/6
+    2/3
+    > -6/4
+    -3/2
+    > 3/0
+    
+    Exception in read: cannot represent 3/0
+    Type (debug) to enter the debugger.
+    > 4/1
+    4
+    > 6/3
+    2
+    > 
+
+
+Example of reals::
+
+    > 1.23
+    1.23
+    > -1.23
+    -1.23
+    > 1.000
+    1.0
+    > 
+
+
+Ground expressions: Booleans
+----------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <boolean> ::= #t | #f
+
+
+Example::
+
+    > #t
+    #t
+    > #f
+    #f
+    > 
+
+
+Ground expressions: characters
+------------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <character> ::= ...
+
+A Scheme character is written with a ``#`` followed by a ``\`` and
+character itself.  For example, the characters ``c`` and ``"`` (double
+quote) are written as follows::
+
+    > #\c
+    #\c
+    > #\"
+    #\"
+    > 
+
+Question: how would you write the characters ``\`` (backslash) and
+``#``?  (Just try it interactively with Petite Chez Scheme.)
+
+Note: the space character can also be written as
+``#\space``.
+
+
+Ground expressions: strings
+---------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <string> ::= ...
+
+Scheme strings are delimited by double quotes and contain ordinary
+characters.  For example::
+
+    > "hello world"
+    "hello world"
+    > 
+
+To specify a double quote in a string, one prefixes it with a
+backslash.  To specify a backslash in a string, one also prefixes it
+with a backslash::
+
+    > "hello \" world"
+    "hello \" world"
+    > "hello \\ world"
+    "hello \\ world"
+    > 
+
+
+Petite Chez Scheme core special form: time
+------------------------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <time-expression> ::= (time <expression>)
+
+Evaluating the expression
+
+.. code-block:: scheme
+
+   (time e)
+
+yields the result of evaluating
+
+.. code-block:: scheme
+
+   e
+
+and, as a byproduct, prints out how much resource (time and space) was
+spent evaluating ``e``.
+
+For example::
+
+    > (time 42)
+    (time 42)
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    42
+    > (time (time 42))
+    (time 42)
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    (time (time 42))
+        no collections
+        1 ms elapsed cpu time
+        0 ms elapsed real time
+        1008 bytes allocated
+    42
+    > (time (time (time 42)))
+    (time 42)
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    (time (time 42))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        1008 bytes allocated
+    (time (time (time 42)))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        2016 bytes allocated
+    42
+    > 
+
+
+Core special form: if
+---------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <if-expression> ::= (if <if-test>
+                           <if-consequent>
+                           <if-alternative>)
+   
+   <if-test> ::= <expression>
+   
+   <if-consequent> ::= <expression>
+   
+   <if-alternative> ::= <expression>
+
+An **if-expression** consists of a test, a consequent, and an
+alternative, all of which are expressions.
+To evaluate an if-expression, the test is first evaluated.
+If it evaluates to ``#f``, the alternative is evaluated (and the
+consequent is not evaluated); its result is the result of the
+if-expression.
+Otherwise, the consequent is evaluated (and the
+alternative is not evaluated); its result is the result of the
+if-expression.
+
+Example::
+
+    > (if #t 1 2)
+    1
+    > (if #t 1 (time 2))
+    1
+    > (if #f 1 2)
+    2
+    > (if #f (time 1) 2)
+    2
+    > (if (if #t #t #f) 1 2)
+    1
+    > (if (if #f #t #f) 1 2)
+    2
+    > (if #t (if #f 0 1) 2)
+    1
+    > (if (time #t) (if (time #f) (time 0) (time 1)) (time 2))
+    (time #t)
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    (time #f)
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    (time 1)
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    1
+    > 
+
+In Scheme, everything that is not false is interpreted as true::
+
+    > (if 33 1 2)
+    1
+    > (if #\c 1 2)
+    1
+    > (if "hello world" 1 2)
+    1
+    > 
+
+
+Conjunction and disjunction
+---------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <expression> ::= (and {<expression>}*)
+                  | (or {<expression>}*)
+
+An **and-expression** and a **or-expression** consist of zero or more
+sub-expressions.  These sub-expressions are evaluated from left to
+right.
+
+* If all the sub-expressions of an and-expression evaluate to
+  something that is not false, the result of the and-expression is the
+  result of the last sub-expression.  Otherwise, the result of the
+  and-expression is false and the remaining expressions are not
+  evaluated (they are "short-circuited")::
+
+    > (and #t #t)
+    #t
+    > (and 1 2 3)
+    3
+    > (and 1 #f 3)
+    #f
+    > (and 1 #f (time 3))
+    #f
+    > 
+
+* If all the sub-expressions of an or-expression evaluate to false,
+  the result of the or-expression is false.  Otherwise, the result of
+  the or-expression is the result of the first sub-expression that
+  does not evaluate to false and the remaining expressions are not
+  evaluated (they are "short-circuited")::
+
+    > (or #f #f)
+    #f
+    > (or #f #t #f)
+    #t
+    > (or #f 2 #f)
+    2
+    > (or #f 2 (time #f))
+    2
+    > 
+
+We will revisit
+and-expressions
+and
+or-expressions
+next week.
+
+
+Core special forms: define
+--------------------------
+
+.. index:: definiens (in a global definition)
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <definition> ::= (define <variable> <definiens>)
+
+   <definiens> ::= <expression>
+ 
+A definition is composed of a name (an identifier that is globally
+visible) and a definiens (an expression).  The definiens is evaluated,
+and the name is globally bound to the result of this evaluation.  It
+then denotes this result::
+
+  > (define x (time 1))
+  (time 1)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  > x
+  1
+  > (define y x)
+  > y
+  1
+  > 
+
+Redefining an already defined name modifies its global binding.  After
+defining a variable with a new definiens, the variable denotes the
+value of the new definiens::
+
+  > y
+  1
+  > (define y 2)
+  > y
+  2
+  > 
+
+This redefinition, however, does not affect the other global bindings.
+In the following scenario, ``x`` is first defined to denote ``3``;
+``x`` is then bound to ``3``; ``z`` is then defined to denote the
+denotation of ``x``, i.e., ``3``; both ``z`` and ``x`` then are bound
+to ``3``; ``x`` is then redefined to denote ``4``; ``x`` then is bound
+to ``4`` while ``z`` still is bound to ``3``; finally, ``z`` is
+redefined to denote ``5``; ``z`` then is bound to ``5`` while ``x`` is
+still bound to ``4``::
+
+  > (define x 3)
+  > x
+  3
+  > (define z x)
+  > z
+  3
+  > x
+  3
+  > (define x 4)
+  > x
+  4
+  > z
+  3
+  > (define z 5)
+  > z
+  5
+  > x
+  4
+  > 
+
+It is an error to evaluate an unbound variable.  Once defined,
+however, a variable is bound forever (i.e., until the end of the
+session with Petite Chez Scheme)::
+
+  > foobarbaz
+  
+  Exception: variable foobarbaz is not bound
+  Type (debug) to enter the debugger.
+  > (define foobarbaz 42)
+  > foobarbaz
+  42
+  > (exit)
+  
+  Process scheme finished
+  Petite Chez Scheme Version 8.4
+  Copyright (c) 1985-2011 Cadence Research Systems
+  
+  > foobarbaz
+  
+  Exception: variable foobarbaz is not bound
+  Type (debug) to enter the debugger.
+  > 
+
+
+.. index:: parameters (formal)
+.. index:: body (of a lambda-abstraction)
+.. index:: lambda
+
+.. _lambda-abstractions-with-fixed-arity:
+
+Core special form: lambda-abstractions with fixed arity
+-------------------------------------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <lambda-abstraction> ::= (lambda <lambda-formals> <lambda-body>)
+  
+   <lambda-formals> ::= <lambda-formals-with-fixed-arity>
+                      | <lambda-formals-with-non-fixed-arity>
+
+   <lambda-formals-with-fixed-arity> ::= ({<variable>}*)
+                                         ;;; where all the variables are distinct
+
+   <lambda-formals-with-non-fixed-arity> ::= <variable>
+                                           | ({<variable>}+ . <variable>)
+                                             ;;; where all the variables are distinct
+
+   <lambda-body> ::= <expression>
+
+.. index:: lambda (abstraction)
+
+A **lambda-abstraction** consists of formal parameters and a body.
+The body is an expression.  The formal parameters consist of zero or
+more variables, grouped between parentheses or not, and if so,
+possibly with a dot before the last variable.  All these variables
+*must* be distinct.
+
+.. index:: procedure
+
+Evaluating a lambda-abstraction yields a user-defined **procedure**, a
+Scheme value that implements a function::
+
+  > (lambda (x) x)
+  #<procedure>
+  > (lambda (x y) x)
+  #<procedure>
+  > (lambda (x x) x)
+  
+  Exception: invalid parameter list in (lambda (x x) x)
+  Type (debug) to enter the debugger.
+  > (lambda xs xs)
+  #<procedure>
+  > (lambda (x y . zs) x)
+  #<procedure>
+  > (lambda (x y . y) x)
+  
+  Exception: invalid parameter list in (lambda (x y . y) x)
+  Type (debug) to enter the debugger.
+  > 
+
+Many predefined procedures exist in Scheme, and are denoted by
+variables::
+
+  > +
+  #<procedure +>
+  > list
+  #<procedure list>
+  > 
+
+(Petite Chez Scheme is implemented in Scheme, and therefore its
+predefined procedures are user-defined procedures at its meta-level.)
+
+Procedures can be applied to arguments, as seen just below.
+
+.. index:: arity (of a procedure)
+.. index:: variadic procedure
+.. index::
+   single: Strachey, Christopher (variadic)
+
+The *arity* of a procedure is the number of arguments this procedure
+can be applied to.  A user-defined procedure has a *fixed arity* if it
+is the result of evaluating a lambda-abstraction constructed with
+:bnfref:`pure-scheme:lambda-formals-with-fixed-arity`.  Its arity is
+then the number of variables among its formal parameters.  It has a
+*non-fixed arity* (or, as coined by `Christopher Strachey`__, it is
+*variadic*) if it is the result of evaluating a lambda-abstraction
+constructed with
+:bnfref:`pure-scheme:lambda-formals-with-non-fixed-arity`.
+
+.. __: http://en.wikipedia.org/wiki/Christopher_Strachey
+
+User-defined variadic procedures will be addressed in a subsequent
+lecture note.
+
+
+.. index:: parameters (actual)
+
+Core special form: applications
+-------------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <application> ::= (<operator> {<operand>}*)
+ 
+   <operator> ::= <expression>
+ 
+   <operand> ::= <expression>
+
+An **application** consists of an operator (which is an expression, i.e.,
+*not* a keyword) and zero or more operands (which are expressions).
+
+When evaluating the expression
+
+.. code-block:: scheme
+
+   (e0 e1 e2 ... eN-1 eN)
+
+the expressions ``e0``, ``e1``, ..., and ``eN`` are evaluated in an
+unspecified order, yielding the values ``v0``, ``v1``, ..., and
+``vN``.  It is an error to apply something else than a procedure, so
+``v0`` must be a procedure.  (Informally, both of ``e1``, ..., and
+``eN`` and of ``v1``, ..., and ``vN`` are often referred to as "the
+arguments" of this procedure.)  The values ``v1``, ..., and ``vN`` are
+the *actual parameters* of the application.
+
+If ``v0`` is a procedure of arity ``N``, say the result of evaluating
+``(lambda (x1 ... xN) e)``, then the formal parameters ``x1``, ...,
+``xN`` are respectively bound to the actual parameters ``v1``, ...,
+``vN``, and ``e`` is evaluated in a local environment that extends the
+current environment and where each of the formal parameters denotes
+the corresponding actual parameter::
+
+    > ((lambda (x1 x2 x3) x1) 1 2 3)
+    1
+    > ((lambda (x1 x2 x3) x2) 1 2 3)
+    2
+    > ((lambda (x1 x2 x3) x3) 1 2 3)
+    3
+    > 
+
+.. index::
+   single: Perlis, Alan (procedures with ten parameters)
+
+.. epigraph::
+
+   | If you have a procedure with ten parameters,
+   | you probably missed some. 
+
+    -- `Alan Perlis`__'s `programming epigram`__ #11
+
+.. __: http://en.wikipedia.org/wiki/Alan_Perlis
+.. __: http://www.cs.yale.edu/homes/perlis-alan/quotes.html
+
+This way to respectively bind each of the formal parameters to the
+corresponding actual parameter is said to be "by position": the first
+formal parameter is bound to the first actual parameter, the second to
+the second, etc.
+
+It is an error to apply a user-defined procedure with fixed arity when
+its number of formal parameters does not match the number of actual
+parameters::
+
+    > ((lambda (x) x) 10 20)
+    
+    Exception: incorrect argument count in call ((lambda (x) x) 10 20)
+    Type (debug) to enter the debugger.
+    > ((lambda (x y) x) 10)
+    
+    Exception: incorrect argument count in call ((lambda (x y) x) 10)
+    Type (debug) to enter the debugger.
+    > 
+
+
+.. index::
+   single: identity procedure
+
+.. _exercise-observable-difference-for-the-identity-procedure:
+
+Exercise 4
+----------
+
+Is there an observable difference between the lambda-abstractions
+``(lambda (x) x)`` and ``(lambda (y) y)``?
+
+Hint: they both implement the identity function.
+
+Corollary: do names of formal parameters matter?
+
+
+Order of evaluation of actual parameters
+----------------------------------------
+
+As in `the C programming language
+<http://en.wikipedia.org/wiki/The_C_Programming_Language>`_,
+the order in which actual parameters are evaluated is
+unspecified in Scheme, so that the programmer does not rely on it.
+
+.. index:: list (the predefined procedure)
+
+Here is an illustration, using the variadic predefined procedure
+``list`` that packages its arguments in a list and returns this list.
+The computation of each actual parameter is timed and the scenario
+illustrates that this computation takes place sometimes from right to
+left, sometimes from left to right, and sometimes in between::
+
+  > (list 1 2 3 4)
+  (1 2 3 4)
+  > (list (time 1) (time 2) (time 3) (time 4))
+  (time 4)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 3)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 2)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 1)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (1 2 3 4)
+  > (list 1 2 3)
+  (1 2 3)
+  > (list (time 1) (time 2) (time 3))
+  (time 2)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 3)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 1)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (1 2 3)
+  > (list 1 2)
+  (1 2)
+  > (list (time 1) (time 2))
+  (time 2)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 1)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (1 2)
+  > 
+
+
+Order of evaluation of sub-expressions in an application
+--------------------------------------------------------
+
+More generally, in an application, the order in which
+*sub-expressions* are evaluated is unspecified in Scheme, so that the
+programmer does not rely on it.
+
+For the following illustration to make sense, do remember that names
+denote values, i.e., that variables are bound to values.  In
+particular, ``list`` denotes a procedure, and therefore evaluating
+``(time list)`` yields this procedure::
+
+  > (time list)
+  (time list)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  #<procedure list>
+  > ((time list) 1 2 3)
+  (time list)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (1 2 3)
+  > 
+
+In the following scenario, all the sub-expressions of an application
+are timed, to illustrate that they are evaluated in an unspecified,
+implementation-dependent order::
+
+  > ((time list) (time 1))
+  (time 1)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time list)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (1)
+  > ((time list) (time 1) (time 2) (time 3))
+  (time 1)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 2)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 3)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time list)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (1 2 3)
+  > ((time list) (time 1) (time 2) (time 3) (time 4))
+  (time list)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 4)
+      no collections
+      0 ms elapsed cpu time
+      1 ms elapsed real time
+      0 bytes allocated
+  (time 3)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 2)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 1)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (1 2 3 4)
+  > 
+
+
+.. _dynamic-definitions-and-redefinitions:
+
+Dynamic definitions and redefinitions
+-------------------------------------
+
+In the body of the lambda-abstraction that gave rise to it, a
+procedure may refer to a yet-undefined variable.  Applying this
+procedure then raises an error, unless the variable has been
+dynamically defined in the meanwhile.  The variable referred to in a
+procedure denotes the current value of the variable::
+
+    > (define foo (lambda () foobarbaz))
+    > (foo)
+    
+    Exception: variable foobarbaz is not bound
+    Type (debug) to enter the debugger.
+    > (define foobarbaz 42)
+    > (foo)
+    42
+    > (define foobarbaz 43)
+    > (foo)
+    43
+    > 
+
+
+.. index::
+   single: lambda (abstraction with a trace)
+
+Petite Chez Scheme core special form: tracing lambda-abstractions
+-----------------------------------------------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <lambda-abstraction-with-trace> ::= (trace-lambda <variable> <lambda-formals> <lambda-body>)
+  
+.. index::
+   single: identity procedure (traced)
+
+A **trace-lambda-abstraction** is much like a lambda-abstraction: in
+addition, it is given a name.  Evaluating a trace-lambda-abstraction
+yields a "traced procedure".  A traced procedure behaves just like a
+normal user-defined procedure except that, when it is applied, it
+prints its actual parameters and its result.  This printing feature is
+precious in that it provides a way to visualize the evaluation process
+of Scheme.
+
+* In this scenario, a traced procedure is applied to ``1``, ``2``, and
+  ``3``, and returns ``(3 2 1)``::
+
+    > ((trace-lambda example (x1 x2 x3) (list x3 x2 x1)) 1 2 3)
+    |(example 1 2 3)
+    |(3 2 1)
+    (3 2 1)
+    > ((trace-lambda another-example (x1 x2 x3) (list x3 x2 x1)) 1 2 3)
+    |(another-example 1 2 3)
+    |(3 2 1)
+    (3 2 1)
+    > 
+
+* In this scenario, a traced version of the identity procedure is
+  applied 0, 1, 2, and then 3 times::
+
+    > ((trace-lambda baz (p) 42) (trace-lambda identity (x) x))
+    |(baz #<procedure>)
+    |42
+    42
+    > ((trace-lambda baz (p) (p 42)) (trace-lambda identity (x) x))
+    |(baz #<procedure>)
+    |(identity 42)
+    |42
+    42
+    > ((trace-lambda baz (p) (p (p 42))) (trace-lambda identity (x) x))
+    |(baz #<procedure>)
+    | (identity 42)
+    | 42
+    |(identity 42)
+    |42
+    42
+    > ((trace-lambda baz (p) (p (p (p 42)))) (trace-lambda identity (x) x))
+    |(baz #<procedure>)
+    | (identity 42)
+    | 42
+    | (identity 42)
+    | 42
+    |(identity 42)
+    |42
+    42
+    > 
+
+* In this scenario, two traced versions of the identity procedure are
+  applied in turn::
+
+    > ((lambda (p q) (p (q (p (q 42)))))
+       (trace-lambda foo (x) x)
+       (trace-lambda bar (y) y))
+    |(bar 42)
+    |42
+    |(foo 42)
+    |42
+    |(bar 42)
+    |42
+    |(foo 42)
+    |42
+    42
+    > 
+
+* The final scenario uses the predefined procedure ``+`` that adds its
+  arguments::
+
+    > (+ 2 3)
+    5
+    > (+ 1 0)
+    1
+    > (+ 10 0)
+    10
+    > 
+
+  Two traced procedures that respectively add 1 and add 10 to their
+  argument are applied in turn::
+
+    > ((lambda (p q) (p (q (p (q 0)))))
+       (trace-lambda 1+ (x) (+ 1 x))
+       (trace-lambda 10+ (y) (+ 10 y)))
+    |(10+ 0)
+    |10
+    |(1+ 10)
+    |11
+    |(10+ 11)
+    |21
+    |(1+ 21)
+    |22
+    22
+    > 
+
+Make sure you appreciate how and in which order procedures are called,
+what actual parameters they are passed, and what results they return.
+
+
+.. index:: predicate
+.. index::
+   single: predicate (type)
+
+Predefined type predicates
+--------------------------
+
+A predicate is a procedure that yields a Boolean.  For each of its
+types (number, Boolean, character, string, procedure, etc.),
+Scheme offers a **type predicate**, i.e., a unary procedure testing the
+type of its argument::
+
+  > (number? 3)
+  #t
+  > (number? "hello world")
+  #f
+  > (integer? 3)
+  #t
+  > (integer? 3/4)
+  #f
+  > (rational? 3/4)
+  #t
+  > (boolean? #t)
+  #t
+  > (boolean? 3)
+  #f
+  > (char? #\f)
+  #t
+  > (char? #f)
+  #f
+  > (char? "foo")
+  #f
+  > (string? "bar")
+  #t
+  > (string? 3)
+  #f
+  > (string? #\c)
+  #f
+  > (procedure? 42)
+  #f
+  > (procedure? number?)
+  #t
+  > (procedure? procedure?)
+  #t
+  > (procedure? (lambda (x) x))
+  #t
+  > (procedure? (trace-lambda identity (x) x))
+  #t
+  > 
+
+
+.. _section-predefined-procedures-over-numbers:
+
+Predefined procedures over numbers
+----------------------------------
+
+Scheme features numeric operations such as addition, subtraction,
+multiplication, division, exponentiation, equality, and comparison
+over integers, rationals, and reals::
+
+  > (+ 10 20)
+  30
+  > (+ 2/5 1/5)
+  3/5
+  > (+ (+ 2/5 1/5) 2/5)
+  1
+  > (+ 10.0 20.5)
+  30.5
+  > (+ 10 20.5)
+  30.5
+  > (- 10 20)
+  -10
+  > (* 10 20)
+  200
+  > (/ 10 20)
+  1/2
+  > (quotient 14 4)
+  3
+  > (remainder 14 4)
+  2
+  > (expt 2 0)
+  1
+  > (expt 2 10)
+  1024
+  > (expt 10 3)
+  1000
+  > (< 10 20)
+  #t
+  > (<= 10 20)
+  #t
+  > (<= 10 10)
+  #t
+  > (= 10 20)
+  #f
+  > (= 10 10)
+  #t
+  > (= 10 20)
+  #f
+  > (>= 10 10)
+  #t
+  > (>= 10 20)
+  #f
+  > (> 10 20)
+  #f
+  > (zero? 0)
+  #t
+  > (zero? 10)
+  #f
+  > 
+
+Addition, multiplication, and equality are variadic::
+
+  > (+ 1 10)
+  11
+  > (+ 1 10 100)
+  111
+  > (+ 1 10 100 1000)
+  1111
+  > (* 1 2)
+  2
+  > (* 1 2 3)
+  6
+  > (* 1 2 3 4)
+  24
+  > (* 1 2 3 4 5)
+  120
+  > 
+
+Food for thought:
+
+* If you had to decide what should be the result of applying ``+`` to
+  *one* argument, what would be this result?  Why?
+  How does your decision compare with the behavior of Petite Chez Scheme?
+
+* If you had to decide what should be the result of applying ``+`` to
+  *zero* arguments, what would be this result?  Why?
+  How does your decision compare with the behavior of Petite Chez Scheme?
+  (Point of reference: the `empty sum
+  <https://en.wikipedia.org/wiki/Empty_sum>`_ in mathematics.)
+
+* If you had to decide what should be the result of applying ``*`` to
+  *one* argument, what would be this result?  Why?
+  How does your decision compare with the behavior of Petite Chez Scheme?
+
+* If you had to decide what should be the result of applying ``*`` to
+  *zero* arguments, what would be this result?  Why?
+  How does your decision compare with the behavior of Petite Chez Scheme?
+  (Point of reference: the `empty product
+  <https://en.wikipedia.org/wiki/Empty_product>`_ in mathematics.)
+
+* If you had to decide what should be the result of applying ``=`` to
+  *one* argument, what would be this result?  Why?
+  How does your decision compare with the behavior of Petite Chez Scheme?
+
+* If you had to decide what should be the result of applying ``=`` to
+  *zero* arguments, what would be this result?  Why?
+  How does your decision compare with the behavior of Petite Chez Scheme?
+
+* What is the behavior of Petite Chez Scheme when applying ``-`` to
+  *zero* arguments?  To *one* argument?  To *three or more* arguments?
+  Justify this behavior.
+
+* What is the behavior of Petite Chez Scheme when applying ``/`` to
+  *zero* arguments?  To *one* argument?  To *three or more* arguments?
+  Justify this behavior.
+
+
+Predefined procedures over Booleans
+-----------------------------------
+
+Scheme features Boolean negation, though this procedure is simple to
+define as a user-defined procedure:
+
+.. code-block:: scheme
+
+  (define not-as-a-user-defined-procedure
+    (lambda (v)
+      (if v
+          #f
+          #t)))
+
+Here is Boolean negation in action::
+
+  > (not #t)
+  #f
+  > (not #f)
+  #t
+  > (not 42)
+  #f
+  > 
+  > (not-as-a-user-defined-procedure #t)
+  #f
+  > (not-as-a-user-defined-procedure #f)
+  #t
+  > (not-as-a-user-defined-procedure 42)
+  #f
+  > 
+
+Food for thought:
+
+* What is the result of applying ``not`` to ``not``?
+  Why is it so?
+
+
+Exercise 5
+----------
+
+* The following procedure negates the negation of its argument:
+
+  .. code-block:: scheme
+  
+     (define not-not
+       (lambda (v)
+         (not (not v))))
+  
+  .. epigraph::
+  
+     | Payment is never not a factor.
+  
+     -- `Mal Reynolds <https://en.wikipedia.org/wiki/Malcolm_Reynolds>`_
+  
+  Define a procedure ``who-s-not-not-there`` that also
+  negates the negation of its argument but does not use ``not``.  How
+  does your procedure compare to ``not-not``?  (Try it on ``#t``,
+  ``#f``, and ``42``.)
+
+
+* The following procedure negates the negation of its negated
+  argument:
+  
+  .. code-block:: scheme
+  
+     (define not-not-not
+       (lambda (v)
+         (not (not (not v)))))
+  
+  .. epigraph::
+  
+     | No, I don't know where he's not.
+  
+     -- `Pinocchio <http://en.wikipedia.org/wiki/Shrek_the_Third>`_
+  
+  Define a procedure ``who-s-not-not-not-there`` that also negates the
+  negation of its negated argument but does not use ``not``.  How does
+  your procedure compare to ``not-not-not``?
+
+
+Predefined procedures over characters
+-------------------------------------
+
+Scheme features a procedure ``string`` with a non-fixed arity.  Given
+a series of characters, it returns the corresponding string::
+
+    > (string)
+    ""
+    > (string #\a)
+    "a"
+    > (string #\a #\b)
+    "ab"
+    > (string #\a #\b #\c)
+    "abc"
+    > (string #\h #\e #\l #\l #\o #\   #\w #\o #\r #\l #\d)
+    "hello world"
+    > 
+
+It is an error to apply ``string`` to values that are not characters.
+
+
+Predefined procedures over strings
+----------------------------------
+
+Scheme features a procedure ``string-length`` that, given a string,
+returns its length::
+
+    > (string-length "hello world")
+    11
+    > (string-length "hello \" world")
+    13
+    > (string-length "\"")
+    1
+    > (string-length "")
+    0
+    > 
+
+It is an error to apply ``string-length`` to 0 argument, to more than
+one argument, and to a value that is not a string.
+
+Scheme also features a procedure ``string-ref`` that, given a string
+and a natural number that can index this string, returns the
+corresponding character::
+
+    > (string-ref "abc" 0)
+    #\a
+    > (string-ref "abc" 1)
+    #\b
+    > (string-ref "abc" 2)
+    #\c
+    > (string-ref "abc" 3)
+    
+    Exception in string-ref: 3 is not a valid index for "abc"
+    Type (debug) to enter the debugger.
+    > (string-ref "abc" -1)
+    
+    Exception in string-ref: -1 is not a valid index for "abc"
+    Type (debug) to enter the debugger.
+    > 
+
+One can also concatenate strings in Scheme, using the predefined
+procedure ``string-append``::
+
+    > (string-append "foo" "bar")
+    "foobar"
+    > (string-append "" "bar")
+    "bar"
+    > (string-append "foo" "")
+    "foo"
+    > (string-append "foo" "bar" "baz")
+    "foobarbaz"
+    > (string-append "foo")
+    "foo"
+    > (string-append)
+    ""
+    > 
+
+
+.. _section-equality-re-0-visited:
+
+Equality
+--------
+
+Scheme features a generic equality predicate, ``equal?``, as well as
+type-specific equality predicates such as ``=`` for numbers,
+``boolean=?`` for Booleans, ``char=?`` for characters, and
+``string=?`` for strings::
+
+    > (equal? 1 2)
+    #f
+    > (equal? 10 10)
+    #t
+    > (equal? #t #t)
+    #t
+    > (= 33 44)
+    #f
+    > (= 33 33)
+    #t
+    > (= "33" "33")
+    
+    Exception in =: "33" is not a number
+    Type (debug) to enter the debugger.
+    > (= 42/2 63/3)
+    #t
+    > (boolean=? #t #t)
+    #t
+    > (equal? #\x #\y)
+    #f
+    > (char=? #\x #\y)
+    #f
+    > (char=? #\space #\ )
+    #t
+    > (equal? "foo" "bar")
+    #f
+    > (equal? "foo" "foo")
+    #t
+    > (string=? "foo" "foo")
+    #t
+    > (string=? #f 33)
+    
+    Exception in string=?: #f is not a string
+    Type (debug) to enter the debugger.
+    > (equal? #f 33)
+    #f
+    > 
+
+Remark: considering the naming convention for type-specific equality
+predicates, the name ``number=?`` would have been logical, but for
+simplicity, ``=`` was adopted.
+
+
+.. index:: self- (reference)
+
+Core special forms: define, revisited
+-------------------------------------
+
+.. epigraph::
+
+   | Many computer scientists are happy with self-references. 
+   | Glad is glad.
+
+   -- from the `Facts of Glad
+      <http://users-cs.au.dk/gedefar/index.php?page=facts-of-glad>`_
+      -- again
+
+Globally defined procedures are **recursive** and thus they can call
+themselves.  This makes it possible to process data that were built
+inductively.
+
+(Reminder: recursive procedures that follow the inductive structure of their
+input are said to be *structurally recursive*.)
+
+
+Processing natural numbers
+--------------------------
+
+The above subset of Scheme gives us the expressive power to process
+natural numbers, for example::
+
+  n ::= 0 | 1 + n
+
+* the special form ``lambda`` lets us write a procedure parameterized
+  with the natural number to process;
+
+* the predicate ``zero?`` lets us distinguish whether a given natural
+  number is ``0`` or not;
+
+* the special form ``if`` lets us exploit this distinction to treat
+  the base case and the induction case;
+
+* the predefined procedure ``1+`` lets us compute the successor of a
+  natural number::
+
+    > (1+ 10)
+    11
+    > (1+ 19)
+    20
+    > 
+
+* the predefined procedure ``1-`` lets us compute the predecessor of a
+  natural number::
+
+    > (1- 10)
+    9
+    > (1- 19)
+    18
+    > 
+
+* structural recursion lets us process the induction case.
+
+
+.. _adding-two-natural-numbers:
+
+Adding two natural numbers
+--------------------------
+
+Let us define the addition of two natural numbers according to the
+following recipe, which follows the inductive structure of natural
+numbers:
+
+* in English:
+
+  * Base case:
+    adding 0 to a number yields this number.
+
+  * Induction case:
+    adding the successor of a first number to a second number yields
+    the successor of the addition of the first number to the second number.
+
+* algebraically:
+
+  * Base case:
+    for all natural numbers n2, plus (0, n2) = n2
+
+  * Induction case:
+    for all natural numbers k and n2, plus (1 + k, n2) = 1 + plus (k, n2)
+
+* in Scheme:
+
+  .. code-block:: scheme
+
+    (define plus
+      (lambda (n1 n2)
+        (if (zero? n1)
+            ; the base case:
+            n2
+            ; the induction case:
+            (1+ (plus (1- n1) n2)))))
+
+    ;;; > (plus 2 4)
+    ;;; 6
+    ;;; > 
+
+  Note how ``plus`` calls itself in the induction case.
+
+Let us visualize the calls to ``plus`` by tracing its calls and
+returns:
+
+.. code-block:: scheme
+
+  (define plus_traced
+    (trace-lambda plus (n1 n2)
+      (if (zero? n1)
+          n2
+          (1+ (plus_traced (1- n1) n2)))))
+
+In the following scenario, ``plus_traced`` is applied to ``2`` and
+``4``.  The successive actual parameters are rendered at call time,
+and symmetrically the successive intermediate results are rendered at
+return time::
+
+  > (plus_traced 2 4)
+  |(plus 2 4)
+  | (plus 1 4)
+  | |(plus 0 4)
+  | |4
+  | 5
+  |6
+  6
+  > 
+
+Make sure you appreciate the succession of inductive cases, how they
+end with the base case, and the succession of intermediate results
+until the final one.
+
+
+.. index:: unit tests
+
+The notion of unit test
+-----------------------
+
+When defining a procedure, typically, (1) we think about what it
+should do, and (2) we write it.  Then, there is a blissfully empty
+moment where we are happy to have written the procedure.  This moment
+doesn't last: we haven't tested our procedure, and the sad truth is
+that we know that the tests are likely to show that it doesn't quite
+work, if it works at all.  So we drag our feet.  Besides, what are
+tests, and how does one write tests?  Isn't it the job of someone else to
+write tests?  Then we could blame them for their tests, not us for our
+procedure.
+
+See how the previous paragraph drifted from science to psychology?
+The issue, however, is merely one of timing.  We should just *write
+the tests first*, i.e., at the time where we think about what the
+procedure should do.  Take the addition procedure above, for example.
+What do we expect it to do?  Well, if we apply it to two arguments, it
+should return their sum.  But there are corner cases too: if it
+has zero as one of its arguments, it should return the other.  All of
+that we can capture in the following procedure, that given a candidate
+procedure, checks that applying it to zero as one argument yields the
+other argument, and applying to two non-zero arguments yields their
+sum:
+
+.. code-block:: scheme
+
+  (define test-plus
+    (lambda (candidate)
+      (and (equal? (candidate 0 0)
+                   0)
+           (equal? (candidate 0 5)
+                   5)
+           (equal? (candidate 5 0)
+                   5)
+           (equal? (candidate 3 4)
+                   7)
+           (equal? (candidate 123 4321)
+                   4444)
+           ((lambda (x1 x2)
+              (equal? (candidate x1 x2)
+                      (+ x1 x2)))
+            10
+            100)
+           ;;; add more tests here
+           )))
+
+By writing ``test-plus`` first, we spell out what our procedure should
+do, both in general and in its corner cases.  And then we can test it
+as soon as we have written it::
+
+  > (test-plus plus)
+  #t
+  > 
+
+So for example, the goal of the next section is to define a procedure
+that implements the multiplication of two natural numbers.  What
+should this procedure do?  In general, given two numbers, it should
+return their product.  As for its corner cases: if given zero as one
+of its arguments, it should return zero, and if given one as one of
+its arguments, it should return the other argument.  In Scheme:
+
+.. code-block:: scheme
+
+  (define test-times
+    (lambda (candidate)
+      (and (equal? (candidate 0 0)
+                   0)
+           (equal? (candidate 0 5)
+                   0)
+           (equal? (candidate 5 0)
+                   0)
+           (equal? (candidate 1 1)
+                   1)
+           (equal? (candidate 5 1)
+                   5)
+           (equal? (candidate 1 5)
+                   5)
+           (equal? (candidate 3 4)
+                   12)
+           ((lambda (x1 x2)
+              (equal? (candidate x1 x2)
+                      (* x1 x2)))
+            10
+            100)
+           ;;; add more tests here
+           )))
+
+.. epigraph::
+
+   | But of course you don't obtain the same number
+   | if you add two numbers and if you multiply them!
+   | For example, 2 plus 2...
+
+   -- Prototypical `Hetz <http://users-cs.au.dk/madsfoek/hetz/>`_
+
+Food for thought:
+
+* What is the result of applying ``test-plus`` to ``+``?
+  Why is it so?
+
+* What is the result of applying ``test-times`` to ``*``?
+  Why is it so?
+
+* What is the result of applying ``test-plus`` to ``*``?
+  Why is it so?
+
+* What is the result of applying ``test-times`` to ``+``?
+  Why is it so?
+
+
+.. _multiplying-two-natural-numbers:
+
+Multiplying two natural numbers
+-------------------------------
+
+Let us define the multiplication of two natural numbers according to
+the following recipe, which also follows the inductive structure of
+natural numbers:
+
+* in English:
+
+  * Multiplying 0 and a number yields 0.
+
+  * Multiplying the successor of a first number and a second number yields
+    the addition of the second number to
+    the multiplication of the first number and the second number.
+
+* algebraically:
+
+  * for all natural numbers n2, times (0, n2) = 0
+
+  * for all natural numbers k and n2,
+    times (1 + k, n2) = plus (n2, times (k, n2))
+
+* in Scheme:
+
+  .. code-block:: scheme
+
+    (define times
+      (lambda (n1 n2)
+        (if (zero? n1)
+            0
+            (plus n2 (times (1- n1) n2)))))
+
+  Let us test this definition::
+  
+    > (test-times times)
+    #t
+    > 
+
+  Success: the Scheme procedure implementing the multiplication function
+  passes the unit test.
+
+
+.. _exercise-multiplying-two-natural-numbers:
+
+Exercise 6
+----------
+
+In this mandatory exercise, you are asked to:
+
+* define a traced version of ``times``, apply it to ``3`` and ``2``,
+  and make sense of what you see; and
+
+* define a traced version of ``times`` that uses ``plus_traced`` instead
+  of ``plus``, apply it to ``3`` and ``2``, and make sense of what you
+  see.
+
+
+Exercise 7
+----------
+
+The number 1 is neutral for multiplication.
+Should we add this property to the definition of multiplication?
+
+* multiplying 1 by any number yields this number
+
+* for all natural numbers n2, 1 * n2 = n2
+
+Or is this property a consequence of the definition of multiplication?
+
+
+.. _exponentiating-two-natural-numbers:
+
+Exponentiating two natural numbers
+----------------------------------
+
+Let us define the exponentiation of two natural numbers according to
+the following recipe, which again follows the inductive structure of
+natural numbers:
+
+* in English:
+
+  * x to the power 0 is 1.
+
+  * x to the power of 1 + n is
+    x times (x to the power of n).
+
+* algebraically:
+
+  * for all natural numbers x, power (x, 0) = 1
+
+  * for all natural numbers x and k,
+    power (x, 1 + k) = times (x, power (x, k))
+
+* in Scheme:
+
+  .. code-block:: scheme
+
+    (define test-power
+      (lambda (candidate)
+        (and (equal? (candidate 2 0)
+                     1)
+             (equal? (candidate 2 1)
+                     2)
+             (equal? (candidate 2 10)
+                     1024)
+             ;;; add more tests here
+             )))
+
+    (define power
+      (lambda (x n)
+        (if (zero? n)
+            1
+            (times x (power x (1- n))))))
+
+  Let us test this definition::
+  
+    > (test-power power)
+    #t
+    > 
+
+  Success: the Scheme procedure implementing the power function
+  passes the unit test.
+
+
+Exercise 8
+----------
+
+* Define a traced version of ``power``, apply it to ``2`` and ``10``,
+  and make sense of what you see.
+
+* Define a traced version of ``power`` that uses ``times_traced``
+  instead of ``times``, apply it to ``2`` and ``10``, and make sense
+  of what you see.
+
+* Modify the definition of ``power`` so that it uses the predefined
+  multiplication procedure, ``*``.  Is your modified definition more
+  efficient?  Why?
+
+* As seen in the section on
+  :ref:`section-predefined-procedures-over-numbers`, the power
+  procedure is predefined in Scheme: it is denoted by ``expt``.  Does
+  it pass the unit tests?
+
+
+.. _the-factorial-function:
+
+The factorial function
+----------------------
+
+Let us define the factorial function according to the following
+recipe, which still follows the inductive structure of natural
+numbers:
+
+* in English:
+
+  * The factorial of 0 is 1.
+
+  * The factorial of (1 + n) is (1 + n) times the factorial of n.
+
+* algebraically:
+
+  * fac (0) = 1
+
+  * for all natural numbers k,
+    fac (1 + k) = times (1 + k, fac k)
+
+* in Scheme:
+
+  .. code-block:: scheme
+
+    (define test-fac
+      (lambda (candidate)
+        (and (equal? (candidate 0)
+                     1)
+             (equal? (candidate 1)
+                     1)
+             (equal? (candidate 5)
+                     120)
+             (equal? (candidate 7)
+                     (* 1 2 3 4 5 6 7))
+             ;;; add more tests here
+             )))
+
+    (define fac
+      (lambda (n)
+        (if (zero? n)
+            1
+            (times n (fac (1- n))))))
+
+  Let us test this definition::
+  
+    > (test-fac fac)
+    #t
+    > 
+
+  Success: the Scheme procedure implementing the factorial function
+  passes the unit test.
+
+Let us visualize the calls to ``fac`` by tracing its calls and
+returns:
+
+.. code-block:: scheme
+
+  (define fac_traced
+    (trace-lambda fac (n)
+      (if (= n 0)
+          1
+          (times n (fac_traced (1- n))))))
+
+In the following scenario, ``fac_traced`` is applied to 5.  The
+successive actual parameters are rendered at call time, and
+symmetrically the successive intermediate results are rendered at
+return time::
+
+  > (fac_traced 5)
+  |(fac 5)
+  | (fac 4)
+  | |(fac 3)
+  | | (fac 2)
+  | | |(fac 1)
+  | | | (fac 0)
+  | | | 1
+  | | |1
+  | | 2
+  | |6
+  | 24
+  |120
+  120
+  > 
+
+Make sure you appreciate the succession of inductive cases, how they
+end with the base case, and the succession of intermediate results
+until the final one.
+
+Food for thought:
+
+* What happens if you evaluate ``(test-fac fac_traced)``?
+
+* Modify the definitions of ``fac`` and ``fac_traced`` so that they
+  use the predefined multiplication procedure, ``*``.  Are your
+  modified definitions more efficient?  Why?
+
+
+Exercise 9
+----------
+
+How many digits are there in the factorial of 1000?
+(Hint: use the Emacs command :kbd:`M-x what-cursor-position`.)
+
+
+.. index:: recursion (tail)
+
+.. _adding-two-natural-numbers-tail-recursively:
+
+Adding two natural numbers, tail recursively
+--------------------------------------------
+
+Let us revisit the addition of two natural numbers, this time
+according to the following alternative recipe where instead of waiting
+until the base case to start incrementing the second argument, we
+increment it as we go through the inductive case:
+
+* in English:
+
+  * Adding 0 to a number yields this number.
+
+  * Adding the successor of a first number to a second number yields
+    the addition of the first number to the successor of the second number.
+
+* algebraically:
+
+  * for all natural numbers n2, plus (0, n2) = n2
+
+  * for all natural numbers k and n2,
+    plus (1 + k, n2) = plus (k, 1 + n2)
+
+* in Scheme:
+
+  .. code-block:: scheme
+
+    (define plus_alt
+      (lambda (n1 n2)
+        (if (zero? n1)
+            ; the base case:
+            n2
+            ; the induction case:
+            (plus_alt (1- n1) (1+ n2)))))
+
+  Let us test this definition using *the same unit test as above*::
+
+    > (test-plus plus_alt)
+    #t
+    > 
+
+  Success.
+
+Let us visualize the calls to ``plus_alt`` by tracing its calls and
+returns:
+
+.. code-block:: scheme
+
+  (define plus_alt_traced
+    (trace-lambda plus_alt (n1 n2)
+      (if (zero? n1)
+          n2
+          (plus_alt_traced (1- n1) (1+ n2)))))
+
+In the following scenario, ``plus_alt_traced`` is applied to ``2`` and
+``4``::
+
+  > (plus_alt_traced 2 4)
+  |(plus_alt 2 4)
+  |(plus_alt 1 5)
+  |(plus_alt 0 6)
+  |6
+  6
+  > 
+
+This trace illustrates several points:
+
+* Reminder: the trace for ``plus`` showed a series of calls
+  (corresponding to the inductive case), during which the first
+  argument of ``plus`` is decremented; this series of calls was
+  terminated by the base case, and was followed by a series of returns
+  (one per instance of the inductive case) during which the second
+  argument of ``plus`` was incremented.
+
+  In contrast, the trace for ``plus_alt`` shows a series of calls
+  (corresponding to the inductive case), during which the first
+  argument of ``plus_alt`` is decremented and the second argument is
+  incremented; this series of calls is terminated by the base case, and
+  there is no series of returns.  Since the increments were carried
+  out over the second argument during the calls, the computation
+  is complete at the end of the series of calls.
+
+  Later on, we will revisit this technique of accumulating
+  intermediate results at call time instead of computing them at
+  return time.
+
+* Petite Chez Scheme, when emitting the trace, does not indent the
+  calls to ``plus_alt`` and does not emit a cascade of identical
+  returns.  Instead, it conflates this series of returns into one
+  return.
+
+.. index:: tail calls
+
+The key point here is that this recursive call is *the last thing the
+procedure does*.  Such a call is a *tail call* and Scheme
+implementations optimize it away.
+
+Food for thought:
+
+.. index:: recursion (mutual)
+
+* The two following procedures are defined recursively *in a mutual
+  way*: the first calls the second and the second calls the first.
+  Apply either of them to a natural number.  Do you concur that they
+  test whether their argument is odd or even?  Redefine them with
+  tracing lambda-abstractions.  Do the resulting traces make sense to
+  you?
+
+  .. code-block:: scheme
+
+    (define is-even?
+      (lambda (n)
+        (if (= n 0)
+            #t
+            (is-odd? (1- n)))))
+    
+    (define is-odd?
+      (lambda (n)
+        (if (= n 0)
+            #f
+            (is-even? (1- n)))))
+
+    (define test-is-even?
+      (lambda (candidate)
+        (and (equal? (candidate 0)
+                     #t)
+             (equal? (candidate 1)
+                     #f)
+             (equal? (candidate 2)
+                     #t)
+             (equal? (candidate 3)
+                     #f)
+             (equal? (candidate 4)
+                     #t)
+             (equal? (candidate 100)
+                     #t)
+             (equal? (candidate 101)
+                     #f)
+             ;;; 
+             )))
+
+    (define test-is-odd?
+      (lambda (candidate)
+        (and (equal? (candidate 0)
+                     #f)
+             (equal? (candidate 1)
+                     #t)
+             (equal? (candidate 2)
+                     #f)
+             (equal? (candidate 3)
+                     #t)
+             (equal? (candidate 4)
+                     #f)
+             (equal? (candidate 100)
+                     #f)
+             (equal? (candidate 101)
+                     #t)
+             ;;;
+             )))
+
+  (You may want to apply ``test-is-even?`` to ``is-even?`` and
+  ``test-is-odd?`` to ``is-odd?``.)
+
+  Here is what you should remember from this example:
+
+  .. note::
+
+    In Scheme, iterative computations are carried out with tail calls.
+
+* Naturally, ``is-even?`` and ``is-odd?`` are only meant to illustrate mutually
+  recursive procedures.  Here are two simpler predicates with the same
+  goal:
+
+  .. code-block:: scheme
+
+    (define is-even?_alt
+      (lambda (n)
+        (= (remainder n 2) 0)))
+
+    (define is-odd?_alt
+      (lambda (n)
+        (= (remainder n 2) 1)))
+
+  These two simpler predicates pass the unit tests::
+
+    > (test-is-even? is-even?_alt)
+    #t
+    > (test-is-odd? is-odd?_alt)
+    #t
+    > 
+
+  In any case, Petite Chez Scheme provides two predefined procedure
+  ``even?`` and ``odd?`` who do the job and pass the unit tests as well::
+
+    > (test-is-even? even?)
+    #t
+    > (test-is-odd? odd?)
+    #t
+    > 
+
+
+Example: computing the number of trailing zeroes in a positive integer
+----------------------------------------------------------------------
+
+.. index:: base (10)
+
+Let us briefly consider how to compute the number of trailing zeroes
+in a positive integer when it is represented in base 10.  The
+following unit-test procedure enumerates a sample of examples:
+
+.. code-block:: scheme
+
+  (define test-number-of-trailing-zeroes-in-a-positive-integer-in-base-10
+    (lambda (candidate)
+      (and (equal? (candidate 42)
+                   0)
+           (equal? (candidate 10)
+                   1)
+           (equal? (candidate 500)
+                   2)
+           ;;; add more tests here
+           )))
+
+The following procedure computes this number:
+
+.. code-block:: scheme
+
+  (define number-of-trailing-zeroes-in-a-positive-integer-in-base-10
+    (lambda (n)
+      (if (= (remainder n 10) 0)
+          (if (= n 0)
+              0
+              (1+ (number-of-trailing-zeroes-in-a-positive-integer-in-base-10 (quotient n 10))))
+          0)))
+
+This procedure passes the unit test::
+
+  > (test-number-of-trailing-zeroes-in-a-positive-integer-in-base-10
+          number-of-trailing-zeroes-in-a-positive-integer-in-base-10)
+  #t
+  > 
+
+
+.. _exercise-trailing-zeroes:
+
+Exercise 10
+-----------
+
+* Extend
+  ``test-number-of-trailing-zeroes-in-a-positive-integer-in-base-10``
+  with a few more positive integers.  Does
+  ``number-of-trailing-zeroes-in-a-positive-integer-in-base-10``
+  pass your extended unit test?
+
+* Redefine
+  ``number-of-trailing-zeroes-in-a-positive-integer-in-base-10`` with a
+  tracing lambda-abstraction, apply it to a few positive integers with
+  trailing zeroes, and visualize its non-tail calls.
+
+
+Food for thought:
+
+* How many trailing zeroes are there in the factorial of 10?  Of 100?
+  Of 1000?
+
+* For the over-achievers: Can you venture a formula -- or at least a
+  lower bound -- for the number of trailing zeroes in the factorial of
+  any given natural number?  If so, program it and test it on a
+  handful of examples.
+
+  To start with, this lower bound is clearly related to the number of
+  multiples of 10 in the multiplicands that compose a factorial
+  number.  For example, the factorial of 20 (i.e., 1 * 2 * 3 * ... *
+  10 * ... * 19 * 20) has 10 and 20 as multiplicands, and therefore it
+  has at least two trailing zeroes.  So having multiples of 10 as
+  multiplicands is necessary to have trailing zeroes, but it is not
+  sufficient: there are four trailing zeroes in the factorial of 20
+  (which is 2432902008176640000), and the factorial of 5 (i.e., 120)
+  has one trailing zero but does not have 10 as a multiplicand.  In
+  any case, the number of multiples of 10 in a factorial number can be
+  computed without first computing this factorial number.  Can you
+  venture a formula that, given a natural number, yields the number of
+  trailing zeroes in the factorial of this natural number, without
+  computing this factorial number?
+
+
+Example: computing the number of significant zeroes in a positive integer
+-------------------------------------------------------------------------
+
+Let us briefly consider how to compute the number of significant
+zeroes in a positive integer when it is represented in base 10.
+(Reminder: in the number 007, the two leading zeroes are
+insignificant.)  The following unit-test procedure enumerates a sample
+of examples:
+
+.. code-block:: scheme
+
+  (define test-number-of-significant-zero-digits-in-a-positive-integer-in-base-10
+    (lambda (candidate)
+      (and (equal? (candidate 10)
+                   1)
+           (equal? (candidate 100)
+                   2)
+           (equal? (candidate 1010)
+                   2)
+           (equal? (candidate 00100100)
+                   4)
+           ;;; add more tests here
+           )))
+
+The following procedure computes this number:
+
+.. code-block:: scheme
+
+  (define number-of-significant-zero-digits-in-a-positive-integer-in-base-10
+    (lambda (n)
+      (if (= (remainder n 10) 0)
+          (if (= n 0)
+              0
+              (1+ (number-of-significant-zero-digits-in-a-positive-integer-in-base-10 (quotient n 10))))
+          (number-of-significant-zero-digits-in-a-positive-integer-in-base-10 (quotient n 10)))))
+
+This procedure passes the unit test::
+
+  > (test-number-of-significant-zero-digits-in-a-positive-integer-in-base-10
+          number-of-significant-zero-digits-in-a-positive-integer-in-base-10)
+  #t
+  > 
+
+
+Exercise 11
+-----------
+
+* Extend
+  ``test-number-of-significant-zero-digits-in-a-positive-integer-in-base-10``
+  with a few positive integers, some of which have a solid number of
+  consecutive digits that are zero, and some of which have a solid
+  number of consecutive digits that are not zero.  Does
+  ``number-of-significant-zero-digits-in-a-positive-integer-in-base-10``
+  pass your extended unit test?
+
+* Redefine
+  ``number-of-significant-zero-digits-in-a-positive-integer-in-base-10``
+  with a tracing lambda-abstraction, apply it to a few positive
+  integers, and visualize its tail calls and its non-tail calls.
+
+* Define a procedure
+  ``number-of-non-zero-digits-in-a-positive-integer-in-base-10`` to
+  compute the number of digits in a positive integer that are *not*
+  zero.  Write a unit-test procedure to verify that adding the result
+  of
+  ``number-of-significant-zero-digits-in-a-positive-integer-in-base-10``
+  and of
+  ``number-of-non-zero-digits-in-a-positive-integer-in-base-10``
+  applied to a positive integer yields the number of (significant)
+  digits of that integer in base 10.
+
+
+Food for thought:
+
+* How would you compute the number of significant digits of a
+  non-negative integer in base 10?  In base 2?  In base 8?  In base
+  100?
+
+  Reminder: in base 10, the number 123 is really 1 * 100 + 2 * 10 +
+  3 * 1, i.e., 1 * 10^2 + 2 * 10^1 + 3 * 10^0.  In Scheme::
+
+    > (+ (* 1 (expt 10 2)) (* 2 (expt 10 1)) (* 3 (expt 10 0)))
+    123
+    > 
+
+  In that light, it is simple to write a unit-test procedure for
+  computing the number of significant digits of a non-negative integer
+  in base 8:
+
+  .. code-block:: scheme
+  
+    (define test-number-of-significant-digits-in-a-non-negative-integer-in-base-8
+      (lambda (candidate)
+        (and (equal? (candidate (+ (* 7 (expt 8 0))))
+                     1)  ;;; 7 in base 8
+             (equal? (candidate (+ (* 7 (expt 8 1))
+                                   (* 7 (expt 8 0))))
+                     2)  ;;; 77 in base 8
+             (equal? (candidate (+ (* 7 (expt 8 2))
+                                   (* 7 (expt 8 1))
+                                   (* 7 (expt 8 0))))
+                     3)  ;;; 777 in base 8
+             (equal? (candidate (+ (* 7 (expt 8 3))
+                                   (* 7 (expt 8 2))
+                                   (* 7 (expt 8 1))
+                                   (* 7 (expt 8 0))))
+                     4)  ;;; 7777 in base 8
+             (equal? (candidate (+ (* 7 (expt 8 4))
+                                   (* 7 (expt 8 3))
+                                   (* 7 (expt 8 2))
+                                   (* 7 (expt 8 1))
+                                   (* 7 (expt 8 0))))
+                     5)  ;;; 77777 in base 8
+             ;;; add more tests here
+             )))
+
+
+Exercise 12
+-----------
+
+* Define a procedure
+  ``number-of-one-digits-in-a-non-negative-integer-in-base-10`` to compute
+  the number of digits in a non-negative integer that are 1.
+
+  .. code-block:: scheme
+  
+    (define test-number-of-one-digits-in-a-non-negative-integer-in-base-10
+      (lambda (candidate)
+        (and (equal? (candidate 5)
+                     0)
+             (equal? (candidate 10)
+                     1)
+             (equal? (candidate 11)
+                     2)
+             (equal? (candidate 012340123401234)
+                     3)
+             ;;; add more tests here
+             )))
+  
+* Define a ``procedure
+  number-of-two-digits-in-a-non-negative-integer-in-base-10`` to
+  compute the number of digits in a non-negative integer that are 2.
+
+  .. code-block:: scheme
+  
+    (define test-number-of-two-digits-in-a-non-negative-integer-in-base-10
+      (lambda (candidate)
+        (and (equal? (candidate 5)
+                     0)
+             (equal? (candidate 20)
+                     1)
+             (equal? (candidate 22)
+                     2)
+             (equal? (candidate 012340123401234)
+                     3)
+             ;;; add more tests here
+             )))
+  
+* Define a procedure
+  ``number-of-three-digits-in-a-non-negative-integer-in-base-10`` to
+  compute the number of digits in a non-negative integer that are 3.
+
+  .. code-block:: scheme
+  
+    (define test-number-of-three-digits-in-a-non-negative-integer-in-base-10
+      (lambda (candidate)
+        (and (equal? (candidate 5)
+                     0)
+             (equal? (candidate 30)
+                     1)
+             (equal? (candidate 33)
+                     2)
+             (equal? (candidate 012340123401234)
+                     3)
+             ;;; add more tests here
+             )))
+  
+
+Exercise 13
+-----------
+
+* Define a procedure
+  ``number-of-given-digit-in-a-non-negative-integer-in-base-10`` that,
+  given a digit and a non-negative integer, computes the number of digits
+  in this non-negative integer that are this digit.
+
+  .. code-block:: scheme
+  
+    (define test-number-of-given-digit-in-a-non-negative-integer-in-base-10
+      (lambda (candidate)
+        (and (equal? (candidate 5 43210)
+                     0)
+             (equal? (candidate 9 99)
+                     2)
+             (equal? (candidate 8 012345678901234567890123456789)
+                     3)
+             ;;; add more tests here
+             )))
+
+* Use ``number-of-given-digit-in-a-non-negative-integer-in-base-10`` to
+  define an alternative version of
+  ``number-of-significant-zero-digits-in-a-non-negative-integer-in-base-10``
+  and verify that your alternative definition passes the unit test for
+  ``number-of-significant-zero-digits-in-a-non-negative-integer-in-base-10``.
+
+* Use ``number-of-given-digit-in-a-non-negative-integer-in-base-10`` to
+  define an alternative version of
+  ``number-of-one-digits-in-a-non-negative-integer-in-base-10`` and verify
+  that your alternative definition passes the unit test for
+  ``number-of-one-digits-in-a-non-negative-integer-in-base-10``.
+
+* Use ``number-of-given-digit-in-a-non-negative-integer-in-base-10`` to
+  define an alternative version of
+  ``number-of-two-digits-in-a-non-negative-integer-in-base-10`` and verify
+  that your alternative definition passes the unit test for
+  ``number-of-two-digits-in-a-non-negative-integer-in-base-10``.
+
+* Use ``number-of-given-digit-in-a-non-negative-integer-in-base-10`` to
+  define an alternative version of
+  ``number-of-three-digits-in-a-non-negative-integer-in-base-10`` and
+  verify that your alternative definition passes the unit test for
+  ``number-of-three-digits-in-a-non-negative-integer-in-base-10``.
+
+
+.. _example-computing-the-sum-of-the-first-n-positive-integers:
+
+Example: computing the sum of the first n positive integers
+-----------------------------------------------------------
+
+Let us revisit :ref:`sum-of-the-first-natural-numbers`, from the
+lecture note of `Week 1 <week-1.html>`_.
+Given a natural number ``n``, the following two procedures compute the sum
+of the ``n`` first positive integers:
+
+.. code-block:: scheme
+
+  ;;; Version with a linear number of arithmetic operations:
+  (define sum-from-1-to-max_linear
+    (lambda (max)
+      (if (= max 0)
+          0
+          (+ max (sum-from-1-to-max_linear (1- max))))))
+  
+  ;;; Version with a constant number of arithmetic operations:
+  (define sum-from-1-to-max_constant
+    (lambda (max)
+      (/ (* max (+ max 1)) 2)))
+    
+The following procedures test the two previous procedures:
+
+.. code-block:: scheme
+
+  (define test-sum-from-1-to-max
+    (lambda (n)
+      (= (sum-from-1-to-max_linear n)
+         (sum-from-1-to-max_constant n))))
+
+  ;;; > (test-sum-from-1-to-max 100)
+  ;;; #t
+  ;;; > 
+
+
+Food for thought:
+
+* How would you define ``sum-from-0-to-max_linear`` and
+  ``sum-from-0-to-max_constant``?
+
+
+.. _exercise-timing-of-sum-of-first-positive-integers:
+
+Exercise 14
+-----------
+
+Write a "timed" version of ``test-sum-from-1-to-max`` where what is
+compared is not ``(sum-from-1-to-max_linear n)`` and
+``(sum-from-1-to-max_constant n)`` but ``(time
+(sum-from-1-to-max_linear n))`` and ``(time
+(sum-from-1-to-max_constant n))`` instead.  Apply this timed procedure
+to a few positive integers.  Draw a graph with the time / space measures
+that are displayed.  Do you see linear time / space vs. constant time
+/ space curves?
+
+
+.. _exercise-sum-from-min-to-max:
+
+Exercise 15
+-----------
+
+The goal of this exercise is, given two positive integers min and max
+such that min <= max, to compute min + (min + 1) + ... + (max - 1) + max.
+(In the previous example, we summed from 1 to a given integer
+max.  Here, we sum from a given integer min to a given integer max.)
+
+1. Establish a formula that makes it possible to calculate min +
+   (min + 1) + ... + (max - 1) + max with a constant number of
+   arithmetic operations.
+
+2. Prove your formula by induction.  To this end, let d = max - min,
+   and let F(min, d) be your formula expressed in terms of min and d.
+   You should prove the following property by induction on d::
+
+     for all positive integers d,
+       for all positive integers min,
+         sum for i = 0 to d of min + i
+         =
+         F(min, d)
+
+3. Write two procedures that, given two positive integers min and max,
+   compute min + (min + 1) + ... + (max - 1) + max.  One procedure
+   should work with a linear number of operations, and the other one
+   with a constant number of operations::
+
+     > (sum-from-min-to-max_linear 10 30)
+     420
+     > (sum-from-min-to-max_constant 10 30)
+     420
+     > 
+
+4. Write a procedure ``test-sum-from-min-to-max`` that tests the
+   equivalence of your two procedures, and apply it to a few integers
+   as a rudimentary verification.
+
+5. Using ``sum-from-min-to-max_linear``, define an alternative version
+   of ``sum-from-1-to-max_linear``, and using
+   ``sum-from-min-to-max_constant``, define an alternative version of
+   ``sum-from-1-to-max_constant``.
+
+
+.. index:: Fibonacci numbers
+
+.. _exercise-Fibonacci-function:
+
+Exercise 16
+-----------
+
+In this mandatory exercise, you are asked to
+write a recursive procedure that computes `Fibonacci numbers
+<http://en.wikipedia.org/wiki/Fibonacci_number>`_ according to the
+following recipe: the first Fibonacci number is 0 (so applying your
+procedure to ``0`` should return ``0``); the second Fibonacci number
+is 1 (so applying your procedure to ``1`` should return ``1``); and
+adding two consecutive Fibonacci numbers yields the next Fibonacci
+number.  Your procedure should therefore have two recursive calls.
+
+Here is a unit test for your procedure:
+
+.. code-block:: scheme
+
+  (define test-fib
+    (lambda (candidate)
+      (and (equal? (candidate 0)
+                   0)
+           (equal? (candidate 1)
+                   1)
+           (equal? (candidate 2)
+                   1)
+           (equal? (candidate 3)
+                   2)
+           (equal? (candidate 4)
+                   3)
+           (equal? (candidate 5)
+                   5)
+           (equal? (candidate 6)
+                   8)
+           (equal? (candidate 7)
+                   13)
+           (equal? (candidate 8)
+                   21)
+           (equal? (candidate 9)
+                   34)
+           ;;; add more tests, based on the Fibonacci sequence
+           )))
+
+Assuming your procedure is named ``fib``, here is your measure of
+success: evaluating ``(test-fib fib)`` should yield ``#t``.
+
+
+Exercise 17
+-----------
+
+Implement a Fibonacci-like function on steroids (let us name it
+``fib3``) such that:
+
+* ``fib3(0) = 0``
+
+* ``fib3(1) = 1``
+
+* ``fib3(2) = 2``
+
+* ``for any natural number n, fib3(n) + fib3(n+1) + fib3(n+2) = fib3(n+3)``
+
+Here is a unit test for your procedure:
+
+.. code-block:: scheme
+
+  (define test-fib3
+    (lambda (candidate)
+      (and (equal? (candidate 0)
+                   0)
+           (equal? (candidate 1)
+                   1)
+           (equal? (candidate 2)
+                   2)
+           (equal? (candidate 3)
+                   (+ 0
+                      1
+                      2))
+           (equal? (candidate 4)
+                   (+ 1
+                      2
+                      (+ 0 1 2)))
+           (equal? (candidate 5)
+                   (+ 2
+                      (+ 0 1 2)
+                      (+ 1 2 (+ 0 1 2))))
+           (equal? (candidate 6)
+                   (+ (+ 0 1 2)
+                      (+ 1 2 (+ 0 1 2))
+                      (+ 2 (+ 0 1 2) (+ 1 2 (+ 0 1 2)))))
+           (equal? (candidate 7)
+                   (+ (+ 1 2 (+ 0 1 2))
+                      (+ 2 (+ 0 1 2) (+ 1 2 (+ 0 1 2)))
+                      (+ (+ 0 1 2) (+ 1 2 (+ 0 1 2)) (+ 2 (+ 0 1 2) (+ 1 2 (+ 0 1 2))))))
+           ;;; add more tests
+           )))
+
+Here is your measure of success: evaluating ``(test-fib3 fib3)``
+should yield ``#t``.
+
+Once you are done, extend the unit-test procedure with two more tests
+and verify that ``fib3`` passes your extended unit test.
+
+
+.. _exercise-sum-of-first-even-numbers-program:
+
+Exercise 18
+-----------
+
+In reference to :ref:`exercise-sum-of-first-even-numbers` in the
+lecture note of `Week 1 <week-1.html>`_,
+
+* write a procedure that, given a natural number n, computes the sum
+  of the n first even numbers using a number of operations that is
+  proportional to n;
+
+* write a procedure that, given a natural number n, computes the sum
+  of the n first even numbers using a constant number of operations;
+  and
+
+* write a procedure that tests the equivalence of your two procedures,
+  and apply it to a few natural numbers as a rudimentary verification.
+
+
+.. _exercise-sum-of-first-odd-numbers-program:
+
+Exercise 19
+-----------
+
+In reference to :ref:`exercise-sum-of-first-odd-numbers` in the
+lecture note of `Week 1 <week-1.html>`_,
+
+* write a procedure that, given a natural number n, computes the sum
+  of the n first odd numbers using a number of operations that is
+  proportional to n;
+
+* write a procedure that, given a natural number n, computes the sum
+  of the n first odd numbers using a constant number of operations;
+  and
+
+* write a procedure that tests the equivalence of your two procedures,
+  and apply it to a few natural numbers as a rudimentary verification.
+
+
+Exercise 20
+-----------
+
+In reference to :ref:`sum-of-the-cubes-of-the-first-natural-numbers`
+in the lecture note of `Week 1 <week-1.html>`_, write three
+procedures that, given a natural number n, compute the sum of the n
+first cubes:
+
+* the first procedure should sum cubes;
+
+* the second procedure should square a sum of integers;
+
+* the third procedure should operate with a constant number of
+  arithmetic operations.
+
+Then write a procedure that tests the equivalence of your three
+procedures, and apply it to a few natural numbers as a rudimentary
+verification.
+
+
+Solution for Exercise 20
+------------------------
+
+.. code-block:: scheme
+
+  (define cube
+    (lambda (n)
+      (* n n n)))
+
+  ;;; Version with a linear number of arithmetic operations:
+  (define sum-of-the-first-cubes_linear
+    (lambda (max)
+      (if (= max 0)
+          0
+          (+ (cube max) (sum-of-the-first-cubes_linear (1- max))))))
+  
+  (define square
+    (lambda (n)
+      (* n n)))
+
+  ;;; Other version with a linear number of arithmetic operations:
+  (define sum-of-the-first-cubes_linear_alt
+    (lambda (max)
+      (square (sum-from-1-to-max_linear max))))
+  
+  ;;; Version with a constant number of arithmetic operations:
+  (define sum-of-the-first-cubes_constant
+    (lambda (max)
+      (square (sum-from-1-to-max_constant max))))
+
+The following procedure tests the three previous procedures:
+
+.. code-block:: scheme
+
+  (define test-sum-of-the-first-cubes
+    (lambda (n)
+      (= (sum-of-the-first-cubes_linear n)
+         (sum-of-the-first-cubes_linear_alt n)
+         (sum-of-the-first-cubes_constant n))))
+
+In the following scenario, we run this test for 0, 1, and 10::
+
+  > (test-sum-of-the-first-cubes 0)
+  #t
+  > (test-sum-of-the-first-cubes 1)
+  #t
+  > (test-sum-of-the-first-cubes 10)
+  #t
+  > 
+
+The following procedure tests the three previous procedures and times
+their computation:
+
+.. code-block:: scheme
+
+  (define test-sum-of-the-first-cubes_timed
+    (lambda (n)
+      (= (time (sum-of-the-first-cubes_linear_alt n))
+         (time (sum-of-the-first-cubes_constant n))
+         (time (sum-of-the-first-cubes_linear n)))))
+
+In the following scenario, we run this test for 10000, 100000, and
+1000000::
+
+  > (test-sum-of-the-first-cubes_timed 10000)
+  (time (sum-of-the-first-cubes_constant n))
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      16 bytes allocated
+  (time (sum-of-the-first-cubes_linear n))
+      no collections
+      8 ms elapsed cpu time
+      7 ms elapsed real time
+      376136 bytes allocated
+  (time (sum-of-the-first-cubes_linear_alt n))
+      no collections
+      2 ms elapsed cpu time
+      3 ms elapsed real time
+      240 bytes allocated
+  #t
+  > (test-sum-of-the-first-cubes_timed 100000)
+  (time (sum-of-the-first-cubes_constant n))
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      48 bytes allocated
+  (time (sum-of-the-first-cubes_linear n))
+      2 collections
+      61 ms elapsed cpu time, including 5 ms collecting
+      65 ms elapsed real time, including 6 ms collecting
+      6015496 bytes allocated, including 10426536 bytes reclaimed
+  (time (sum-of-the-first-cubes_linear_alt n))
+      no collections
+      19 ms elapsed cpu time
+      18 ms elapsed real time
+      2302328 bytes allocated
+  #t
+  > (test-sum-of-the-first-cubes_timed 1000000)
+  (time (sum-of-the-first-cubes_constant n))
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      48 bytes allocated
+  (time (sum-of-the-first-cubes_linear n))
+      19 collections
+      619 ms elapsed cpu time, including 124 ms collecting
+      639 ms elapsed real time, including 131 ms collecting
+      77274504 bytes allocated, including 74851192 bytes reclaimed
+  (time (sum-of-the-first-cubes_linear_alt n))
+      9 collections
+      302 ms elapsed cpu time, including 95 ms collecting
+      306 ms elapsed real time, including 98 ms collecting
+      38968992 bytes allocated, including 18024824 bytes reclaimed
+  #t
+  > 
+
+Analysis:
+
+* The unexpected order of actual parameters, in the definition of
+  ``test-sum-of-the-first-cubes_timed``, is opportunistic, so that in
+  the scenario, the timings are emitted in a logical order.  (Sigh.)
+
+* The time and space consumed when applying
+  ``sum-of-the-first-cubes_constant`` to a natural number is
+  essentially independent of this natural number.
+
+* ``sum-of-the-first-cubes_linear_alt`` consumes less time and space
+  than ``sum-of-the-first-cubes_linear`` because most of the time, it
+  operates over smaller numbers (consecutive natural numbers instead
+  of cubes of consecutive natural numbers), only squaring the final
+  result.
+
+
+Exercise 21
+-----------
+
+In reference to :ref:`exercise-sum-of-cubes-of-first-even-numbers` in
+the lecture note of `Week 1 <week-1.html>`_,
+
+* write a procedure that, given a natural number n, computes the sum
+  of the cubes of the n first even numbers using a number of
+  operations that is proportional to n;
+
+* write a procedure that, given a natural number n, computes the sum
+  of the cubes of the n first even numbers using a constant number of
+  operations; and
+
+* write a procedure that tests the equivalence of your two procedures,
+  and apply it to a few natural numbers as a rudimentary verification.
+
+
+Exercise 22
+-----------
+
+In reference to
+:ref:`exercise-sum-of-cubes-of-halves-of-first-natural-numbers` in the
+lecture note of `Week 1 <week-1.html>`_,
+
+* write a procedure that, given a natural number n, computes the sum
+  of the cubes of the halves of the n first numbers using a number of
+  operations that is proportional to n;
+
+* write a procedure that, given a natural number n, computes the sum
+  of the cubes of the halves of the n first numbers using a constant
+  number of operations; and
+
+* write a procedure that tests the equivalence of your two procedures,
+  and apply it to a few natural numbers as a rudimentary verification.
+
+
+Exercise 23
+-----------
+
+In reference to
+:ref:`exercise-sum-of-cubes-of-first-odd-numbers` in the
+lecture note of `Week 1 <week-1.html>`_,
+
+* write a procedure that, given a natural number n, computes the sum
+  of the cubes of the n first odd numbers using a number of
+  operations that is proportional to n;
+
+* write a procedure that, given a natural number n, computes the sum
+  of the cubes of the n first odd numbers using a constant number of
+  operations; and
+
+* write a procedure that tests the equivalence of your two procedures,
+  and apply it to a few natural numbers as a rudimentary verification.
+
+
+.. _programming-finite-state-automata-in-Scheme:
+
+Programming finite-state automata in Scheme
+-------------------------------------------
+
+Here is a finite-state automaton:
+
+.. ditaa::
+
+                 /----\
+                 |    | 
+                 v    |0
+          /--------\  |               /--------\
+          |        | -/  1            |/------\|
+          |        | ---------------> ||      ||
+  ------> |        |                  ||      ||
+          |        | <--------------- ||      ||
+          |        |            1  /- |\------/|
+          \--------/               |  \--------/
+                                  0|    ^
+                                   |    |
+                                   \----/
+
+This automaton recognizes the strings over the alphabet of zeroes and
+ones that contain an odd number of ones.
+
+Here is a unit test to illustrate the behavior of this automaton.  The
+following procedure is applied to a candidate procedure implementing
+this automaton and tests whether this procedure returns:
+
+* ``"yes"`` if it is applied to a string that contains only zeroes and
+  ones, and contains an odd number of ones (here: ``"1"``,
+  ``"001000"``, ``"00111000"``, and ``"0010101000"``);
+
+* ``"stuck"`` if it is applied to a string that contains only zeroes
+  and ones, and contains an even number of ones (here: ``""`` (since
+  it contains 0 ones, and 0 is even), ``"0"``, ``"11"``,
+  ``"00101010001"``, and ``"001010100010"``); and
+
+* ``"error"`` if it is applied to a string that contains another
+  character than zero or one (here: ``"xy"``, ``"0xy1"``, and
+  ``"1xy0"``).
+
+.. code-block:: scheme
+
+  (define test-odd-number-of-ones?
+    (lambda (candidate)
+      (and (equal? (candidate "1")
+                   "yes")
+           (equal? (candidate "001000")
+                   "yes")
+           (equal? (candidate "00111000")
+                   "yes")
+           (equal? (candidate "0010101000")
+                   "yes")
+           (equal? (candidate "")
+                   "stuck")
+           (equal? (candidate "0")
+                   "stuck")
+           (equal? (candidate "11")
+                   "stuck")
+           (equal? (candidate "00101010001")
+                   "stuck")
+           (equal? (candidate "001010100010")
+                   "stuck")
+           (equal? (candidate "xy")
+                   "error")
+           (equal? (candidate "0xy1")
+                   "error")
+           (equal? (candidate "1xy0")
+                   "error")
+           ;;; add more tests here
+           )))
+
+Here is our implementation of the automaton, in Scheme.  The two
+states are implemented with two auxiliary procedures that are mutually
+recursive.  State transitions are implemented with tail calls:
+
+.. code-block:: scheme
+
+  (define state-with-even-number-of-ones
+    (lambda (s i max)
+      (if (= i max)
+          "stuck"
+          (if (char=? (string-ref s i) #\0)
+              (state-with-even-number-of-ones s (1+ i) max)
+              (if (char=? (string-ref s i) #\1)
+                  (state-with-odd-number-of-ones s (1+ i) max)
+                  "error")))))
+ 
+  (define state-with-odd-number-of-ones
+    (lambda (s i max)
+      (if (= i max)
+          "yes"
+          (if (char=? (string-ref s i) #\0)
+              (state-with-odd-number-of-ones s (1+ i) max)
+              (if (char=? (string-ref s i) #\1)
+                  (state-with-even-number-of-ones s (1+ i) max)
+                  "error")))))
+ 
+  (define odd-number-of-ones?
+    (lambda (s)
+      (state-with-even-number-of-ones s 0 (string-length s))))
+
+When Procedure ``odd-number-of-ones?`` is applied to a string, it
+traverses this string iteratively using an index initialized with
+``0``.  It stops when the traversal is complete or if the given string
+contains another character than ``#\0`` or ``#\1``.  It returns
+``"yes"``, ``"stuck"``, or ``"error"``.
+
+We can now run the unit test::
+
+  > (test-odd-number-of-ones? odd-number-of-ones?)
+  #t
+  > 
+
+Success.
+
+
+.. _exercise-automaton-odd-number-of-ones:
+
+Exercise 24
+-----------
+
+0. Visualize the execution of the automaton by defining the auxiliary
+   procedures with ``trace-lambda`` instead of with ``lambda``.
+
+1. Modify the definition of ``odd-number-of-ones?`` so that it returns
+   ``"no"`` instead of ``"stuck"`` if it is given a string with an
+   even number of ones.  Adjust the unit test and test your modified
+   definition.
+
+2. Further modify your definition of ``odd-number-of-ones?`` so that
+   it returns a one-character string containing the offending
+   character instead of ``"error"``::
+
+     > (odd-number-of-ones? "xy")
+     "x"
+     > (odd-number-of-ones? "01xy")
+     "x"
+     > 
+
+   Adjust the unit test and test your modified definition.
+
+3. Write an alternative definition of ``odd-number-of-ones?`` that
+   traverses the given string *from right to left* (i.e., from the end
+   to the beginning) instead of from left to right, and that returns
+   ``"yes"``, ``"no"``, or a one-character string.  Adjust the unit
+   test and test your modified definition.  Can you think of a string
+   for which your modified definition does not give the same result as
+   the original definition?  What are the relative benefits of
+   traversing a string from left to right and from right to left?
+
+
+.. _exercise-automaton-even-number-of-ones:
+
+Exercise 25
+-----------
+
+Implement, in Scheme, an automaton that recognizes the strings over
+the alphabet of zeroes and ones that contain an *even* number of ones,
+using two auxiliary procedures.  Write a unit-test procedure, and test
+your implementation.
+
+How much of the previous implementation can you reuse?  None?  Some?
+Most?  All of it?  What about the unit-test procedure?
+
+
+.. _programming-finite-state-automata-in-Scheme-revisited:
+
+Programming finite-state automata in Scheme, revisited
+------------------------------------------------------
+
+The two states of the automaton above were implemented with *two*
+auxiliary procedures.  Alternatively, they could be implemented with *one*
+auxiliary procedure parameterized with a Boolean reflecting the oddness of
+the number of ones encountered so far:
+
+.. code-block:: scheme
+
+  (define state
+    (lambda (s i max b)
+      (if (= i max)
+          (if b
+              "yes"
+              "stuck")
+          (if (char=? (string-ref s i) #\0)
+              (state s (1+ i) max b)
+              (if (char=? (string-ref s i) #\1)
+                  (state s (1+ i) max (not b))
+                  "error")))))
+
+  (define other-odd-number-of-ones?
+    (lambda (s)
+      (state s 0 (string-length s) #f)))
+
+We can now run the same unit test on this new implementation::
+
+  > (test-odd-number-of-ones? other-odd-number-of-ones?)
+  #t
+  > 
+
+Success.
+
+Suggestion: trace the calls to ``state`` and compare the resulting
+visualization with your solution to Item 0 of
+:ref:`exercise-automaton-odd-number-of-ones`.
+
+
+Exercise 26
+-----------
+
+Implement, in Scheme, an automaton that recognizes the strings over
+the alphabet of zeroes and ones that contain an even number of ones
+(as in :ref:`exercise-automaton-even-number-of-ones`),
+using only one auxiliary procedure.
+
+Again, how much of the implementation just above can you reuse?
+
+Use the unit-test procedure from
+:ref:`exercise-automaton-even-number-of-ones` to test your
+implementation.
+
+
+.. index:: cons, car, cdr, pair (predicate)
+
+Pairs and binary trees
+----------------------
+
+The predefined procedure ``cons`` takes two arguments and returns a
+pair that groups these two arguments.  The associated type predicate
+is ``pair?`` and the two pair accessors are ``car`` and
+``cdr``::
+
+  > (pair? 42)
+  #f
+  > (pair? (cons 10 20))
+  #t
+  > (car (cons 10 20))
+  10
+  > (cdr (cons 10 20))
+  20
+  > (cdr (car (cons (cons 10 20) 30)))
+  20
+  > 
+
+In general, pairs are printed with parentheses and a dot in the
+middle::
+
+  > (cons 10 20)
+  (10 . 20)
+  > (cons (cons 10 20) 30)
+  ((10 . 20) . 30)
+  > 
+
+Graphically:
+
+.. ditaa::
+
+  +-----------+
+  |     |     |
+  |     |     +---> 30
+  |     |     |
+  +--+--------+
+     |     
+     |
+     v
+      
+  +-----------+     
+  |     |     |     
+  |     |     +---> 20
+  |     |     |     
+  +--+--------+     
+     |              
+     |              
+     v              
+                    
+    10              
+
+Pairs make it possible to construct the nodes of a binary tree.  For
+example, the following procedure interprets, in its input, pairs as
+binary-tree nodes and anything else as a binary-tree leaf.  It
+traverses its input recursively and counts the number of leaves in its
+input:
+
+.. code-block:: scheme
+
+  (define number-of-leaves
+    (lambda (v)
+      (if (pair? v)
+          (+ (number-of-leaves (car v))
+             (number-of-leaves (cdr v)))
+          1)))
+
+
+The following unit test illustrates the expectations upon ``number-of-leaves``:
+
+.. code-block:: scheme
+
+  (define test-number-of-leaves
+    (lambda (candidate)
+      (and (equal? (candidate 42)
+                   1)
+           (equal? (candidate candidate)
+                   1)
+           (equal? (candidate (cons 42 43))
+                   2)
+           (equal? (candidate (cons 42 number-of-leaves))
+                   2)
+           (equal? (candidate (cons (cons 1 2) (cons 3 4)))
+                   4)
+           (equal? (candidate (cons 0 (cons (cons 1 2) (cons 3 4))))
+                   5)
+           (equal? (candidate (cons (cons 0 (cons (cons 1 2) (cons 3 4))) (cons 5 6)))
+                   7)
+           ;;; add more tests here
+           )))
+
+We can now run this unit test::
+
+  > (test-number-of-leaves number-of-leaves)
+  #t
+  > 
+
+Success.
+
+
+.. _exercise-counting-the-number-of-pairs-in-a-Scheme-value:
+
+Exercise 27
+-----------
+
+In this mandatory exercise, you are asked to define a procedure
+``number-of-pairs`` that counts the number of pairs in its input,
+recursively:
+
+.. code-block:: scheme
+
+  (define test-number-of-pairs
+    (lambda (candidate)
+      (and (equal? (candidate (cons (cons 10 20) 30))
+                   2)
+           (equal? (candidate 10)
+                   0)
+           (equal? (candidate candidate)
+                   0)
+           ;;; add more tests here
+           )))
+
+You should then apply this unit-test procedure to your procedure
+``number-of-pairs`` so that it yields ``#t``::
+
+  > (test-number-of-pairs number-of-pairs)
+  #t
+  > 
+
+Is there a relation between the result of applying ``number-of-pairs``
+to a Scheme value and the result of applying ``number-of-leaves`` to
+the same Scheme value?  If so, what is this relation?
+
+
+.. _section-equality-re1visited:
+
+Equality, revisited
+-------------------
+
+To summarize, a Scheme value can be a number, a Boolean, a character,
+a string, a procedure, or a pair of Scheme values -- which is an
+inductive specification.  Formally:
+
+.. bnf:: Scheme values
+   :noindex:
+   :namespace: Scheme-values
+
+   <value> ::= <number>
+             | <boolean>
+             | <character>
+             | <string>
+             | <procedure>
+             | (<value> . <value>)
+
+Here is a unit test for an equality predicate, i.e., a procedure that
+is applied to two values and returns a Boolean -- ``#t`` if the two
+values are structurally equal, and ``#f`` otherwise:
+
+.. code-block:: scheme
+
+  (define test-equal?
+    (lambda (candidate)
+      (and ;;; numbers:
+           (equal? (candidate 2
+                              2)
+                   #t)
+           (equal? (candidate 2
+                              3)
+                   #f)
+           (equal? (candidate 2
+                              #t)
+                   #f)
+           ;;; Booleans:
+           (equal? (candidate #t
+                              #t)
+                   #t)
+           (equal? (candidate #f
+                              #f)
+                   #t)
+           (equal? (candidate #t
+                              #f)
+                   #f)
+           (equal? (candidate #t
+                              33)
+                   #f)
+           ;;; characters:
+           (equal? (candidate #\c
+                              #\c)
+                   #t)
+           (equal? (candidate #\c
+                              #\d)
+                   #f)
+           (equal? (candidate #\c
+                              33)
+                   #f)
+           ;;; strings
+           (equal? (candidate "hello"
+                              "hello")
+                   #t)
+           (equal? (candidate "hello"
+                              "hola")
+                   #f)
+           (equal? (candidate "hello"
+                              33)
+                   #f)
+           (equal? (candidate "42"
+                              42)
+                   #f)
+           ;;; procedures
+           (equal? (candidate (lambda (x) x)
+                              (lambda (y) y))
+                   #f)
+           ;;; pairs
+           (equal? (candidate (cons 1 2)
+                              (cons 1 2))
+                   #t)
+           (equal? (candidate (cons (cons 1 2) (cons 3 4))
+                              (cons (cons 1 2) (cons 3 4)))
+                   #t)
+           (equal? (candidate (cons (cons 1 2) (cons 3 4))
+                              (cons (cons 1 2) (cons 4 3)))
+                   #f)
+           (equal? (candidate (cons (cons 1 2) (cons 3 4))
+                              (cons (cons 2 1) (cons 3 4)))
+                   #f)
+           (equal? (candidate (cons (cons 1 2) (cons 3 4))
+                              (cons (cons 1 2) (cons 3 #f)))
+                   #f)
+           ;;; add more tests here
+           )))
+
+Incidentally, Petite Chez Scheme's predefined ``equal?`` procedure
+passes this unit test::
+
+  > (test-equal? equal?)
+  #t
+  > 
+
+By now we are equipped to implement an equality predicate that is
+structurally recursive and whose pattern of calls matches this
+inductive specification:
+
+.. code-block:: scheme
+
+    (define equal?_revisited
+      (lambda (v1 v2)
+        (if (number? v1)
+            (if (number? v2)
+                (= v1 v2)
+                #f)
+            (if (boolean? v1)
+                (if (boolean? v2)
+                    (boolean=? v1 v2)
+                    #f)
+                (if (char? v1)
+                    (if (char? v2)
+                        (char=? v1 v2)
+                        #f)
+                    (if (string? v1)
+                        (if (string? v2)
+                            (string=? v1 v2)
+                            #f)
+                        (if (pair? v1)
+                            (if (pair? v2)
+                                (if (equal?_revisited (car v1) (car v2))
+                                    (equal?_revisited (cdr v1) (cdr v2))
+                                    #f)
+                                #f)
+                            #f)))))))
+
+Let us test this predicate::
+
+  > (test-equal? equal?_revisited)
+  #t
+  > 
+
+Success.
+
+Food for thought:
+
+* Observe how the recursive structure of the definition follows the
+  inductive structure of the specification.  Each type is tested over
+  the first argument, and if the type predicate succeeds, then the
+  same type is tested over the second argument.  If both type
+  predicates succeed, then the corresponding equality predicate is
+  applied.  For pairs, ``equal?_revisited`` is recursively called twice,
+  once for each component.
+
+* Among the two recursive calls to ``equal?_revisited``, which one is
+  a tail call and which one is not a tail call?
+
+* Observe how ``equal?_revisited`` silently returns ``#f`` when
+  applied to two procedures.  Can you think of a reason why?  What
+  does it mean for two procedures to be equal?  (Hint #1: see
+  :ref:`exercise-observable-difference-for-the-identity-procedure`.
+  Hint #2: how are ``plus`` and ``plus_alt`` shown to implement the
+  same function, in this week's `supplementary note about induction
+  <week-2-induction-proofs.html>`_?)
+
+* Observe the regularity of the definition and its indentation.  The
+  Scheme mode, in Emacs, indents this definition automatically for
+  you.
+
+
+Checkpoint
+----------
+
+We have taken the first steps towards using Scheme as our programming
+`language of discourse <http://en.wikipedia.org/wiki/Discourse>`_.
+
+
+.. _enlightenment:
+
+.. index::
+   single: Scheme (enlightenment in)
+
+.. epigraph::
+
+   | Enlightenment is reached in Scheme
+   | when the parentheses disappear.
+
+
+Resources
+---------
+
+* The Scheme code for
+  `the present lecture note for Week 2
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-2.scm>`_
+  (latest version: 27 Aug 2015).
+
+
+Version
+-------
+
+Fixed a typo in the algebraic specification of power and fac,
+thanks to Arch Wilhes's eagle eye
+[09 Oct 2015]
+
+Fixed the explanation in the last bullet of the solution of Exercise
+20, thanks to Arch Wilhes's eagle eye
+[08 Oct 2015]
+
+Fixed a typo in the conclusion of a proof tree,
+thanks to Matthew Kennedy's eagle eye
+[07 Sep 2015]
+
+Duplicated the section about Resources at the beginning of this file
+[27 Aug 2015]
+
+Suggested ``power`` and ``fac`` use the predefined multiplication
+procedure, ``*``
+[27 Aug 2015]
+
+Fine-tuned the algebraic specifications of plus, times, etc.
+[27 Aug 2015]
+
+Fixed a typo in fac_traced,
+thanks to Bora Buyukturk's eagle eye
+[26 Aug 2015]
+
+Added :ref:`exercise-writing-regexps-for-abstract-syntax-trees`
+[19 Aug 2015]
+
+Added :ref:`a-bnf-for-regular-expressions-logically`
+[19 Aug 2015]
+
+Created
+[19 Aug 2015]

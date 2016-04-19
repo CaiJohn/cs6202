@@ -1,0 +1,995 @@
+.. -*- mode: rst -*-
+
+Note for Week 8 about the mutation of bindings
+==============================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+.. epigraph::
+
+   | Question: why do students love the functional-programming course?
+   | Answer: because there are no assignments.
+
+None.
+
+
+Goal
+----
+
+The goal of this lecture note is to reveal that all bindings in Scheme
+are actually mutable, and to analyze consequences: unit tests can be
+made more practical in case of hard errors, Scheme is an imperative
+language after all, and are imperative features needed to describe a
+computation?
+
+
+Core special form: set!
+-----------------------
+
+You probably had an inkling that global definitions are mutable, since
+they can be dynamically redefined (cf. Section
+:ref:`dynamic-definitions-and-redefinitions`).  The stark reality is
+that all bindings in Scheme are mutable.  They can be mutated with the
+following special form:
+
+.. code-block:: scheme
+
+    (set! <variable> <expression>)
+
+In a global environment where ``x`` denotes, e.g., ``3``, evaluating
+``(set! x 4)`` has the effect of changing the global environment to
+make ``x`` denote ``4``::
+
+  > (define x 3)
+  > (set! x 4)
+  > x
+  4
+  > 
+
+In a local environment where ``x`` denotes, e.g., ``1``, evaluating
+``(set! x 2)`` has the effect of changing the local environment to
+make ``x`` denote 2, without interfering with the way ``x`` is bound
+in the global environment::
+
+  > x
+  4
+  > (let ([x 1])
+      (begin
+        (set! x 2)
+        x))
+  2
+  > x
+  4
+  > 
+
+Mutable bindings make it simple, e.g., to increment counters::
+
+    > (define counter 0)
+    > x
+    0
+    > (set! x (+ x 10))
+    > x
+    10
+    > 
+
+As we will see in two subsequent lecture notes, ``set!`` makes it
+possible to program objects and memoization in Scheme.
+
+
+.. index::
+   single: unit tests (hard errors in)
+
+.. _hard-errors-in-unit-tests:
+
+Hard errors in unit tests
+-------------------------
+
+Brynja the Systematic is reflecting about what can go wrong in her
+syntax checker:
+
+* the positive unit tests help her to verify that her syntax checker
+  correctly accepts well-formed programs, and
+
+* the negative unit tests help her to verify that her syntax checker
+  correctly rejects ill-formed programs, but
+
+* they don't help at all if her syntax checker crashes.
+
+When her syntax checker crashes, all she sees is that an exception is
+raised for some reason, and all she is offered is to type ``(debug)``
+to enter the Petite Chez Scheme debugger.  This debugger, however, is
+terse, very terse, and its story is about how a program is
+interpreted, not about what it does and where that went wrong.  It
+would be much more useful to know which test program made her syntax
+checker crash.  Of course, she could trace ``check-toplevel-form``,
+but then there would be a deluge of information on her screen, most of
+it irrelevant: when debugging, you want to be told what does not work,
+not what works.  What works should go without saying.
+
+And so Brynja is reflecting when she hears about ``set!``, and then
+she sees the solution to her problem: all she needs is one globally
+bound variable that denotes the current toplevel form being checked.
+This way, if her syntax checker crashes, she knows what toplevel form
+made it crash, and in the meanwhile, her screen is not flooded with
+tracing information: the globally bound variable gives her a simple
+and unobstrusive backtrace.  So she promptly upgrades her unit-test
+framework as follows:
+
+.. code-block:: scheme
+
+  (define the-current-input
+    "not initialized yet")
+
+  (define try-candidate
+    (lambda (name candidate expected-output . input)
+      (begin
+        (set! the-current-input input)
+        (or (equal? (apply candidate input)
+                    expected-output)
+            (begin
+              (printf "~s: error for ~s~n" name input)
+              #f)))))
+
+The key point is that before applying the candidate, she mutates the
+binding of ``the-current-input`` to make it denote the candidate's
+input.
+
+Now for testing this framework...  Well, for one point, `Loki's
+factorial procedure
+<week-3-lists-and-defensive-programming.html#information-content-in-unit-tests>`_
+fits ideally, and for another, after the last candidate has been
+applied, the binding of ``the-current-input`` should be restored to
+its initial value:
+
+.. code-block:: scheme
+
+  (define test-fac-3.2
+    (lambda (candidate)
+      (let ([result (and-all (try-candidate 'test-fac-3.2 candidate 1 0)
+                             (try-candidate 'test-fac-3.2 candidate 1 1)
+                             (try-candidate 'test-fac-3.2 candidate 120 5)
+                             (try-candidate 'test-fac-3.2 candidate (* 1 2 3 4 5 6) 6)
+                             ;;;
+                             )])
+        (begin
+          (set! the-current-input "not initialized yet")
+          result))))
+
+  (define fac-Loki_revised
+    (lambda (n)
+      (case n
+        [(0)
+         1]
+        [(1)
+         1]
+        [(5)
+         (car '())]
+        [(6)
+         (* 1 2 3 4 5 6)]
+        [else
+         -1])))
+
+In all the tested cases but one, the revised version of Loki's
+factorial procedure yields the expected result.  In the remaining
+case, it applies ``car`` to the empty list, which is guaranteed not to
+sit well with Petite Chez Scheme::
+
+  > (test-fac-3.2 fac-Loki_revised)
+  
+  Exception in car: () is not a pair
+  Type (debug) to enter the debugger.
+  > the-current-input
+  (5)
+  > 
+
+Indeed taking the car of the empty list raised an error, and
+``the-current-input`` denotes the guilty input.  For the rest, the
+upgrade is backward compatible.
+
+Brynja lifts her eyes from her screen to tell Loki, but it is getting
+late and he has already left.
+
+
+Scheme as a traditional block-structured imperative language
+------------------------------------------------------------
+
+Alfrothul the Resplendent (recapitulating): So in Scheme, bindings are
+mutable.
+
+The lecturer: Yes they are.  You can assign a variable that was
+already defined, and bind it to a new value.
+
+Harald the Bold (also recapitulating): And Scheme also allows
+sequencing.
+
+The lecturer: Yes it does.  You can evaluate expressions one after
+another using a ``begin``-expression.
+
+Alfrothul (tentatively): So...  Isn't Scheme an imperative programming
+language after all?
+
+Harald (also tentatively): A block-structured imperative language,
+even.
+
+The lecturer: That is correct.  You can define local blocks, evaluate
+expressions sequentially in their scope, and change their bindings,
+just like, for example, in Pascal or in Algol.
+
+Brynja the Systematic: But still you are not calling Scheme an
+imperative language.  You are calling it a functional language.
+
+The lecturer: That is because its `main syntactic unit
+<week-6-on-designing-programming-languages.html#analysis>`_ is the
+expression, not the command.
+
+Harald: Right.  In the basic imperative language `from last week
+<week-6-basic-imperative-language_a-syntax-checker.html>`_, the
+syntactic unit was the command, but we could also write expressions in
+that language.
+
+Alfrothul: And in Scheme, the syntactic unit is the expression, but we
+can treat them as commands when we put them in ``begin``-expressions.
+
+Brynja: And indeed we don't seem to use the result of a
+``set!``-expression, so for all intents and purposes it is a command --
+something to be executed one after another.
+
+Alfrothul: So in some sense, we could take a program written in the
+imperative language, and express it in Scheme pretty much as is.
+
+Harald: Well, you would need to add more than a few parentheses...
+
+Alfrothul: Right, but that is not the point.  Remember the factorial
+program?
+
+Harald and Brynja (sighing): Yes we do...
+
+Alfrothul (carrying on): Its concrete syntax pretty much looked
+`like this <week-6-on-designing-programming-languages.html#concrete-syntax-of-factorial-in-the-basic-imperative-language>`_::
+
+  loc0 := 5;
+  loc1 := 1;
+  loc2 := 1;
+  while @loc1 <= @loc0 do {
+    loc2 := @loc2 * @loc1;
+    loc1 := @loc1 + 1
+  };
+  loc0 := @loc2
+
+Harald: Yes.  And its abstract syntax looked `like that
+<week-6-basic-imperative-language_a-syntax-checker.html#bnf-of-the-basic-imperative-language>`_,
+wham:
+
+.. code-block:: scheme
+
+  (make-top
+   (make-sequence
+    (make-assign (make-location 0) (make-constant 5))
+    (make-sequence
+     (make-assign (make-location 1) (make-constant 1))
+     (make-sequence
+      (make-assign (make-location 2) (make-constant 1))
+      (make-sequence
+       (make-while (make-binary-operation '<= (make-dereference (make-location 1)) (make-dereference (make-location 0)))
+        (make-sequence
+         (make-assign (make-location 2) (make-binary-operation '* (make-dereference (make-location 2)) (make-dereference (make-location 1))))
+         (make-assign (make-location 1) (make-binary-operation '+ (make-dereference (make-location 1)) (make-constant 1)))))
+       (make-assign (make-location 0) (make-dereference (make-location 2))))))))
+
+Harald: It sure has got lots of parentheses already, but it ain't Scheme.
+
+Alfrothul: But it could be.  Suppose we replace each occurrence of
+``(make-location i)`` by ``loci``.
+
+Loki (in the background): I am so glad lokation is spelled with a c.
+
+Alfrothul: It isn't.  Now replace each occurrence of ``(make-constant
+blah)`` by ``blah``, each occurrence of ``make-sequence`` by
+``begin``, and each occurrence of ``make-assign`` by ``set!``.  Look
+at the result:
+
+.. code-block:: scheme
+
+  (make-top
+   (begin
+     (set! loc0 5)
+     (begin
+       (set! loc1 1)
+       (begin
+         (set! loc2 1)
+         (begin
+           (make-while (make-binary-operation '<= (make-dereference loc1) (make-dereference loc0))
+                       (begin
+                         (set! loc2 (make-binary-operation '* (make-dereference loc2) (make-dereference loc1)))
+                         (set! loc1 (make-binary-operation '+ (make-dereference loc1) 1))))
+           (set! loc0 (make-dereference loc2)))))))
+
+Brynja (jumping in): Right.  There is no need for ``(make-dereference
+loki)`` in Scheme.  We can just put ``loki``.
+
+Loki (still in the background): Capital letter, please?
+
+Brynja (paying Loki no never mind): Same story for
+``make-binary-operation``:
+
+.. code-block:: scheme
+
+  (make-top
+   (begin
+     (set! loc0 5)
+     (begin
+       (set! loc1 1)
+       (begin
+         (set! loc2 1)
+         (begin
+           (make-while (<= loc1 loc0)
+                       (begin
+                         (set! loc2 (* loc2 loc1))
+                         (set! loc1 (+ loc1 1))))
+           (set! loc0 loc2))))))
+
+Alfrothul: For ``make-top``, we could just put one global
+``let``-expression that declares all the loci.
+
+Brynja: Yup, that would work.  We could initialize them with
+``"uninitialized value"``, like in the interpreter:
+
+.. code-block:: scheme
+
+  (let ([loc0 "uninitialized value"]
+        [loc1 "uninitialized value"]
+        [loc2 "uninitialized value"])
+   (begin
+     (set! loc0 5)
+     (begin
+       (set! loc1 1)
+       (begin
+         (set! loc2 1)
+         (begin
+           (make-while (<= loc1 loc0)
+                       (begin
+                         (set! loc2 (* loc2 loc1))
+                         (set! loc1 (+ loc1 1))))
+           (set! loc0 loc2))))))
+
+Alfrothul: And at the end we could return a list containing their
+values, again like in the interpreter:
+
+.. code-block:: scheme
+
+  (let ([loc0 "uninitialized value"]
+        [loc1 "uninitialized value"]
+        [loc2 "uninitialized value"])
+    (begin
+      (begin
+        (set! loc0 5)
+        (begin
+          (set! loc1 1)
+          (begin
+            (set! loc2 1)
+            (begin
+              (make-while (<= loc1 loc0)
+                          (begin
+                            (set! loc2 (* loc2 loc1))
+                            (set! loc1 (+ loc1 1))))
+              (set! loc0 loc2)))))
+      (list loc0 loc1 loc2)))
+
+Harald: OK, it is getting closer and closer to a Scheme program, but
+what do we do about the while command?
+
+Alfrothul: Wait!  Wait!  In the June 2014 exam, it was pointed out
+that ``begin``-expressions are associative.  Plus, we know from
+programming the Scheme syntax checker that they can take more than two
+sub-expressions.  So all told, we could write this program with just
+two ``begin``-expressions.  Look:
+
+.. code-block:: scheme
+
+  (let ([loc0 "uninitialized value"]
+        [loc1 "uninitialized value"]
+        [loc2 "uninitialized value"])
+    (begin
+      (set! loc0 5)
+      (set! loc1 1)
+      (set! loc2 1)
+      (make-while (<= loc1 loc0)
+                  (begin
+                    (set! loc2 (* loc2 loc1))
+                    (set! loc1 (+ loc1 1))))
+      (set! loc0 loc2)
+      (list loc0 loc1 loc2)))
+
+Harald: Count me impressed.
+
+Brynja: Well done, Alfrothul.
+
+Harald: So we are just left with the while command.  Any idea?
+
+Brynja: Let me think.
+
+Harald: We could ask the lecturer?
+
+Alfrothul: Yeah.  He looks like he is done smoking a cigar with Loki.
+
+Brynja: Let's use a ``letrec``-expression.
+
+Harald: Sounds good to me!
+
+Brynja: No, seriously.  It's a basic tenet of Scheme that iteration is
+carried out via tail recursion, so all we need to do is to replace the
+while command by a ``letrec``-expression declaring a tail-recursive
+procedure.
+
+Alfrothul: OK.  Something like this, then:
+
+.. code-block:: scheme
+
+  (let ([loc0 "uninitialized value"]
+        [loc1 "uninitialized value"]
+        [loc2 "uninitialized value"])
+    (begin
+      (set! loc0 5)
+      (set! loc1 1)
+      (set! loc2 1)
+      (letrec ([while-loop (lambda ()
+                             (if (<= loc1 loc0)
+                                (begin
+                                  (set! loc2 (* loc2 loc1))
+                                  (set! loc1 (+ loc1 1))
+                                  (while-loop))
+                                ...))])
+        (while-loop))
+      (set! loc0 loc2)
+      (list loc0 loc1 loc2)))
+
+Harald: Yes.  That is inspired, and probably correct too.  But the
+ellipses?
+
+Brynja: They don't matter because the result of the while loop is left
+unused.  We could just put, I don't know, ``"skip"`` and be done with
+it:
+
+.. code-block:: scheme
+
+  (let ([loc0 "uninitialized value"]
+        [loc1 "uninitialized value"]
+        [loc2 "uninitialized value"])
+    (begin
+      (set! loc0 5)
+      (set! loc1 1)
+      (set! loc2 1)
+      (letrec ([while-loop (lambda ()
+                             (if (<= loc1 loc0)
+                                 (begin
+                                   (set! loc2 (* loc2 loc1))
+                                   (set! loc1 (+ loc1 1))
+                                   (while-loop))
+                                 "skip"))])
+        (while-loop))
+      (set! loc0 loc2)
+      (list loc0 loc1 loc2)))
+
+Brynja: We are done because syntactically, this expression is valid,
+and because semantically, evaluating it gives the same result as
+interpreting the original imperative program -- but directly, i.e.,
+without `interpretive overhead
+<week-1.html#exercise-cost-of-interpretation>`_.
+
+Loki: That seems like an awfully complicated way to obtain what a
+normal programming language gives you directly.  Why are you guys
+studying Scheme *at all*?
+
+The lecturer (to Loki, sweepingly): Because Scheme, like Lisp before
+it, is a ball of clay.
+
+The lecturer (turning to Alfrothul, Brynja, and Harald): I have
+actually automated your derivation and written a small compiler in
+Scheme that maps the abstract syntax of any basic imperative program
+into something like what you guys wrote just above.  It is a
+completely functional thing that works in one pass and I really
+wouldn't wish to write it in the basic imperative language -- but of
+course you are welcome to do that.  It is available `over here
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-8-basic-imperative-language_a-compiler.scm>`_
+in a basic version, `there
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-8-basic-imperative-language_a-smoother-compiler.scm>`_
+in a smoother version that flattens sequencing, and `over there
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-8-basic-imperative-language_a-curried-smoother-compiler.scm>`_
+in curried form.  You are most welcome to play with it.  Here is its
+output for the factorial program:
+
+.. code-block:: scheme
+
+  (let ([x0 "uninitialized value"]
+        [x1 "uninitialized value"]
+        [x2 "uninitialized value"])
+    (begin
+      (set! x0 5)
+      (set! x1 1)
+      (set! x2 1)
+      (letrec ([loop (lambda ()
+                       (if (<= x1 x0)
+                           (begin
+                             (set! x2 (* x2 x1))
+                             (set! x1 (+ x1 1))
+                             (loop))
+                           "skip"))])
+        (loop))
+      (set! x0 x2)
+      (list x0 x1 x2)))
+
+Harald: Guys, we basically had it.
+
+Brynja: Did you say that your compiler works in one pass?  But how do
+you know how many variables each compiled program uses?  The locations
+are not declared in the source programs.
+
+The lecturer (shifting to lecturing mode): Scheme encourages you to
+think like that: a good programming language is `a convenient and
+expressive notation for... <week-6-on-designing-programming-languages.html#a-convenient-and-expressive-notation>`_
+
+Harald, Alfrothul, and Brynja: Yes, yes, we get that.
+
+The lecturer (getting it too, and changing gears): OK.  The compiler
+is written in continuation-passing style?  You know, like
+``equal?_re8visited`` in the section on `equality and identity over
+Scheme values
+<week-3-lists-and-defensive-programming.html#equality-and-identity-between-Scheme-values>`_.
+
+Loki: Now we're talking.
+
+The lecturer: Well, I suppose we are, yes.  Anyhow, its initial
+continuation is eventually applied to the compiled program *and to the
+largest location index in that program*, so the last thing this
+continuation does is to construct the let header with as many
+unitialized values as specified by that largest index.
+
+Brynja: Of which there could be none, if the program is just
+``(skip)``.
+
+The lecturer: That is true.  But then zero variables are declared, so
+the point remains::
+
+  > (compile-program (make-top (make-skip)))
+  (let () (begin "skip" (list)))
+  > 
+
+Alfrothul: And if Location 0 is used...
+
+The lecturer: ...then one variable is declared, since zero is the
+first natural number::
+
+  > (compile-program (make-top (make-assign (make-location 0) (make-constant #t))))
+  (let ([x0 "uninitialized value"])
+    (begin (set! x0 #t) (list x0)))
+  > 
+
+.. index::
+   single: Steele, Guy L. (give someone Lisp)
+
+.. epigraph::
+
+   | If you give someone Fortran, he has Fortran.
+   | If you give someone Lisp, he has any language he pleases.
+
+   -- `Guy L. Steele <http://en.wikipedia.org/wiki/Guy_Steele>`_
+
+
+Think global, act local
+-----------------------
+
+Alfrothul: Hej Hagar!
+
+Hagar the Hefty: Hej Alfrothul.  You look excited.
+
+Alfrothul: Hagar, you are not going to believe this.  Remember the
+factorial program?
+
+Hagar (sighing): Yes I do...
+
+Alfrothul (carrying on): Its concrete syntax pretty much looked like
+this::
+
+  loc0 := 5;
+  loc1 := 1;
+  loc2 := 1;
+  while @loc1 <= @loc0 do {
+    loc2 := @loc2 * @loc1;
+    loc1 := @loc1 + 1
+  };
+  loc0 := @loc2
+
+Hagar: Yes?
+
+Alfrothul (continuing): Long story short, the bindings in Scheme are
+mutable, and therefore this very program can literally be coded as the
+following valid Scheme program:
+
+.. code-block:: scheme
+
+  (let ([x0 "uninitialized value"]
+        [x1 "uninitialized value"]
+        [x2 "uninitialized value"])
+    (begin
+      (set! x0 5)
+      (set! x1 1)
+      (set! x2 1)
+      (letrec ([while-loop (lambda ()
+                             (if (<= x1 x0)
+                                 (begin
+                                   (set! x2 (* x2 x1))
+                                   (set! x1 (+ x1 1))
+                                   (while-loop))
+                                 "skip"))])
+        (while-loop))
+      (set! x0 x2)
+      (list x0 x1 x2)))
+
+Hagar: Ah, yes, with ``begin`` and ``set!``.  Wow.  It's the same structure.
+
+Alfrothul: Yes!  And then at the beginning the three variables are
+declared, and at the end their denotation is returned.
+
+Hagar: It's quite imperative.
+
+Alfrothul: Yes, that's what Loki said too.
+
+Hagar: But there isn't one global state, as in a normal imperative
+program.
+
+Alfrothul: Well, there is one, but since it only uses 3 locations, the
+program directly names them, and then it reads them, as in ``(+ x1
+1)``, or updates them, as in ``(set! x1 1)``.
+
+Hagar: I get it for reading them, it's like the program is
+`lambda-dropped <week-3.html#exercise-plus-with-letrec>`_, but for writing them...
+
+Alfrothul: Right, for writing them, we need ``set!``.
+
+Hagar: Wow.
+
+Alfrothul: I know!
+
+Hagar: But still.
+
+Alfrothul: Yes?
+
+Hagar: Couldn't we `lambda-lift
+<week-3.html#exercise-plus-with-letrec>`_ them?  Then they would not be global
+and we wouldn't need ``set!``.
+
+Alfrothul: Beg pardon?
+
+Hagar: Well, yes, look.  I put ``v`` instead of ``x`` to indicate that
+``while-loop`` is passed not ``x``, but the denotation of ``x``:
+
+.. code-block:: scheme
+
+  (let ([x0 "uninitialized value"]
+        [x1 "uninitialized value"]
+        [x2 "uninitialized value"])
+    (begin
+      (set! x0 5)
+      (set! x1 1)
+      (set! x2 1)
+      (letrec ([while-loop (lambda (v1 v2)
+                             (if (<= v1 x0)
+                                 (while-loop (+ v1 1) (* v2 v1))
+                                 "skip"))])
+        (while-loop x1 x2))
+      (set! x0 x2)
+      (list x0 x1 x2)))
+
+Hagar: It's not correct yet because after the loop, the store is not
+up to date, but you see the idea?  Now ``while-loop`` is passed the
+parts of the store that vary, so there is not need for ``set!`` at
+each iteration of the loop.
+
+Alfrothul: Plus, we still need to initialize them.
+
+Hagar: Just a sec. -- the correct thing to do is to store ``v1`` and
+``v2`` in ``x1`` and ``x2`` at the end of the loop:
+
+.. code-block:: scheme
+
+  (let ([x0 "uninitialized value"]
+        [x1 "uninitialized value"]
+        [x2 "uninitialized value"])
+    (begin
+      (set! x0 5)
+      (set! x1 1)
+      (set! x2 1)
+      (letrec ([while-loop (lambda (v1 v2)
+                             (if (<= v1 x0)
+                                 (while-loop (+ v1 1) (* v2 v1))
+                                 (begin
+                                   (set! x1 v1)
+                                   (set! x2 v2))))])
+        (while-loop x1 x2))
+      (set! x0 x2)
+      (list x0 x1 x2)))
+
+Hagar: And now the store is up to date after the loop.
+
+Alfrothul: Yup.  And about the initialization, there is no need to use
+``set!`` at the beginning for ``x1`` and ``x2``: we can just supply
+their initial values in the initial call to ``while-loop`` and only
+assign them at the end:
+
+.. code-block:: scheme
+
+  (let ([x0 "uninitialized value"]
+        [x1 "uninitialized value"]
+        [x2 "uninitialized value"])
+    (begin
+      (set! x0 5)
+      (letrec ([while-loop (lambda (v1 v2)
+                             (if (<= v1 x0)
+                                 (while-loop (+ v1 1) (* v2 v1))
+                                 (begin
+                                   (set! x1 v1)
+                                   (set! x2 v2))))])
+        (while-loop 1 1))
+      (set! x0 x2)
+      (list x0 x1 x2)))
+
+Hagar: But now that their denotations are local to ``while-loop``, do
+we need ``x1`` and ``x2`` at all in the global store?  The program
+only returns their value.  Ah, we can fix that by making
+``while-loop`` directly return the final result, and then we can omit
+the last last three assignments too since all they do is set up the
+final version of the store.  Look, ``x1`` and ``x2`` are gone:
+
+.. code-block:: scheme
+
+  (let ([x0 "uninitialized value"])
+    (begin
+      (set! x0 5)
+      (letrec ([while-loop (lambda (v1 v2)
+                             (if (<= v1 x0)
+                                 (while-loop (+ v1 1) (* v2 v1))
+                                 (list v2 v1 v2)))])
+        (while-loop 1 1))))
+
+Alfrothul: Wow.
+
+Hagar: Yes.  It starts imperative, but it ends functional.
+
+Brynja: Guys?
+
+Alfrothul and Hagar: Yes?
+
+Hagar: Hej, Brynja.
+
+Brynja: Hej, Hagar.  First of all, wow.
+
+Alfrothul and Hagar: We know!
+
+Brynja: But still.
+
+Alfrothul and Hagar: Yes?
+
+Brynja: Can't you do the same for ``x0``?
+
+Alfrothul and Hagar: Beg pardon?
+
+Brynja: Well, yes: the only thing you do is to declare it and make it
+denote ``5``.  But that's a job for ``let``, methinks:
+
+.. code-block:: scheme
+
+  (let ([v0 5])
+    (letrec ([while-loop (lambda (v1 v2)
+                           (if (<= v1 v0)
+                               (while-loop (+ v1 1) (* v2 v1))
+                               (list v2 v1 v2)))])
+      (while-loop 1 1)))
+
+Hagar: And now the store is completely gone.
+
+Brynja: The global store, yes.  But all the naming and denotations
+happens just the same -- they happen without assignments, that's all.
+
+Hagar: Right.  They happen just with bindings.
+
+Alfrothul: It's like *the flow of data now follows the flow of control*.
+
+Brynja: Yes.  And it follows it *in a completely local way*.
+
+Hagar: Talking about flow, this factorial program is not like the ones
+we have written so far: it does have an accumulator (namely ``v2``)
+but it doesn't go from ``5`` to ``0``: it goes from ``1`` to ``6`` and
+then it stops.
+
+Harald: Ah, like a for loop: it does something from ``1`` to ``5``,
+and ``6`` is its stopping point.
+
+Hagar: Sometimes I feel so small.
+
+Harald: Guys?
+
+Alfrothul, Brynja, and Hagar: Yes?
+
+Hagar: Hej, Harald.
+
+Harald: Hej, Hagar.  First of all, wow.
+
+Alfrothul, Brynja, and Hagar: We know!
+
+Harald: But still.
+
+Alfrothul, Brynja, and Hagar: Yes?
+
+Harald: Remember when `Mimer <http://en.wikipedia.org/wiki/Mímir>`_
+said that a ``let``-expression is syntactic sugar for the application
+of a lambda-abstraction?
+
+Hagar: Yes, vaguely.  Mimer says a lot of things.
+
+Harald: Well, look:
+
+.. code-block:: scheme
+
+  ((lambda (v0)
+     (letrec ([while-loop (lambda (v1 v2)
+                            (if (<= v1 v0)
+                                (while-loop (+ v1 1) (* v2 v1))
+                                (list v2 v1 v2)))])
+       (while-loop 1 1)))
+   5)
+
+Alfrothul: Oh.  Talking about naming...
+
+Harald: Yes, we could name that lambda.  Obviously:
+
+.. code-block:: scheme
+
+  (define fac
+    (lambda (v0)
+      (letrec ([while-loop (lambda (v1 v2)
+                             (if (<= v1 v0)
+                                 (while-loop (+ v1 1) (* v2 v1))
+                                 (list v2 v1 v2)))])
+        (while-loop 1 1))))
+
+  (fac 5)
+
+Brynja: Right.  If you give someone Scheme, she has any language she pleases.
+
+Loki: Like... Scheme.
+
+Brynja: Yes, but not only.  For example, we can still lambda-lift the
+variables and mutate their bindings.  Let me rename them ``x1`` and
+``x2`` to make it manifest that they are mutable.  Wait, careful about
+the order here: ``x2`` first, and then ``x1`` -- that's
+sequentialization for you, I guess.  Here we go:
+
+.. code-block:: scheme
+
+  (define fac
+    (lambda (v0)
+      (let ([x1 1] [x2 1])
+        (letrec ([while-loop (lambda ()
+                               (if (<= x1 v0)
+                                   (begin
+                                     (set! x2 (* x2 x1))
+                                     (set! x1 (+ x1 1))
+                                     (while-loop))
+                                   (list x2 x1 x2)))])
+          (while-loop)))))
+
+Brynja: The point is that we can do that *locally*.  This procedure
+has a local state.
+
+Loki: But all modern programming languages can do that.
+
+Brynja: Yes, sort of.  But in Scheme that local state could be
+persistent because procedures are values that can be passed to other
+procedures *or returned from a procedure*.  Look:
+
+.. code-block:: scheme
+
+  (define make-persistent-counter
+    (lambda (initial-value)
+      (let ([local-counter initial-value])
+        (lambda (b)
+          (if b
+              local-counter
+              (begin
+                (set! local-counter (1+ local-counter))
+                local-counter))))))
+
+Brynja: ``make-persistent-counter`` returns a procedure with a local
+state that implements a counter.  If you apply it to ``#t``, it
+returns the current value of its counter.  If you apply it to ``#f``,
+it increments its local counter.  And you can have co-existing
+counters: they don't interfere with each other, because each state is
+local to each counter.
+
+The lecturer: Brynja, you are getting ahead of me -- what you just
+outlined is the topic of the next lecture note, which is about how to
+simulate objects in Scheme.
+
+Loki: See?  In Scheme.  Only in Scheme.
+
+The lecturer: Yes.  But objects.  We can program objects in Scheme.
+We can also write imperative programs in Scheme.  Obviously, we can
+write functional programs too.  But we can also write
+`non-deterministic programs <week-5-random-programming.html>`_ with
+the ``random`` procedure.  And lazy programs as well, as we will see shortly.
+And we can do logic programming too.  All of that in one programming language of
+discourse.  So, yes, in Scheme.  I am sure you could write a
+`self-applicable syntax checker
+<week-6-a-syntax-checker-for-Scheme-part-1.html#exercise-syntax-checker-for-Scheme-part-1>`_
+for Java or JavaScript, or even for Haskell for that matter, but that
+would be immensely more complicated, and would require concepts we
+haven't studied yet.  So, yes, there is only one programming language
+of discourse in this course, without features piled on top of
+features: `*one* convenient and expressive notation for *many* notions
+of computation
+<week-6-on-designing-programming-languages.html#a-convenient-and-expressive-notation>`_,
+...
+
+Alfrothul, Brynja, Hagar, and Harald: :-)
+
+The lecturer: ...one programming language not to discourage
+first-year students and overwhelm them, but to encourage them and to
+enable them.  You know: a substrate to inform them and to educate them.
+
+Loki: But Emacs?  I mean come on.
+
+The lecturer: Yes, Emacs.  You have to believe in your students.  A
+first-year student who knows Scheme and Emacs and who has implemented
+a self-applicable syntax checker is a lot harder to impress.  That's
+what a university education is supposed to do for you.  You can then
+face any dragon.
+
+Hagar: Yup.  That's what my cousin Hiccup says too.
+
+.. epigraph::
+
+  | I would trade all of my technology for an afternoon with Socrates.
+
+   -- `Steve Jobs <https://en.wikipedia.org/wiki/Steve_Jobs>`_
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-8-set-bang.scm>`_
+  (latest version: 15 Sep 2015).
+
+* The Scheme code for `the compiler from the basic imperative language
+  to Scheme <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-8-basic-imperative-language_a-compiler.scm>`_
+  (latest version: 15 Sep 2015).
+
+* The Scheme code for `a smoother version of the compiler from the
+  basic imperative language to Scheme
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-8-basic-imperative-language_a-smoother-compiler.scm>`_
+  (latest version: 15 Sep 2015).
+
+* The Scheme code for `a smoother version of the compiler in curried form from the
+  basic imperative language to Scheme
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-8-basic-imperative-language_a-curried-smoother-compiler.scm>`_
+  (latest version: 15 Sep 2015).
+
+
+
+Version
+-------
+
+Added the reference to Hagar's cousin
+[01 Oct 2015]
+
+Created
+[15 Sep 2015]

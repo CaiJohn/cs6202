@@ -1,0 +1,706 @@
+.. -*- mode: rst -*-
+
+Note for Week 6 about arithmetic expressions: Magritte and the 40 optimizing compilers
+======================================================================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercise
+-------------------
+
+* :ref:`exercise-compilers-arithmetic-expressions`:
+  about "optimizing" compilers for arithmetic expressions
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions.scm>`_
+  (latest version: 20 Sep 2015).
+
+* An extensible `collection of arithmetic expressions
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions-sample.scm>`_
+  for testing purposes (latest version: 17 Sep 2015).
+
+
+Goal
+----
+
+This lecture note is a continuation of :ref:`exercise-Magritte` and
+:ref:`exercise-Magritte-interpreter` in the lecture note of Week 4
+about arithmetic expressions.  Its goal is to investigate optimizing
+compilers for arithmetic expressions.
+
+
+Material on our workbench
+-------------------------
+
+First, download the accompanying files
+`week-6-arithmetic-expressions-sample.scm
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions-sample.scm>`_
+and `week-6-arithmetic-expressions.scm
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions.scm>`_.
+The first file contains a collection of arithmetic expressions in the
+concrete syntax of Scheme, for example:
+
+.. code-block:: scheme
+
+  (define source-ae2
+    '(+ (+ 1 10)
+        (+ 100 1000)))
+  
+  (define source-ae3
+    '(* (* (* 1 2)
+           3)
+        (* 4 5)))
+
+The second file contains a stand-alone implementation of the
+:ref:`bnf-of-arithmetic-expressions` from Week 4:
+
+.. bnf:: arithmetic expressions
+   :noindex:
+   :namespace: arithmetic-expressions
+
+   <arithmetic-expression> ::= (literal <literal>)
+                             | (plus <arithmetic-expression> <arithmetic-expression>)
+                             | (times <arithmetic-expression> <arithmetic-expression>)
+
+   <literal> ::= ...any Scheme number...
+
+The implementation includes
+
+* a parser from the concrete syntax of Scheme to the abstract syntax
+  specified by the BNF of arithmetic expressions,
+  ``parse-arithmetic-expression``;
+
+* an unparser from this abstract syntax back to the concrete syntax of
+  Scheme, ``unparse-arithmetic-expression``;
+
+* a unit-test procedure ``test-interpret-arithmetic-expressions``
+  that, applied to a procedure implementing an interpreter for
+  arithmetic expressions, applies this procedure to a handful of
+  arithmetic expressions and tests whether interpreting each of them
+  yields the expected result;
+
+  for example, interpreting ``source-ae2`` should yield ``1111`` and
+  interpreting ``source-ae3`` should yield ``120``;
+
+* a unit-test procedure
+  ``test-compile-and-run-arithmetic-expressions`` that, applied to a
+  procedure implementing a compiler from arithmetic expressions to
+  byte code and to a procedure implementing a virtual machine for
+  byte-code programs, applies these two procedures to a handful of
+  arithmetic expressions and tests whether compiling and running each
+  of them yields the expected result;
+
+  for example, compiling and then running ``source-ae2`` should yield
+  ``1111`` and compiling and then running ``source-ae3`` should yield
+  ``120``;
+
+* a procedure ``interpret-arithmetic-expression`` that implements an
+  interpreter for (parsed) arithmetic expressions and passes the
+  unit test ``test-interpret-arithmetic-expressions``;
+
+* a procedure ``run-byte-code-program`` that implements a virtual
+  machine (i.e., an interpreter) for byte-code programs;
+
+* a procedure ``compile-arithmetic-expression`` that implements a
+  compiler from (parsed) arithmetic expressions to byte code and,
+  together with ``run-byte-code-program``, passes the unit test
+  ``test-compile-and-run-arithmetic-expressions``; and
+
+* a procedure ``compile-and-run-arithmetic-expression`` that compiles
+  any given (parsed) arithmetic expression and then runs the resulting
+  compiled program with the virtual machine and passes the unit test
+  ``test-interpret-arithmetic-expressions``.
+
+The interpreter, compiler, and virtual machine fit together in the
+sense that the following diagram commutes:
+
+.. ditaa::
+
+  +-------------------+
+  | source expression |--+
+  |                {d}|  |
+  +-------------------+  |
+           |             |
+           |             |
+  compiler |             |
+           |             |
+           |             |
+           v             |
+  +-------------------+  |
+  | byte-code program |  | interpreter
+  |                {d}|  |
+  +-------------------+  |
+           |             |
+           |             |
+   virtual |             |
+   machine |             |
+           |             |
+           v             |
+                         |
+         number <--------+
+
+In words: compiling the source expression and then running the
+resulting compiled program with the virtual machine gives the same
+result as interpreting this source expression.
+
+The implementation includes
+
+* a procedure to test this commuting diagram for any given arithmetic
+  expression,
+  ``does_interpret-arithmetic-expression_make_the_diagram_commute?``;
+  and
+
+* a unit-test procedure,
+  ``test_does_interpret-arithmetic-expression_make_the_diagram_commute?``,
+  verifying that the diagram commutes for each of the arithmetic
+  expressions in `week-6-arithmetic-expressions-sample.scm
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions-sample.scm>`_.
+
+It can be proved (by structural induction over the source arithmetic
+expression) that this diagram commutes for all arithmetic expressions,
+not just for the sample in `week-6-arithmetic-expressions-sample.scm
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions-sample.scm>`_.
+
+The implementation in `week-6-arithmetic-expressions.scm
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions.scm>`_
+also includes:
+
+* a procedure ``interpret-arithmetic-expression_Magritte`` that
+  implements an interpreter for (parsed) arithmetic expressions that
+  does not operate on numbers, but on syntactic representations of
+  numbers;
+
+* a procedure ``run-byte-code-program_Magritte`` that implements a
+  virtual machine for byte-code programs that does not operate on
+  numbers, but on syntactic representations of numbers; and
+
+* a procedure ``compile-and-run-arithmetic-expression_Magritte`` that
+  compiles any given (parsed) source arithmetic expression and then
+  runs the resulting compiled code with the Magritte virtual machine.
+
+.. index:: decompiler (for arithmetic expressions)
+
+In the lecture note of Week 4, the point of :ref:`exercise-Magritte`
+was that ``run-byte-code-program_Magritte`` implements a decompiler
+from byte-code to (parsed) arithmetic expressions, and the point of
+:ref:`exercise-Magritte-interpreter` was that
+``interpret-arithmetic-expression_Magritte`` implements the identity
+function over (parsed) arithmetic expressions.
+
+Like their ordinary counterparts above, the Magritte interpreter,
+compiler, and Magritte virtual machine fit together in the sense that
+the following analogue diagram commutes:
+
+.. ditaa::
+
+  +-------------------+
+  | source expression |--+
+  |                {d}|  |
+  +-------------------+  |
+           |             |
+           |             |
+  compiler |             |
+           |             |
+           |             |
+           v             |
+  +-------------------+  |
+  | byte-code program |  | Magritte
+  |                {d}|  | interpreter
+  +-------------------+  |
+           |             |
+  Magritte |             |
+   virtual |             |
+   machine |             |
+           |             |
+           v             |
+                         |
+       syntactic         |
+     representation <----+
+          of a     
+         number
+
+In words: compiling a source expression and then running the resulting
+compiled program with the Magritte virtual machine gives the same
+result as interpreting the source expression with the Magritte
+interpreter.
+
+In both the Magritte virtual machine and the Magritte interpreter,
+numbers are represented syntactically using the source syntax
+constructors of arithmetic expressions.  The Magritte interpreter
+therefore carries out a *source-to-source program transformation*:
+
+.. ditaa::
+
+  +-----------------------+
+  | arithmetic expression |-----+
+  |                    {d}|     |
+  +-----------------------+     |
+              |                 |
+              |                 |
+     compiler |                 |
+              |                 |
+              |                 |
+              v                 |
+     +-------------------+      |
+     | byte-code program |      | Magritte
+     |                {d}|      | interpreter
+     +-------------------+      |
+              |                 |
+     Magritte |                 |
+      virtual |                 |
+      machine |                 |
+              |                 |
+              v                 |
+  +-----------------------+     |
+  | arithmetic expression |<----+
+  |                    {d}|     
+  +-----------------------+     
+
+The implementation includes
+
+* a procedure to test this commuting diagram for any given arithmetic
+  expression,
+  ``does_interpret-arithmetic-expression_Magritte_make_the_diagram_commute?``;
+  and
+
+* a unit-test procedure,
+  ``test_does_interpret-arithmetic-expression_Magritte_make_the_diagram_commute?``,
+  that tests whether the diagram commutes for each of the arithmetic
+  expressions in `week-6-arithmetic-expressions-sample.scm
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions-sample.scm>`_.
+
+It can be proved (by structural induction over the source arithmetic
+expression) that this diagram commutes for all arithmetic expressions,
+not just for the sample in `week-6-arithmetic-expressions-sample.scm
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions-sample.scm>`_.
+
+The point of :ref:`exercise-Magritte-interpreter` was that
+``interpret-arithmetic-expression_Magritte`` implements the identity
+function over arithmetic expressions.  Therefore
+
+* the Magritte virtual machine is a left inverse of the compiler,
+  i.e., a decompiler; and
+
+* ``compile-and-run-arithmetic-expression_Magritte`` maps any
+  arithmetic expression back to itself.
+
+Diagrammatically:
+
+.. ditaa::
+
+                        +----+
+                        |    |
+                        V    | Magritte
+  +-----------------------+  | interpreter
+  | arithmetic expression |  |
+  |                    {d}|--+
+  +-----------------------+
+           |    ^
+           |    | Magritte
+  compiler |    | virtual
+           |    | machine
+           |    |
+           v    |
+    +-------------------+
+    | byte-code program |
+    |                {d}|
+    +-------------------+
+
+The rest of the file `week-6-arithmetic-expressions.scm
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions.scm>`_
+contains a series of optimizing compilers for arithmetic expressions:
+
+* ``compile-arithmetic-expression_bizarre``,
+
+* ``compile-arithmetic-expression_quaint``,
+
+* ``compile-arithmetic-expression_strange``,
+
+* ``compile-arithmetic-expression_curious``, and
+
+* ``compile-arithmetic-expression_surprising``.
+
+To the best of the lecturer's ability, these optimizing compilers are
+all correct.  For example, they all pass the unit test
+``test-compile-and-run-arithmetic-expressions``, and also they each
+come with a unit-test procedure verifying that compiling and running the
+arithmetic expressions in the sample gives the same result as
+interpreting them:
+
+* ``test_does_interpret-arithmetic-expression_make_the_bizarre_diagram_commute?``
+
+* ``test_does_interpret-arithmetic-expression_make_the_quaint_diagram_commute?``
+
+* ``test_does_interpret-arithmetic-expression_make_the_strange_diagram_commute?``
+
+* ``test_does_interpret-arithmetic-expression_make_the_curious_diagram_commute?``
+
+* ``test_does_interpret-arithmetic-expression_make_the_surprising_diagram_commute?``
+
+Diagrammatically:
+
+.. ditaa::
+
+    +-------------------+
+    | source expression |--+
+    |                {d}|  |
+    +-------------------+  |
+             |             |
+  optimizing |             |
+    compiler |             |
+             |             |
+             v             |
+    +-------------------+  |
+    | byte-code program |  | interpreter
+    |                {d}|  |
+    +-------------------+  |
+             |             |
+     virtual |             |
+     machine |             |
+             |             |
+             v             |
+                           |
+           number <--------+
+
+The rest of this lecture note is a study of these optimizing compilers.
+
+
+.. index::
+   single: compiler (optimizing)
+
+What is an "optimizing" compiler?
+---------------------------------
+
+An optimizing compiler is a compiler that not only translates a source
+program into a target program, but somehows transforms it as well in
+passing so that the target program runs more efficiently.  For
+example, an optimizing compiler could simplify adding zero or
+multiplying by one.
+
+
+.. index:: program transformation (arithmetic expressions)
+
+Completeness of compiler optimizations
+--------------------------------------
+
+These transformations carried out by an optimizing compiler, could
+they be expressed in the source language?  In other words, could the
+source program be first transformed and then compiled with a naive,
+non-optimizing compiler, to give the same resulting compiled program?
+
+Diagrammatically:
+
+.. ditaa::
+
+     +----------------+ optimizing transformation  +----------------+
+     | source program |--------------------------->| source program |
+     |             {d}|                            |             {d}|
+     +----------------+                            +----------------+
+             |                                            |
+  optimizing |                                      naive |
+    compiler |                                   compiler |
+             |                                            |
+             |                                            |
+             |                                            v
+             |                                     +-------------------+
+             +------------------------------------>| byte-code program |
+                                                   |                {d}|
+                                                   +-------------------+
+
+For the purpose of this lecture note, all the transformations that are
+baked in the optimizing compilers can be expressed in the source
+language.
+
+
+Decompilation, revisited
+------------------------
+
+Since the decompiler is a left inverse of the non-optimizing compiler,
+it is not "de-optimizing" in any way, and therefore it yields back the
+transformed source program:
+
+.. ditaa::
+
+     +----------------+ optimizing transformation  +----------------+
+     | source program |--------------------------->| source program |
+     |             {d}|                            |             {d}|
+     +----------------+                            +----------------+
+             |                                            |   ^
+  optimizing |                                      naive |   | 
+    compiler |                                   compiler |   | decompiler
+             |                                            |   | 
+             |                                            |   |
+             |                                            v   |
+             |                                     +-------------------+
+             +------------------------------------>| byte-code program |
+                                                   |                {d}|
+                                                   +-------------------+
+
+So the Magritte interpreter that corresponds to the optimizing
+compiler does not implement the identity function over arithmetic
+expressions, as it did for the naive, non-optimizing compiler: *it
+implements the source-to-source optimizing transformation associated
+to the optimizing compiler*.
+
+Diagrammatically:
+
+.. ditaa::
+
+  +-----------------------+
+  | arithmetic expression |-----+
+  |                    {d}|     |
+  +-----------------------+     |
+              |                 |
+              |                 |
+   optimizing |                 |
+     compiler |                 |
+              |                 |
+              |                 |
+              v                 |
+     +-------------------+      | optimizing
+     | byte-code program |      | Magritte
+     |                {d}|      | interpreter
+     +-------------------+      |
+              |                 |
+     Magritte |                 |
+      virtual | decompiler      |
+      machine |                 |
+              |                 |
+              v                 |
+  +-----------------------+     |
+  | arithmetic expression |<----+
+  |                    {d}|     
+  +-----------------------+     
+
+
+Goal, revisited
+---------------
+
+The goal of this lecture note is to characterize the optimization that
+is baked in each of the optimizing compilers
+``compile-arithmetic-expression_bizarre``,
+``compile-arithmetic-expression_quaint``, etc., and to implement the
+corresponding optimizing Magritte interpreter that makes the diagram
+above commute.  For example, for
+``compile-arithmetic-expression_bizarre``,
+
+* we should implement an interpreter:
+
+  .. code-block:: scheme
+
+    (define interpret-arithmetic-expression_Magritte_bizarre
+      (lambda (e)
+        (errorf 'interpret-arithmetic-expression_Magritte_bizarre
+                "not implemented yet")))
+    
+* we should implement a procedure to test this commuting diagram for
+  any given arithmetic expression:
+
+  .. code-block:: scheme
+
+    (define does_interpret-arithmetic-expression_Magritte_bizarre_make_the_diagram_commute?
+      (lambda (source-ae)
+        (let ([ae (parse-arithmetic-expression source-ae)])
+          (equal? (interpret-arithmetic-expression_Magritte_bizarre ae)
+                  (run-byte-code-program_Magritte (compile-arithmetic-expression_bizarre ae))))))
+    
+* and we should implement a unit-test procedure that tests whether the
+  diagram commutes for each of the arithmetic expressions in
+  `week-6-arithmetic-expressions-sample.scm
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions-sample.scm>`_:
+
+  .. code-block:: scheme
+
+    (define test_does_interpret-arithmetic-expression_Magritte_bizarre_make_the_diagram_commute?
+      (lambda ()
+        (andmap does_interpret-arithmetic-expression_Magritte_bizarre_make_the_diagram_commute?
+                sample-of-arithmetic-expressions)))
+
+  (``andmap`` is described just before :ref:`exercise-ormap1` in the
+  next lecture note.)
+
+Naturally, in so doing, we devise many new arithmetic expressions for
+testing purpose.  **Each of these new arithmetic expressions should be
+added to the sample.**
+
+
+The scientific method at work: observation
+------------------------------------------
+
+The question is: which optimization is baked in
+``compile-arithmetic-expression_bizarre``?
+
+.. index::
+   single: Feynman, Richard P. (the algorithm)
+
+.. epigraph::
+
+  | The Feynman Algorithm:
+  | 1. Write down the problem.
+  | 2. Think real hard.
+  | 3. Write down the solution.
+
+  -- `Murray Gell-Mann <http://en.wikipedia.org/wiki/Murray_Gell-Mann>`_
+
+* White-box approach: look at the source code of the optimizing
+  compiler, think real hard, and figure out the optimization.
+
+* Black-box approach: find arithmetic expressions for which the naive
+  compiler and the optimizing compiler emit byte-code programs that
+  differ.  (**Remember to add your arithmetic expressions to the
+  sample.**)
+
+  It is quite unlikely that you can read and understand the resulting
+  byte-code programs, for byte code is quite unintuitive.  So instead,
+  decompile them: decompiling the result of the naive compiler gives
+  back your source arithmetic expression, and decompiling the result
+  of the naive compiler *yields the result of your optimizing Magritte
+  interpreter*.  (Seriously, it does: look at the commuting diagram
+  just above.)
+
+
+The scientific method at work: hypothesis
+-----------------------------------------
+
+Based on your observations, you are in position to state a hypothesis
+about a source-to-source transformation that corresponds to an
+optimization in the optimizing compiler.  (For example, the optimizing
+compiler could simplify away all the multiplications by ``1``.)
+
+
+The scientific method at work: experiment
+-----------------------------------------
+
+You are now ready to test your hypothesis.  Can you predict the result
+of compiling a particular expression?  Put your prediction to the
+test: compile this expression and compare the actual result with the
+result you predicted.
+
+.. epigraph::
+
+   | Harald: Do you think they will remember
+   |         to add their expressions to the sample?
+   | Brynja: Mais oui, mais oui.
+   |         (And pardon my French.)
+
+* Can you state an expression where the optimization will take place?
+  For example, if you are suspecting that the compiler simplifies away
+  all the multiplications by ``1``, state expressions where ``1`` is
+  multiplied on the left and where ``1`` is multiplied on the right.
+  State expressions where the multiplication occurs at the top, and
+  others where it occurs deep inside.  And state an expression that
+  solely consists of many multiplications by ``1``.
+
+* Can you state an expression where the optimization will *not* take
+  place?  For example, if you are suspecting that the compiler
+  simplifies away all the multiplications by ``1``, state expressions
+  that contain no multiplications by ``1`` at all.
+
+If an experiment fails, go back to the observation stage.
+
+If all experiments succeed, you are ready to solve the following
+exercise, which happens to be mandatory.
+
+
+.. _exercise-compilers-arithmetic-expressions:
+
+Exercise 1
+----------
+
+.. epigraph::
+
+   | Harald: And remember to add...
+   | Brynja: Yes, yes, they will remember.
+
+For each optimizing compiler in the file
+`week-6-arithmetic-expressions.scm
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions.scm>`_,
+
+* characterize its optimization in English precisely and concisely;
+
+* implement the corresponding optimizing Magritte interpreter and
+  verify that it passes the unit tests; and
+
+  .. epigraph::
+  
+     | Brynja: Harald -- not a word.
+
+* compare the relative efficiencies of
+
+  - interpreting with your optimizing Magritte interpreter and
+
+  - compiling and decompiling with the Magritte virtual machine.
+
+  You might need to write / generate big arithmetic expressions and /
+  or to repeat the comparison to detect a meaningful difference.
+
+
+.. index:: idempotence (for arithmetic expressions)
+
+Exercise 2
+----------
+
+* Is your optimizing Magritte interpreter `idempotent
+  <https://en.wikipedia.org/wiki/Idempotence>`_?
+
+* Should it be?
+
+For example, the following procedure tests whether
+``interpret-arithmetic-expression_Magritte_bizarre`` is idempotent.
+
+.. code-block:: scheme
+
+  (define is_interpret-arithmetic-expression_Magritte_bizarre_idempotent?
+    (lambda (source-ae)
+      (let* ([ae (parse-arithmetic-expression source-ae)]
+             [ae_optimized (interpret-arithmetic-expression_Magritte_bizarre ae)])
+        (equal? ae_optimized
+                (interpret-arithmetic-expression_Magritte_bizarre ae_optimized)))))
+
+An idempotent optimizer seizes all the optimization opportunities in
+its input, and yields an output without any optimization opportunity:
+applying this optimizer to its output yields the same output.
+
+(NB. This is the second time we meet an idempotent transformation --
+see the section :ref:`on-the-idempotence-of-negational-normalization`.)
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions.scm>`_
+  (latest version: 20 Sep 2015).
+
+* An extensible `collection of arithmetic expressions
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions-sample.scm>`_
+  for testing purposes (latest version: 17 Sep 2015).
+
+
+Version
+-------
+
+Elided the mentions of JIT-compiling in the narrative and improved the
+unit tests in `week-6-arithmetic-expressions.scm
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-arithmetic-expressions.scm>`_
+[20 Sep 2015]
+
+Fined-tuned the narrative and changed the title of this lecture note
+[19 Sep 2015]
+
+Massaged a couple of diagrams and mentioned the unit-test procedures for
+the optimizing compilers
+[18 Sep 2015]
+
+Created
+[17 Sep 2015]

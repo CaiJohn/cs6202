@@ -1,0 +1,948 @@
+.. -*- mode: rst -*-
+
+Note for Week 6
+===============
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+.. epigraph::
+
+   | `Less is more <http://en.wikipedia.org/wiki/Less_is_more>`_
+
+* :ref:`exercise-compilers-arithmetic-expressions`:
+  about "optimizing" compilers for arithmetic expressions
+
+* :ref:`exercise-syntax-checker-for-scheme-part-1`:
+  a self-applicable syntax checker for Scheme, Part I/II
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6.scm>`_
+  (latest version: 15 Sep 2015).
+
+
+Recap
+-----
+
+So using Scheme as our programming language of discourse, we have
+expressed a collection of programming-language artifacts.  This week,
+we paint more of the picture.  We `program with accumulators
+<week-6.html#programming-with-accumulators>`_ and play with `the map
+procedure <week-6-map.html>`_.  The main
+exercise this week and next week
+(:ref:`exercise-syntax-checker-for-scheme-part-2`) is to write a
+self-applicable syntax checker for the same BNF as for the
+self-interpreter used in `Week 1
+<week-1.html#exercise-cost-of-interpretation>`_.
+
+The rest of this lecture note is dedicated to `reversing proper lists
+<week-6.html#reversing-proper-lists>`_ and `programming with
+accumulators <week-6.html#programming-with-accumulators>`_.
+
+
+.. index:: list (reversal)
+
+.. _reversing-proper-lists:
+
+Reversing a proper list
+-----------------------
+
+Reversing a proper list just means listing its elements in reverse
+order, so it is simple to write a unit test for a procedure that
+implements list reversal:
+
+.. code-block:: scheme
+
+  (define test-reverse
+    (lambda (candidate)
+      (and (equal? (candidate '())
+                   '())
+           (equal? (candidate '(1))
+                   '(1))
+           (equal? (candidate '(1 2))
+                   '(2 1))
+           (equal? (candidate '(1 2 3))
+                   '(3 2 1))
+           ;;;
+           )))
+
+Petite Chez Scheme offers a predefined procedure, ``reverse``, that
+does the job::
+
+  > (test-reverse reverse)
+  #t
+  > 
+
+Writing a procedure ``reverse_proper-list`` that, given a proper list,
+returns its converse requires some thought, however.  Indeed Scheme
+lists are constructed by starting from the empty list, and
+successively adding elements in front of the list that has been
+constructed so far.  Take the list ``(1 2 3)``, for example.  It is a
+traditional linked list with one forward link and no back link.
+Pictorially:
+
+.. ditaa::
+
+  +-----------+     +-----------+     +-----------+
+  |     |     |     |     |     |     |     |     |
+  |     |     +---> |     |     +---> |     |     +---> ()
+  |     |     |     |     |     |     |     |     |
+  +--+--------+     +--+--------+     +--+--------+
+     |                 |                 |
+     |                 |                 |
+     v                 v                 v
+
+     1                 2                 3
+
+This list is constructed starting from the empty list, by adding ``3``
+in front, and then by adding ``2`` in front, and then by adding ``1``
+in front::
+
+  > '()
+  ()
+  > (cons 3 '())
+  (3)
+  > (cons 2 (cons 3 '()))
+  (2 3)
+  > (cons 1 (cons 2 (cons 3 '())))
+  (1 2 3)
+  > 
+
+Symmetrically, its converse is ``(3 2 1)``.  It is constructed
+starting from the empty list, by adding ``1`` in front, and then by
+adding ``2`` in front, and then by adding ``3`` in front::
+
+  > '()
+  ()
+  > (cons 1 '())
+  (1)
+  > (cons 2 (cons 1 '()))
+  (2 1)
+  > (cons 3 (cons 2 (cons 1 '())))
+  (3 2 1)
+  > 
+
+Pictorially:
+
+.. ditaa::
+
+  +-----------+     +-----------+     +-----------+
+  |     |     |     |     |     |     |     |     |
+  |     |     +---> |     |     +---> |     |     +---> ()
+  |     |     |     |     |     |     |     |     |
+  +--+--------+     +--+--------+     +--+--------+
+     |                 |                 |
+     |                 |                 |
+     v                 v                 v
+
+     3                 2                 1
+
+The challenge for writing a procedure ``reverse_proper-list`` lies in
+the very nature of the list constructors and accessors: ``cons``,
+``car``, and ``cdr`` all operate at the beginning of the list.
+However, the elements at the beginning of the input list occur at the
+end of the output list, and vice versa.
+
+
+Reversing a proper list, Version 1: the first shall be the last
+---------------------------------------------------------------
+
+A bit of recursive thinking solves the problem:
+
+* reversing the empty list yields the empty list; and
+
+* reversing a non-empty list will require combining its car with the
+  result of reversing its cdr.
+
+  Let's revisit the example of the list ``(1 2 3)``.  Its car is ``1``
+  and its cdr is ``(2 3)``.  Reversing its cdr yields ``(3 2)``.
+  Our problem is as follows: given ``1`` and ``(3 2)``, how do we
+  obtain ``(3 2 1)``.  Procedure ``append_proper-list`` springs to the
+  mind: we could apply it to ``(3 2)`` and to ...?  And to ...?  It
+  can't be to ``1`` since ``append_proper-list`` expects both of its
+  parameters to be proper lists.  So let's put ``1`` in a singleton
+  list: we apply ``append_proper-list`` to ``(3 2)`` and to the result
+  of applying ``list`` to ``1``.
+
+In Scheme:
+
+.. code-block:: scheme
+
+  (define reverse_proper-list-v1
+    (lambda (vs_init)
+      (letrec ([visit (lambda (vs)
+                        (cond
+                          [(null? vs)
+                           '()]
+                          [(pair? vs)
+                           (append_proper-list (visit (cdr vs))
+                                               (list (car vs)))]
+                          [else
+                           (errorf 'reverse_proper-list-v1
+                                   "not a proper list: ~s"
+                                   vs_init)]))])
+        (visit vs_init))))
+
+Let us run it through the unit test::
+
+  > (test-reverse reverse_proper-list-v1)
+  #t
+  > 
+
+Success.
+
+Food for thought:
+
+* Trace ``visit`` in ``reverse_proper-list-v1`` and visualize its
+  execution when ``reverse_proper-list-v1`` is applied to the list
+  ``(1 2 3 4 5 6 7 8 9)``.  See how, at call time, ``visit`` is
+  applied to the successive suffixes of ``(1 2 3 4 5 6 7 8 9)`` and
+  how, at return time, ``visit`` returns the successive prefixes of
+  ``(9 8 7 6 5 4 3 2 1)``?
+
+* Both the time and space complexity of ``car`` and ``cdr`` are
+  constant.  Both the time complexity and the space complexity of
+  ``append_proper-list`` are linear on its first argument, since
+  ``append_proper-list`` prepends its first argument (i.e., copies it)
+  in front of its second argument.
+
+  Therefore, at return time, the lists ``()``, ``(9)``, ``(9 8)``,
+  ..., and ``(9 8 7 6 5 4 3 2 1)`` will be successively copied, which
+  corresponds to copying ``0 + 1 + 2 + ... + 9`` list elements, or
+  again ``9 * 10 / 2`` elements, or again a number of elements that is
+  proportional to the square of ``9``.
+
+  So both the time complexity and the space complexity of
+  ``reverse_proper-list-v1`` are quadratic.  That doesn't feel right
+  because the size of the output is the same as the size of the input.
+  Shouldn't the complexity of reversing a list be linear rather than
+  quadratic?
+
+
+Reversing a proper list, Version 2: the last shall be the first
+---------------------------------------------------------------
+
+Just as plausibly, however, we could assume two procedures ``rac`` and
+``rdc`` that are converses of ``car`` and ``cdr``:
+
+* whereas applying ``car`` to a non-empty list returns the first
+  element of that list, applying ``rac`` to a non-empty list would return
+  its *last* element; and
+
+* whereas applying ``cdr`` to a non-empty list returns [the list of]
+  all the elements of that list, except the first, applying ``rdc`` to
+  a non-empty list would return [the list of] all the elements of that
+  list, except the last.
+
+Using ``rac`` and ``rdc``, writing ``reverse_proper-list`` is
+straightforwardly done using structural recursion.  In the induction
+case, to reverse a non-empty proper list, we cons its rac to the
+result of reversing its rdc:
+
+.. code-block:: scheme
+
+  (define reverse_proper-list-v2
+    (lambda (vs_init)
+      (letrec ([visit (lambda (vs)
+                        (cond
+                          [(null? vs)
+                           '()]
+                          [(pair? vs)
+                           (cons (rac vs) (visit (rdc vs)))]
+                          [else
+                           (errorf 'reverse_proper-list-v2
+                                   "not a proper list: ~s"
+                                   vs_init)]))])
+        (visit vs_init))))
+
+Food for thought:
+
+* What would ``reverse_proper-list-v2`` compute if you replaced
+  ``rac`` by ``car`` and ``rdc`` by ``cdr``?
+
+So we just need to implement ``rac`` and ``rdc``:
+
+.. code-block:: scheme
+
+  (define test-rac
+    (lambda (candidate)
+      (and (equal? (rac '(1 2 3))
+                   3)
+           (equal? (rac '(1 2))
+                   2)
+           (equal? (rac '(1))
+                   1)
+           ;;;
+           )))
+
+  (define test-rdc
+    (lambda (candidate)
+      (and (equal? (rdc '(1 2 3))
+                   '(1 2))
+           (equal? (rdc '(1 2))
+                   '(1))
+           (equal? (rdc '(1))
+                   '())
+           ;;;
+           )))
+
+  (define rac
+    (lambda (vs_init)
+      (letrec ([visit (lambda (v vs)
+                        (cond
+                          [(null? vs)
+                           v]
+                          [(pair? vs)
+                           (visit (car vs) (cdr vs))]
+                          [else
+                           (errorf 'rac
+                                   "not a proper list: ~s"
+                                   vs_init)]))])
+        (if (pair? vs_init)
+            (visit (car vs_init) (cdr vs_init))
+            (errorf 'rac
+                    "not a non-empty list: ~s"
+                    vs_init)))))
+
+  (define rdc
+    (lambda (vs_init)
+      (letrec ([visit (lambda (v vs)
+                        (cond
+                          [(null? vs)
+                           '()]
+                          [(pair? vs)
+                           (cons v (visit (car vs) (cdr vs)))]
+                          [else
+                           (errorf 'rdc
+                                   "not a proper list: ~s"
+                                   vs_init)]))])
+        (if (pair? vs_init)
+            (visit (car vs_init) (cdr vs_init))
+            (errorf 'rdc
+                    "not a non-empty list: ~s"
+                    vs_init)))))
+
+* Given a proper list, ``rac`` traverses it in search of its last
+  element.  (If you haven't yet, you really should read `the Socratic
+  dialog of three weeks ago
+  <week-3-at-the-DatLab-Study-Cafe.html>`_.)
+
+* Given a proper list, ``rdc`` copies it in the same order and does
+  not include the last element in this copy.
+
+These two procedures pass their respective unit test::
+
+  > (test-rac rac)
+  #t
+  > (test-rdc rdc)
+  #t
+  > 
+
+And so does ``reverse_proper-list-v2``::
+
+  > (test-reverse reverse_proper-list-v2)
+  #t
+  > 
+
+Success.
+
+Food for thought:
+
+* Trace ``visit`` in ``reverse_proper-list-v2`` and visualize its
+  execution when ``reverse_proper-list-v2`` is applied to the list
+  ``(1 2 3 4 5 6 7 8 9)``.  See how, at call time, ``visit`` is
+  applied to the successive prefixes of ``(1 2 3 4 5 6 7 8 9)`` and
+  how, at return time, ``visit`` returns the successive suffixes of
+  ``(9 8 7 6 5 4 3 2 1)``?
+
+* Both the time and space complexity of ``cons`` are constant.  The
+  time complexity of ``rac`` is linear on its argument, and its space
+  complexity is constant.  Both the time complexity and the space
+  complexity of ``rdc`` are linear on its argument.
+
+  Therefore, both at call time and at return time, ``visit`` will
+  incur a cost that is linearly proportional to the length of its
+  argument.  If the input of ``reverse_proper-list-v2`` has length 9,
+  the overall cost of using ``visit`` is linearly proportional to
+  ``9 + 8 + 7 + ... + 1 + 0``, which is a number proportional to the
+  square of ``9``.
+
+  So both the time complexity and the space complexity of
+  ``reverse_proper-list-v2`` are quadratic.  Again, that doesn't feel
+  right because the size of the output is the same as the size of the
+  input.  Again, shouldn't the complexity of reversing a list be
+  linear rather than quadratic?
+
+
+Exercise 1
+----------
+
+In a manner of speaking, we say that
+
+* the successive cars of the list ``(1 2 3)`` are ``1``, ``2``, and
+  ``3``,
+
+* the successive cdrs of the list ``(1 2 3)`` are ``(2 3)``,
+  ``(3)``, and ``()``,
+
+* the successive racs of the list ``(1 2 3)`` are ``3``, ``2``, and
+  ``1``, and
+
+* the successive rdcs of the list ``(1 2 3)`` are ``(1 2)``,
+  ``(1)``, and ``()``.
+
+1. Could you characterize lists whose successive cars are the same,
+   respectively, as its successive racs?  Could such a list contain
+   distinct elements?
+
+2. Could you characterize lists whose successive cdrs are the same,
+   respectively, as its successive rdcs?  Could such a list contain
+   distinct elements?
+
+3. If all the successive cars of a list are the same, respectively, as
+   all its successive racs, are all its successive cdrs the same,
+   respectively, as all its successive rdcs?
+
+4. If all the successive cdrs of a list are the same, respectively, as
+   all its successive rdcs, are all its successive cars the same,
+   respectively, as all its successive racs?
+
+
+Reversing a proper list, Version 3: trading space for time
+----------------------------------------------------------
+
+Common to Versions 1 and 2 of ``reverse_proper-list`` is the
+successive copying of all the elements but the last one either of the
+input list (Version 2, with ``rdc``) or of the result of the recursive
+calls (Version 1, with ``append``).  We could trade space for time
+with an index, using ``list-ref`` to pick the successive elements of
+the list in reverse order:
+
+.. code-block:: scheme
+
+  (define reverse_proper-list-v3
+    (lambda (vs)
+      (letrec ([visit (lambda (i)
+                        (if (< i 0)
+                            '()
+                            (cons (list-ref vs i)
+                                  (visit (1- i)))))])
+        (visit (1- (length vs))))))
+
+This version passes the unit test::
+
+  > (test-reverse reverse_proper-list-v3)
+  #t
+  > 
+
+Success.
+
+Food for thought:
+
+* Trace ``visit`` in ``reverse_proper-list-v3`` and visualize its
+  execution when ``reverse_proper-list-v3`` is applied to the list
+  ``(1 2 3 4 5 6 7 8 9)``.  See how, at call time, the index decreases
+  all the way to ``-1`` and how, at return time, ``visit`` returns the
+  successive suffixes of ``(9 8 7 6 5 4 3 2 1)``?
+
+* In contrast to the two first versions, this version only uses
+  ``cons`` to construct the result, and since the complexity of
+  ``cons`` is constant, the space complexity of
+  ``reverse_proper-list-v3`` is linear.  (Yay.)
+
+* Still, for a proper list of length n, ``reverse_proper-list-v3``
+
+  * traverses the list with n tail calls to compute its length;
+  
+  * traverses the list with n-1 tail calls to access its nth element;
+  
+  * traverses the list with n-2 tail calls to access its (n-1)th element;
+  
+  * ...
+  
+  * traverses the list with 2 tail calls to access its 3rd element;
+  
+  * traverses the list with 1 tail call to access its 2nd element; and
+  
+  * traverses the list with 0 tail calls to access its 1st element.
+
+  All in all, given a proper list of length n,
+  ``reverse_proper-list-v3`` makes n + n-1 + n-2 + ... + 2 + 1 + 0
+  tail calls, i.e., its time complexity is quadratic.
+
+  So while the space complexity of ``reverse_proper-list-v3`` is
+  linear, its time complexity is quadratic.  That doesn't feel quite
+  right either because why should we need a quadratic time complexity
+  to perform a computation whose space complexity is linear?
+
+
+Exercise 2
+----------
+
+Why would anyone want to write the following alternative versions of
+``reverse_proper-list-v3``?  Do they even work?
+
+.. code-block:: scheme
+
+  (define reverse_proper-list-v3_alt1
+    (lambda (vs)
+      (letrec ([visit (lambda (i)
+                        (if (= i 0)
+                            '()
+                            (cons (list-ref vs (1- i))
+                                  (visit (1- i)))))])
+        (visit (length vs)))))
+
+  (define reverse_proper-list-v3_alt2
+    (lambda (vs)
+      (letrec ([visit (lambda (i)
+                        (cons (list-ref vs i)
+                              (if (= i 0)
+                                  '()
+                                  (visit (1- i)))))])
+        (let ([n (length vs)])
+          (if (< n 2)
+              vs
+              (visit (1- n)))))))
+
+
+Reversing a proper list, Version 4: using an accumulator
+--------------------------------------------------------
+
+We have not been thinking right about list reversal:
+
+* the first element of the input list is the first element that will
+  be consed [to the empty list] to construct the result;
+
+* the second element of the input list is the second element that will
+  be consed to construct the result;
+
+* the third element of the input list is the third element that will
+  be consed to construct the result;
+
+* etc.
+
+We should exploit this coincidence by *synchronizing the traversal of
+the input list and the construction of the output list*, as we did to
+`add two natural numbers tail recursively
+<week-2.html#adding-two-natural-numbers-tail-recursively>`_.  To this
+end, let us *add a second argument* to the local procedure that
+traverses the input list and accumulate the output list over this
+second argument during the traversal:
+
+.. code-block:: scheme
+
+  (define reverse_proper-list-v4
+    (lambda (vs_init)
+      (letrec ([visit (lambda (vs a)
+                        (cond
+                          [(null? vs)
+                           a]
+                          [(pair? vs)
+                           (visit (cdr vs) (cons (car vs) a))]
+                          [else
+                           (errorf 'reverse_proper-list-v4
+                                   "not a proper list: ~s"
+                                   vs_init)]))])
+        (visit vs_init '()))))
+
+Let us run it through the unit test::
+
+  > (test-reverse reverse_proper-list-v4)
+  #t
+  > 
+
+Success.
+
+Food for thought:
+
+* Trace ``visit`` in ``reverse_proper-list-v4`` and visualize its
+  execution when ``reverse_proper-list-v4`` is applied to the list
+  ``(1 2 3 4 5 6 7 8 9)``.  See the synchronicity, at call time,
+  between incrementally traversing the input and constructing the
+  output?  See how all calls are tail calls and therefore there is
+  only one return time?  This version is iterative.
+
+* In contrast to the three first versions, this version only uses
+  ``cons``, ``car``, and ``cdr``, whose time complexity and space
+  complexity are constant.  Therefore both the time complexity and
+  space complexity of ``reverse_proper-list-v4`` are linear.
+
+.. index:: accumulators
+
+The extra argument for ``visit`` is called an *accumulator*.
+
+
+.. _programming-with-accumulators:
+
+Programming with accumulators
+-----------------------------
+
+Many of the recursive procedures from the second lecture note --
+`multiplication <week-2.html#multiplying-two-natural-numbers>`_,
+`exponentiation <week-2.html#exponentiating-two-natural-numbers>`_,
+`factorial <week-2.html#the-factorial-function>`_ -- and even the
+compiler for arithmetic expressions in `the fourth lecture note
+<week-4-arithmetic-expressions.html#compiler-for-arithmetic-expressions>`_
+can be written with a local procedure that uses an accumulator.  Let
+us quickly go through them.
+
+* Let us revisit the multiplication of two natural numbers, this time
+  according to the following auxiliary recipe that uses an accumulator
+  which is initially 0:
+  
+  * algebraically:
+  
+    * for all natural numbers n2 and a, mul_acc (0, n2, a) = a
+  
+    * for all natural numbers k and n2, mul_acc (1 + k, n2, a) = n2 +
+      mul_acc (k, n2, a) = mul_acc (k, n2, n2 + a)
+  
+  * in Scheme, transliterated:
+  
+    .. code-block:: scheme
+  
+      (define times_acc
+        (lambda (n1 n2 a)
+          (if (zero? n1)
+              a
+              (times_acc (1- n1) n2 (+ n2 a)))))
+      
+      (define times_alt-lifted
+        (lambda (n1 n2)
+          (times_acc n1 n2 0)))
+
+    Let us test this definition using the same unit test as last
+    time::
+  
+      > (test-times times_alt-lifted)
+      #t
+      > 
+  
+    Success.
+
+  * in Scheme, lambda-dropped:
+  
+    .. code-block:: scheme
+  
+      (define times_alt
+        (lambda (n1_orig n2)
+          (letrec ([visit (lambda (n1 a)
+                            (if (zero? n1)
+                                a
+                                (visit (1- n1) (+ n2 a))))])
+            (visit n1_orig 0))))
+  
+    Let us test this definition using the same unit test as every
+    time::
+  
+      > (test-times times_alt)
+      #t
+      > 
+  
+    Success.
+
+* Let us revisit the exponentiation of two natural numbers, this time
+  according to the following auxiliary recipe that uses an accumulator
+  which is initially 1:
+
+  * algebraically:
+  
+    * for all natural numbers x and a, power_acc (x, 0, a) = a
+  
+    * for all natural numbers x, k and a, power_acc (x, 1 + k, a) = x *
+      power_acc (x, k, a) = power_acc (x, k, x * a)
+  
+  * in Scheme, transliterated:
+  
+    .. code-block:: scheme
+  
+      (define power_acc
+        (lambda (x n a)
+          (if (zero? n)
+              a
+              (power_acc x (1- n) (* x a)))))
+      
+      (define power_alt-lifted
+        (lambda (x n)
+          (power_acc x n 1)))
+
+    Let us test this definition using the same unit test as last
+    time::
+  
+      > (test-power power_alt-lifted)
+      #t
+      > 
+  
+    Success.
+
+  * in Scheme, lambda-dropped:
+  
+    .. code-block:: scheme
+  
+      (define power_alt
+        (lambda (x n_orig)
+          (letrec ([visit (lambda (n a)
+                            (if (zero? n)
+                                a
+                                (visit (1- n) (* x a))))])
+            (visit n_orig 1))))
+
+    Let us test this definition using the same unit test as every
+    time::
+  
+      > (test-power power_alt)
+      #t
+      > 
+  
+    Success.
+
+* Let us revisit the factorial procedure, this time according to the
+  following auxiliary recipe that uses an accumulator which is
+  initially 1:
+
+  * algebraically:
+  
+    * for all natural numbers a, fac_acc (0, a) = a
+  
+    * for all natural numbers k and a, fac_acc (1 + k, a) = (1 + k) *
+      fac_acc (k, a) = fac_acc (k, (1 + k) * a)
+  
+  * in Scheme, transliterated:
+  
+    .. code-block:: scheme
+  
+      (define fac_acc
+        (lambda (n a)
+          (if (zero? n)
+              a
+              (fac_acc (1- n) (* n a)))))
+      
+      (define fac_alt-lifted
+        (lambda (n)
+          (fac_acc n 1)))
+
+    Let us test this definition using the same unit test as last
+    time::
+  
+      > (test-fac fac_alt-lifted)
+      #t
+      > 
+  
+    Success.
+
+  * in Scheme, lambda-dropped:
+  
+    .. code-block:: scheme
+  
+      (define fac_alt
+        (lambda (n)
+          (letrec ([visit (lambda (n a)
+                            (if (zero? n)
+                                a
+                                (visit (1- n) (* n a))))])
+            (visit n 1))))
+
+    Let us test this definition using the same unit test as every
+    time::
+  
+      > (test-fac fac_alt)
+      #t
+      > 
+  
+    Success.
+
+
+Exercise 2
+----------
+
+Revisit `the procedure computing the sum of the n first positive
+integers
+<week-2.html#example-computing-the-sum-of-the-first-n-positive-integers>`_
+and `the procedure computing the sum of consecutive natural numbers
+<week-2.html#exercise-sum-from-min-to-max>`_ and write them with a
+local recursive procedure that uses an accumulator.  Here is a
+unit-test procedure for the first:
+
+.. code-block:: scheme
+
+  (define test-sum-from-1-to-max
+    (lambda (candidate)
+      (and (equal? (candidate 0)
+                   (sum-from-1-to-max_constant 0))
+           (equal? (candidate 1)
+                   (sum-from-1-to-max_constant 1))
+           (equal? (candidate 2)
+                   (sum-from-1-to-max_constant 2))
+           (equal? (candidate 10)
+                   (sum-from-1-to-max_constant 10))
+           ;;;
+           )))
+
+Write a unit-test procedure for the second.  You know what to do with
+them.
+
+
+.. _exercise-flatten-proper-lists:
+
+Exercise 3
+----------
+
+Write a procedure that flattens nested proper lists into the list of
+their leaves, ordered depth-first from left to right.
+
+.. code-block:: scheme
+
+  (define test-flatten
+    (lambda (candidate)
+      (and (equal? (candidate '())
+                   '())
+           (equal? (candidate '(1 2 3))
+                   '(1 2 3))
+           (equal? (candidate '((1) (2 3)))
+                   '(1 2 3))
+           (equal? (candidate '(((1) (2)) 3))
+                   '(1 2 3))
+           (equal? (candidate '(((1) (2)) 3 4))
+                   '(1 2 3 4))
+           (equal? (candidate '((((() 1) 2) 3) 4))
+                   '(() 1 2 3 4))
+           ;;;
+           )))
+
+1. Use ``append`` as follows:
+
+   * base case -- flattening the empty list:
+
+     * flattening the empty list yields the empty list;
+
+   * induction case -- flattening the pair ``(cons x xs)``:
+
+     * if ``x`` is not a pair, flattening ``(cons x xs)`` yields the
+       result of concatenating
+
+       * a one-element list containing ``x`` and
+
+       * the result of flattening ``xs``; and
+
+     * if ``x`` is pair, flattening ``(cons x xs)`` yields the
+       result of concatenating
+
+       * the result of flattening ``x`` and
+
+       * the result of flattening ``xs``.
+     
+2. Define an auxiliary procedure with an accumulator.  Only use ``cons``.
+   Do not use ``append``, and of course do not even think of using
+   ``length``, ``list-ref``, or ``list-tail``.  Check it out with
+   ``test-flatten``.
+
+
+Exercise 4
+----------
+
+As a continuation of :ref:`exercise-flatten-proper-lists`, revisit
+``compile-arithmetic-expression`` from `two weeks ago
+<week-4-arithmetic-expressions.html#compiler-for-arithmetic-expressions>`_,
+and re-implement it with a local procedure that uses an accumulator.
+
+
+Take-home Chinese food for thought
+----------------------------------
+
+* The practical Scheme programmer first seeks to understand *what* is
+  going on.  He writes unit tests.
+
+* The practical Scheme programmer then seeks to understand *how* things
+  work.  He studies the inductive nature of the data at hand.
+
+* The practical Scheme programmer understands structural recursion.
+  His use of it is swift and decisive.
+
+* The practical Scheme programmer favors predicates, accessors, and
+  data constructors that work in constant time (i.e., not ``list?``
+  but ``pair?``, not ``list-ref`` but ``car``, not ``list-tail`` but
+  ``cdr``, and not ``append`` but ``cons``).  Likewise, he is wary of
+  ``length``.
+
+* Naturally, the practical Scheme programmer only applies
+
+  - ``car`` and ``cdr`` to values that answer ``#t`` to the predicate
+    ``pair?``,
+
+  - ``length`` and friends to proper lists, i.e., to values that answer
+    ``#t`` to the predicate ``list?``,
+
+  etc.
+
+* The practical Scheme programmer is mindful of not overdoing
+  anything, and
+
+  - does not systematically reverse an input list at the beginning of
+    a computation to only have tail calls, and
+
+  - does not systematically use an accumulator to only have tail calls
+    if it means reversing it at the end of the computation.
+
+  He knows that his Scheme implementation *does* implement non-tail
+  calls in an efficient manner.
+
+* The practical Scheme programmer is aware that often, nothing needs
+  to be made efficient if it is done right in the first place.
+
+
+Checkpoint
+----------
+
+We have extended our programming language of discourse, Scheme.  The
+next lecture notes for this week introduce
+
+* `the map procedure <week-6-map.html>`_,
+
+* `the main exercise of this week
+  <week-6-a-syntax-checker-for-Scheme-part-1.html>`_, i.e., a
+  self-applicable syntax checker for a subset of Scheme,
+
+* a 
+  `syntax checker <week-6-a-basic-imperative-language_a-syntax-checker.html>`_
+  as well as an
+  `interpreter <week-6-a-basic-imperative-language_an-interpreter.html>`_ 
+  for a basic imperative language, and
+
+* a review of `David Schmidt's language-extension principles
+  <week-6-on-designing-programming-languages.html>`_ for a
+  basic imperative language.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6.scm>`_
+  (latest version: 15 Sep 2015).
+
+
+Version
+-------
+
+Added one more thought to the take-home Chinese food
+[08 Nov 2015]
+
+Spelled out the complexity issues when reversing a list, and added the
+take-home Chinese food for thought
+[26 Sep 2015]
+
+Created
+[15 Sep 2015]

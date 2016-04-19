@@ -1,0 +1,2765 @@
+.. -*- mode: rst -*-
+
+Note for Week 1
+===============
+
+.. index::
+   single: Dybvig, R. Kent
+   single: Scheme
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://www.cs.indiana.edu/~dyb>`_
+
+   `Scheme on Wikipedia`__
+     by the Wikipedia community
+
+.. __: http://www.scheme.com/tspl4/
+
+.. __: http://en.wikipedia.org/wiki/Scheme_(programming_language)
+
+
+Mandatory exercises
+-------------------
+
+* :ref:`exercise-install-petite-chez-scheme-and-gnu-emacs`:
+  installing GNU Emacs, Petite Chez Scheme, and its Emacs support
+
+* :ref:`exercise-standard-question-about-I-and-T-diagrams-Prolog`:
+  playing with I- and T-diagrams
+
+* :ref:`exercise-standard-question-about-I-and-T-diagrams-Prolog-continued-1`:
+  playing with I- and T-diagrams (if you have the time)
+
+* :ref:`exercise-standard-question-about-I-and-T-diagrams-Prolog-continued-2`:
+  playing with I- and T-diagrams (if you are an overachiever)
+
+* :ref:`exercise-cost-of-interpretation`:
+  measuring the cost of a tower of interpreters
+
+* :ref:`exercise-pleonasms`:
+  redundant pleonasms
+
+NB. Make sure to read the paragraphs that precede the exercises: they
+contain the material these exercises are about.
+
+
+.. _exercise-install-petite-chez-scheme-and-gnu-emacs:
+
+Exercise 0
+----------
+
+.. epigraph::
+
+  | Yes you can.
+
+  -- `Barack Obama <http://en.wikipedia.org/wiki/Barack_Obama>`_ (well, almost)
+
+Download and install :ref:`sec-petite` on your personal computer,
+including its :ref:`sec-emacs` support.
+
+
+.. index:: programming languages
+.. index:: programs
+.. index:: data
+
+Programming languages, programs, and data
+-----------------------------------------
+
+A programming language is *a notation to express computations*.
+A *program* is something written according to this notation.
+It can be executed to perform a computation.
+A computation is some kind of processing operation over some data.
+Data are representations of information.
+
+.. index:: syntax
+.. index:: semantics
+
+Here is an analogy.  A natural language (Danish, for example) is a
+collection of words assembled into sentences.  Words are composed of
+letters, and sentences are composed of words and punctuation marks.
+There is a common agreement about correct Danish words (spelling) and
+about correct Danish sentences (grammar).  Spelling and grammar
+pertain to the *syntax* of Danish.  Sentences are then communicated,
+either orally or in writing, from someone to someone else, to convey a
+meaning.  Meaning pertains to the *semantics* of Danish.  To stay
+within the analogy, let us only consider written communication in the
+rest of this paragraph.  Improperly spelled words and improperly
+constructed sentences are misunderstood or not understood at all.
+Understandable sentences carry information.
+
+.. epigraph::
+
+  | T.T.T.
+
+  -- `Piet Hein <http://en.wikipedia.org/wiki/Piet_Hein_%28scientist%29>`_
+
+Here is a comparison.  A cooking recipe is a notation that conveys how
+to cook something.  It specifies data (the ingredients, e.g., eggs,
+butter, salt, pepper, thyme), resources and tools (e.g., a stove and a
+pan), and an algorithm (a method to operate on the data, e.g., to beat
+the eggs towards cooking an omelet).  To make a dish, a cook can then
+operate over the ingredients according to the recipe.
+
+
+.. index:: meta-language
+
+Notion of meta-language
+-----------------------
+
+Typically, a foreigner learns Danish using a textbook.  Say that the
+foreigner is French.  The textbook is likely to be written in French.
+The foreigner then discovers the Danish language through explanations
+written in French.  For this foreigner, French is the *meta-language*
+of Danish: the language to talk about another language.
+
+At school, a native Dane will learn the proper spelling of Danish
+words and the correct grammar of Danish with a textbook.  This
+textbook is naturally written in Danish.  For this Dane, Danish is the
+meta-language of Danish: (s)he talks about Danish in Danish.  This
+Dane will also learn English at school, also using a textbook.  This
+textbook is of course written in Danish, and therefore, for this Dane,
+Danish will be the meta-language of English: (s)he will talk about
+English in Danish.
+
+
+.. index:: interpreter
+
+Interpreters
+------------
+
+An interpreter is *a program for executing another program*.
+
+An interpreter is written in a meta-language
+(also known as: an implementation language).
+It is often depicted with an "I-diagram" ("I" for "interpreter"),
+where
+
+- S-L stands for the source language (of the interpreted programs) and
+- M-L stands for the meta-language:
+
+.. ditaa::
+
+  +-----+
+  | S-L |
+  |     |
+  |     |
+  |     |
+  |     |
+  | M­L |
+  +-----+
+
+.. index:: microprocessor, virtual machine
+
+Terminology: When interpreters for programs written in assembly
+language / byte code are implemented in hardware, they are called
+*microprocessors*.  When they are implemented in software, they are
+called *virtual machines*.
+
+Virtual machines are a topic of study in themselves.
+
+* For example, here are two artifacts (i.e., man-made constructs):
+  
+  1. an x86 microprocessor, depicted as follows:
+  
+     .. ditaa::
+  
+       +-----+
+       | x86 |
+       |     |
+  
+  2. a program written in x86, depicted as follows:
+  
+     .. ditaa::
+  
+       +-----+
+       | x86 |
+       | {d} |
+       +-----+
+  
+  We depict the execution of the x86 program by putting the two
+  pictures on top of each other:
+  
+  .. ditaa::
+  
+    +-----+
+    | x86 |
+    | {d} |
+    +-----+
+  
+    +-----+
+    | x86 |
+    |     |
+
+  The x86 microprocessor executes the program written in x86.
+
+  - Note how x86 is both the source language of the x86 microprocessor
+    and the language in which the program is written.
+
+* For example, here are three artifacts:
+  
+  1. the same x86 microprocessor as above:
+  
+     .. ditaa::
+  
+       +-----+
+       | x86 |
+       |     |
+  
+  2. an interpreter for Cobol written in x86, depicted as follows:
+  
+     .. ditaa::
+  
+       +-----+
+       |Cobol|
+       |     |
+       |     |
+       |     |
+       |     |
+       | x86 |
+       +-----+
+  
+  3. a program written in Cobol, depicted as follows:
+  
+     .. ditaa::
+  
+       +-----+
+       |Cobol|
+       | {d} |
+       +-----+
+  
+  We depict the execution of the Cobol program by putting the three
+  pictures on top of each other:
+  
+  .. ditaa::
+  
+    +-----+
+    |Cobol|
+    | {d} |
+    +-----+
+  
+    +-----+
+    |Cobol|
+    |     |
+    |     |
+    |     |
+    |     |
+    | x86 |
+    +-----+
+  
+    +-----+
+    | x86 |
+    |     |
+  
+  The x86 microprocessor executes the interpreter for Cobol written in x86,
+  and this interpreter executes the Cobol program.
+
+  - Note how Cobol is both the source language of the interpreter and the
+    language in which the Cobol program is written.
+
+  - Note how x86 is both the source language of the x86 microprocessor and the
+    implementation language of the interpreter.
+
+* For another example, here are four artifacts:
+
+  1. the same x86 microprocessor as above:
+  
+     .. ditaa::
+  
+       +-----+
+       | x86 |
+       |     |
+  
+  2. the same interpreter for Cobol written in x86 as above:
+  
+     .. ditaa::
+  
+       +-----+
+       |Cobol|
+       |     |
+       |     |
+       |     |
+       |     |
+       | x86 |
+       +-----+
+  
+  3. an interpreter for PHP written in Cobol, depicted as follows:
+  
+     .. ditaa::
+  
+       +-----+
+       | PHP |
+       |     |
+       |     |
+       |     |
+       |     |
+       |Cobol|
+       +-----+
+  
+  4. a program written in PHP, depicted as follows:
+  
+     .. ditaa::
+  
+       +-----+
+       | PHP |
+       | {d} |
+       +-----+
+  
+  We depict the execution of the PHP program by putting the four
+  pictures on top of each other:
+  
+  .. ditaa::
+  
+    +-----+
+    | PHP |
+    | {d} |
+    +-----+
+  
+    +-----+
+    | PHP |
+    |     |
+    |     |
+    |     |
+    |     |
+    |Cobol|
+    +-----+
+  
+    +-----+
+    |Cobol|
+    |     |
+    |     |
+    |     |
+    |     |
+    | x86 |
+    +-----+
+  
+    +-----+
+    | x86 |
+    |     |
+  
+  The x86 microprocessor executes the interpreter for Cobol written in x86,
+  this interpreter executes the interpreter for PHP written in Cobol,
+  and this interpreter executes the PHP program.
+
+  - Note how PHP is both the source language of the interpreter and the
+    language in which the PHP program is written.
+
+  - Note how Cobol is both the source language of the interpreter for
+    Cobol written in x86 and the implementation language of the
+    interpreter for PHP written in Cobol.
+
+  - Note how x86 is both the source language of the x86 microprocessor and
+    the implementation language of the interpreter for Cobol written
+    in x86.
+
+
+.. index:: compiler
+
+Compilers
+---------
+
+A compiler is *a program for translating another program* from one
+language (the "source language") to another (the "target language").
+
+A compiler is written in an implementation language.
+It is often depicted with a "T-diagram" ("T" for "translator"),
+where
+
+- S-L stands for the source language,
+- T-L stands for the target language (of the compiled programs), and
+- I-L stands for the implementation language:
+
+.. ditaa::
+
+  +-----------------+
+  |                 |
+  | S-L         T-L |
+  |                 |
+  +-----+     +-----+
+        |     |
+        |     |
+        | I­L |
+        +-----+
+
+Compilers are a traditional topic of study in themselves.
+
+* For example, given (1) an x86 microprocessor, (2) a compiler from
+  Cobol to x86 written in x86, and (3) a Cobol program, one can
+  execute the Cobol program by (a) compiling it from Cobol to x86,
+  resulting in a x86 program, and (b) executing this compiled program
+  with the x86 microprocessor.
+  
+  * Here is a picture of Step (a):
+  
+    .. ditaa::
+    
+      +-------+ +-----------------+ +-----+
+      |       | |                 | |     |
+      | Cobol | | Cobol       x86 | | x86 |
+      |   {d} | |                 | | {d} |
+      +-------+ +-----+     +-----+ +-----+
+                      |     |
+                      |     |
+                      | x86 |
+                      +-----+
+    
+                      +-----+
+                      | x86 |
+                      |     |
+    
+    The x86 microprocessor executes the compiler from Cobol to x86, and
+    this compiler translate the Cobol program to an x86 program.
+    Note how x86 is both the source language of the x86 microprocessor and the
+    implementation language of the compiler.
+  
+  * And here is a picture of Step (b):
+  
+    .. ditaa::
+    
+      +-----+
+      |     |
+      | x86 |
+      | {d} |
+      +-----+
+    
+      +-----+
+      | x86 |
+      |     |
+
+* For another example, given (1) an x86 microprocessor, (2) a compiler
+  from Cobol to x86 written in x86, (3) a compiler from PHP to Cobol
+  written in x86 and (4) a PHP program, one can execute the PHP
+  program by (a) compiling it from PHP to Cobol, resulting in a
+  compiled Cobol program, (b) compiling the resulting Cobol program
+  from Cobol to x86, resulting in a compiled x86 program, and (c)
+  executing the resulting x86 program with the x86 microprocessor.
+  
+  * Here is a picture of Step (a):
+  
+    .. ditaa::
+    
+      +-----+ +-----------------+ +-------+
+      |     | |                 | |       |
+      | PHP | | PHP       Cobol | | Cobol |
+      | {d} | |                 | |   {d} |
+      +-----+ +-----+     +-----+ +-------+
+                    |     |
+                    |     |
+                    | x86 |
+                    +-----+
+      
+                    +-----+
+                    | x86 |
+                    |     |
+  
+  * Here is a picture of Step (b):
+  
+    .. ditaa::
+    
+      +-------+ +-----------------+ +-----+
+      |       | |                 | |     |
+      | Cobol | | Cobol       x86 | | x86 |
+      |   {d} | |                 | | {d} |
+      +-------+ +-----+     +-----+ +-----+
+                      |     |
+                      |     |
+                      | x86 |
+                      +-----+
+      
+                      +-----+
+                      | x86 |
+                      |     |
+  
+  * And here is a picture of Step (c):
+  
+    .. ditaa::
+    
+      +-----+
+      |     |
+      | x86 |
+      | {d} |
+      +-----+
+    
+      +-----+
+      | x86 |
+      |     |
+  
+  For brevity, Steps (a) and (b) are often combined as follows,
+  pictorially:
+  
+  .. ditaa::
+  
+    +-----+ +-----------------+ +-----------------+ +-----+
+    |     | |                 | |                 | |     |
+    | PHP | | PHP       Cobol | | Cobol       x86 | | x86 |
+    | {d} | |                 | |                 | | {d} |
+    +-----+ +-----+     +-----+ +-----+     +-----+ +-----+
+                  |     |             |     |
+                  |     |             |     |
+                  | x86 |             | x86 |
+                  +-----+             +-----+
+    
+                  +-----+             +-----+
+                  | x86 |             | x86 |
+                  |     |             |     |
+  
+  (Note how Cobol is both the target language of the first compiler and
+  the source language of the second compiler.)
+
+
+Combining interpreters and compilers
+------------------------------------
+
+Interpreters and compilers are often combined to obtain new
+interpreters and new compilers.
+
+.. index:: interpreter (interpreting an)
+
+* For example, given an interpreter for a source language L2 written
+  in a meta-language L1, and an interpreter for the source language L3
+  written in the meta-language L2, one obtains an interpreter for L3
+  by interpreting the second interpreter with the first, given a L1
+  processor.  Pictorially:
+  
+  .. ditaa::
+  
+    +----+
+    | L3 |
+    |    |
+    |    |
+    |    |
+    |    |
+    | L2 |
+    +----+
+  
+    +----+
+    | L2 |
+    |    |
+    |    |
+    |    |
+    |    |
+    | L1 |
+    +----+
+  
+    +----+
+    | L1 |
+    |    |
+
+  The L1 processor executes the interpreter for L2 written in L1, and
+  the interpreter for L2 written in L1 executes the interpreter for L3
+  written in L3.  (Note how L2 is both the source language of the first
+  interpreter and the meta-language of the second interpreter.)
+
+  Macroscopically, the resulting interpreter for L3 looks like it is
+  written in L1:
+
+  .. ditaa::
+  
+    +----+
+    | L3 |
+    |    |
+    |    |
+    |    |
+    |    |
+    | L1 |
+    +----+
+  
+  Inside this I-diagram, there are the two I-diagrams above:
+
+  .. ditaa::
+  
+    +--------+
+    |        |
+    | +----+ |
+    | | L3 | |
+    | |    | |
+    | |    | |
+    | |    | |
+    | |    | |
+    | | L2 | |
+    | +----+ |
+    |        |
+    | +----+ |
+    | | L2 | |
+    | |    | |
+    | |    | |
+    | |    | |
+    | |    | |
+    | | L1 | |
+    | +----+ |
+    |        |
+    +--------+
+  
+.. index:: compiler (interpreting a)
+
+* For example, given an interpreter for an implementation language I-L
+  written in a meta-language M-L, and a compiler from a source
+  language S-L to a target language T-L written in the implementation
+  language I-L, one obtains a compiler from S-L to T-L by executing
+  the compiler with the interpreter.  Pictorially:
+  
+  .. ditaa::
+  
+    +-----------------+
+    |                 |
+    | S-L         T-L |
+    |                 |
+    +-----+     +-----+
+          |     |
+          |     |
+          | I­L |
+          +-----+
+  
+          +-----+
+          | I­L |
+          |     |
+          |     |
+          |     |
+          |     |
+          | M­L |
+          +-----+
+
+          +-----+
+          | M­L |
+          |     |
+
+
+.. index:: interpreter (compiling an)
+
+* For example, given an interpreter for Scheme written in C and a
+  compiler from C to, say a language A (e.g., byte code or assembly
+  language), one obtains an interpreter for Scheme written in A by
+  compiling it.  Pictorially:
+  
+  .. ditaa::
+  
+    +--------+                     +--------+
+    |        |                     |        |
+    | Scheme |                     | Scheme |
+    |        |                     |        |
+    |        | +-----------------+ |        |
+    |        | |                 | |        |
+    |   C    | | C             A | |   A    |
+    |        | |                 | |        |
+    +--------+ +-----+     +-----+ +--------+
+                     |     |
+                     |     |
+                     | I­L |
+                     +-----+
+
+                     +-----+
+                     | I­L |
+                     |     |
+
+  The input of the compiler is an interpreter for Scheme, and
+  therefore the output is also an interpreter for Scheme.  The input
+  is a program written in C, and the output is a program written in A.
+  Therefore since the input is an interpreter for Scheme written in C,
+  the output is an interpreter for Scheme written in A.
+
+Food for thought: how would you compile a compiler, and what would be
+the result?  (Hint: see Phase 1 in :ref:`compiling-a-compiler` below.)
+
+
+Vocabulary: executing and running
+---------------------------------
+
+In practice, the terms "executing a program" and "running a program"
+are used interchangeably.  Therefore an interpreter is often also said
+to be a program for running another program.  Likewise, one uses the
+term "run time" to refer to what happens at execution time, i.e., when
+a program runs (i.e., when a program is executed).
+
+
+.. index:: self- (interpreter)
+.. index:: self- (compiler)
+
+Self-interpreters and self-compilers
+------------------------------------
+
+.. index:: interpreter (self-)
+
+When an interpreter is written in (a subset of) its source language,
+it can interpret (a copy of) itself.  Pictorially:
+
+.. ditaa::
+
+  +-----+
+  |  L  |
+  |     |
+  |     |
+  |     |
+  |     |
+  |     |
+  |  L  |
+  +-----+
+
+  +-----+
+  |  L  |
+  |     |
+  |     |
+  |     |
+  |     |
+  |     |
+  |  L  |
+  +-----+
+
+  +-----+
+  |  L  |
+  |     |
+
+An interpreter that can interpret (a copy of) itself is called a
+*self-interpreter*.  (See :ref:`exercise-cost-of-interpretation`.)
+
+.. index:: compiler (self-)
+
+When a compiler is written in (a subset of) its source language,
+it can compile (a copy of) itself.  Pictorially:
+
+.. ditaa::
+
+  +-----------------+         +-----------------+
+  |                 |         |                 |
+  | L            A  |         | L             A |
+  |                 |         |                 |
+  +-----+     +-----+         +-----+     +-----+
+        |     | +-----------------+ |     |
+        |     | |                 | |     |
+        |  L  | | L             A | |  A  |
+        |     | |                 | |     |
+        +-----+ +-----+     +-----+ +-----+
+                      |     |
+                      |     |
+                      |  L  |
+                      +-----+
+
+                      +-----+
+                      |  L  |
+                      |     |
+
+The input of the compiler is a compiler from L to A, and
+therefore the output is also a compiler from L to A.  The input
+is a program written in L, and the output is a program written in A.
+Therefore since the input is a compiler from L to A written in L,
+the output is a compiler from L to A written in A.
+
+A compiler that can compile (a copy of) itself is called a
+*self-compiler*.  (See :ref:`compiling-a-compiler`.)
+
+
+.. _exercise-standard-question-about-I-and-T-diagrams:
+
+Exercise 1
+----------
+
+You are given:
+
+- an x86 microprocessor,
+- an interpreter for Scheme written in C,
+- a compiler from C to x86 written in x86, and
+- a compiler from ML to C written in Scheme.
+
+Can you execute a program written in ML, and if so how?
+
+Hint: draw I- and T-diagrams, and then play with them as you would
+with LEGO bricks.
+
+
+Solution for Exercise 1, Version 1: top down, depth first
+---------------------------------------------------------
+
+Can we execute a program written in ML, and if so how?
+
+Rhetorical question: Which language processor do we have for ML?
+  
+Answer: We only have one, namely
+  
+- a compiler from ML to C written in Scheme.
+
+It we can't execute this compiler, the overall answer is negative, so
+let's look at that now.
+
+  Rhetorical question: Which language processors do we have for Scheme?
+
+  Answer: We only have one, namely
+
+  - an interpreter for Scheme written in C.
+
+  It we can't execute this interpreter, the overall answer is
+  negative, so let's look at that now.
+
+    Rhetorical question: Which language processor do we have for C?
+  
+    Answer: We only have one, namely
+  
+    - a compiler from C to x86 written in x86.
+  
+    It we can't execute this compiler, the overall answer is
+    negative, so let's look at that now.
+  
+      Rhetorical question: Which language processor do we have for x86?
+    
+      Answer: We only have one, namely
+
+      - an x86 microprocessor.
+    
+    So we can execute the compiler from C to x86 written in x86,
+    using the x86 microprocessor.
+
+    So we can compile the interpreter for Scheme written in C,
+    obtaining an interpreter for Scheme written in x86.
+    Pictorially:
+
+    .. ditaa::
+    
+      +------+                     +------+
+      |      |                     |      |
+      |Scheme|                     |Scheme|
+      |      |                     |      |
+      |      | +-----------------+ |      |
+      |      | |                 | |      |
+      |  C   | | C           x86 | | x86  |
+      |      | |                 | |      |
+      +------+ +-----+     +-----+ +------+
+                     |     |
+                     |     |
+                     | x86 |
+                     +-----+
+    
+                     +-----+
+                     | x86 |
+                     |     |
+    
+    The result is an interpreter for Scheme written in x86.
+
+  Rhetorical question, revisited: Which language processors do we have for Scheme?
+  
+  Answer: We now have two, namely
+  
+  - an interpreter for Scheme written in C, and
+  - an interpreter for Scheme written in x86.
+  
+So we can compile a program written in ML into a program written in C,
+using the interpreter for Scheme written in x86 and the x86
+microprocessor.  We can then compile the resulting C program into a
+program written in x86, using the x86 microprocessor, and we can
+execute the resulting x86 program, again using the x86 microprocessor.
+
+Pictorially:
+
+.. ditaa::
+
+  +----+ +----------------+ +-----------------+ +-----+
+  |    | |                | |                 | |     |
+  | ML | | ML           C | | C           x86 | | x86 |
+  | {d}| |                | |                 | | {d} |
+  +----+ +----+      +----+ +-----+     +-----+ +-----+
+              |      |            |     |
+              |Scheme|            | x86 |       +-----+
+              |      |            |     |       |     |
+              +------+            +-----+       | x86 |
+                                                |     |
+              +------+            +-----+
+              |      |            |     |
+              |Scheme|            | x86 |
+              |      |            |     |
+              |      |
+              | x86  |
+              |      |
+              +------+
+
+              +------+
+              |      |
+              | x86  |
+              |      |
+
+So overall the answer is yes: we can compile a program written in ML,
+as depicted just above.
+
+
+Solution for Exercise 1, Version 2: top down, breadth first
+-----------------------------------------------------------
+
+Can we execute a program written in ML, and if so how?
+
+  Rhetorical question: Which language processors do we have for ML?
+  
+  Answer: We only have one, namely
+  
+  - a compiler from ML to C written in Scheme.
+  
+  Assuming we can somehow execute this compiler, the question would then
+  reduce to the following one:
+  
+    Can we execute a program written in C, and if so how?
+    
+      Rhetorical question: Which language processors do we have for C?
+      
+      Answer: We only have one, namely
+      
+      - a compiler from C to x86 written in x86.
+      
+      Assuming we can somehow execute this compiler, the question would then
+      reduce to the following one:
+      
+        Can we execute a program written in x86, and if so how?
+      
+          Rhetorical question: Which language processors do we have for x86?
+        
+          Answer: We only have one, namely
+        
+          - an x86 microprocessor.
+      
+        Therefore we can execute a program written in x86,
+        using the x86 microprocessor.
+      
+    Therefore we can execute a program written in C,
+    using the compiler from C to x86 and then the x86 microprocessor,
+    provided we can execute the compiler from C to x86 written in x86.
+  
+Therefore we can execute a program written in ML, provided we can
+execute the compiler from C to x86 written in x86 and the
+compiler from ML to C written in Scheme.
+
+We can execute the compiler from C to x86 written in x86 since we have
+an x86 microprocessor.  Pictorially:
+
+.. ditaa::
+
+  +-----+ +-----------------+ +-----+        
+  |     | |                 | |     |
+  |  C  | | C           x86 | | x86 |
+  | {d} | |                 | | {d} |
+  +-----+ +-----+     +-----+ +-----+
+                |     |
+                |     |
+                | x86 |
+                +-----+
+
+                +-----+
+                | x86 |
+                |     |
+
+So the problem reduces to executing the compiler from ML to C written
+in Scheme.
+
+  Rhetorical question: Which language processors do we have for Scheme?
+  
+  Answer: We only have one, namely
+  
+  - an interpreter for Scheme written in C.
+  
+  Assuming we can somehow execute this interpreter, the question would
+  reduce to the following one:
+  
+    Can we execute a program written in C, and if so how?
+  
+    We have already answered this question above: using the compiler from
+    C to x86 written in x86 (and the x86 microprocessor to execute it).
+  
+  So let us use this compiler from C to x86 to compile the interpreter
+  written in C.  Pictorially:
+  
+  .. ditaa::
+  
+    +------+                     +------+
+    |      |                     |      |
+    |Scheme|                     |Scheme|
+    |      |                     |      |
+    |      | +-----------------+ |      |
+    |      | |                 | |      |
+    |  C   | | C           x86 | | x86  |
+    |      | |                 | |      |
+    +------+ +-----+     +-----+ +------+
+                   |     |
+                   |     |
+                   | x86 |
+                   +-----+
+   
+                   +-----+
+                   | x86 |
+                   |     |
+
+  The result is an interpreter for Scheme written in x86.
+
+We can now execute the program in ML by:
+
+1. interpreting the compiler from ML to C written in Scheme (using the
+   interpreter for Scheme written in x86 and the x86 microprocessor) and
+   using it to compile the program written in ML to a program written
+   in C;
+
+2. executing the compiler from C to x86 (using the x86 microprocessor) and
+   using it to compile the resulting program written in C to a program
+   written in x86; and
+
+3. executing the resulting program written in x86 (using the x86
+   microprocessor).
+
+Pictorially:
+
+.. ditaa::
+
+  +----+ +----------------+ +-----------------+ +-----+
+  |    | |                | |                 | |     |
+  | ML | | ML           C | | C           x86 | | x86 |
+  | {d}| |                | |                 | | {d} |
+  +----+ +----+      +----+ +-----+     +-----+ +-----+
+              |      |            |     |
+              |Scheme|            | x86 |       +-----+
+              |      |            |     |       |     |
+              +------+            +-----+       | x86 |
+                                                |     |
+              +------+            +-----+
+              |      |            |     |
+              |Scheme|            | x86 |
+              |      |            |     |
+              |      |
+              | x86  |
+              |      |
+              +------+
+
+              +------+
+              |      |
+              | x86  |
+              |      |
+
+
+Solution for Exercise 1, Version 3: bottom up
+---------------------------------------------
+
+a. Since we
+
+   * have a compiler from C to x86 written in x86 (given) and
+   
+   * have an x86 microprocessor (given),
+   
+   we can compile C programs to x86.
+
+b. Since we
+
+   * can compile C programs to x86 (Point a) and
+   
+   * have an x86 microprocessor (given),
+   
+   we can execute C programs.
+
+c. Since we
+   
+   * have an interpreter for Scheme written in C (given) and
+   
+   * can execute C programs (Point b),
+   
+   we can execute Scheme programs.
+
+d. Since we
+   
+   * have a compiler from ML to C written in Scheme (given) and
+   
+   * can execute Scheme programs (Point c),
+   
+   we can compile ML programs to C.
+
+e. Since we
+   
+   * can compile ML programs to C (Point d) and
+   
+   * can execute C programs (Point b),
+   
+   we can execute ML programs.
+
+So the answer to the question is yes: we can execute a program written
+in ML (Point e).
+
+
+.. _exercise-Question-1-at-exam-in-August-2012:
+
+Exercise 2
+----------
+
+The present exercise is Question 1 of the `August 2012 exam`__.
+
+.. __: http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014/exam-dProgSprog-August-2012.pdf
+
+You are given:
+
+- an x86 microprocessor,
+- a compiler from Java Byte Code to x86 written in Java Byte Code,
+- an interpreter for Scheme written in Scheme,
+- a compiler from Scheme to Java Byte Code written in x86, and
+- a compiler from Schelog to Scheme written in x86.
+
+Can you execute a program written in Schelog, and if so how?
+
+
+Solution for Exercise 2, top down
+---------------------------------
+
+Rhetorical question: Which language processor do we have for Schelog?
+
+Answer: We have
+
+- a compiler from Schelog to Scheme written in x86.
+
+This compiler can be used because to run it, we need a language
+processor for x86, and we have one: the x86 microprocessor.
+
+So let us use this compiler from Schelog to Scheme to compile the
+program written in Schelog.  Pictorially:
+
+.. ditaa::
+
+  +---------+ +-------------------------+ +--------+        
+  |         | |                         | |        |
+  |         | |                         | |        |
+  | Schelog | | Schelog          Scheme | | Scheme |
+  |         | |                         | |        |
+  |     {d} | |                         | |    {d} |
+  +---------+ +--------+       +--------+ +--------+
+                       |       |
+                       |       |
+                       |       |
+                       |  x86  |
+                       +-------+
+
+                       +-------+
+                       |  x86  |
+                       |       |
+
+So the problem reduces to processing the resulting Scheme program.
+
+Rhetorical question: Which language processor do we have for Scheme?
+
+Answer: We have
+
+- an interpreter for Scheme written in Scheme, and
+- a compiler from Scheme to Java Byte Code written in x86.
+
+.. epigraph::
+
+  | Murph: Each iteration becomes an attempt to prove its own proof.
+  | It's recursive.  Nonsensical.
+  | Professor Brand: Are you calling my life's work "nonsense"?
+
+  -- `Interstellar <http://en.wikipedia.org/wiki/Interstellar_%28film%29>`_
+
+The interpreter cannot be used because to run it, we need a language
+processor for Scheme, and we do not have one.  (This Scheme
+interpreter is useless because to run it, we need a Scheme
+interpreter.  But to run this Scheme interpreter, we need a Scheme
+interpreter.  And to run this Scheme interpreter, we need a Scheme
+interpreter -- a circular argument.  So all in all, we cannot interpret any
+Scheme program.)
+
+The compiler can be used because to run it, we need a language
+processor for x86, and we have one: the x86 microprocessor.
+
+So let us use this compiler from Scheme to Java Byte Code to compile 
+the resulting program written in Scheme.  Pictorially:
+
+.. ditaa::
+
+  +--------+ +------------------------+ +--------+
+  |        | |                        | |        |
+  |        | |                   Java | |  Java  |
+  | Scheme | | Scheme            Byte | |  Byte  |
+  |        | |                   Code | |  Code  |
+  |    {d} | |                        | |    {d} |
+  +--------+ +--------+       +-------+ +--------+
+                      |       |
+                      |       |
+                      |       |
+                      |  x86  |
+                      +-------+
+
+                      +-------+
+                      |  x86  |
+                      |       |
+
+So the problem reduces to processing the resulting byte-code program.
+
+Rhetorical question: Which language processor do we have for Java Byte
+Code?
+
+Answer: we have
+
+- a compiler from Java Byte Code to x86 written in Java Byte Code.
+
+.. epigraph::
+
+  | But we do have one:
+  | the compiler from Java Byte Code to x86 written in Java Byte Code.
+  | (Boy, I love those circular arguments.)
+
+  -- `Loki <http://en.wikipedia.org/wiki/Loki>`_ the Mischievous
+
+This compiler cannot be used because to run it, we need a language
+processor for Java Byte Code, and we do not have one.
+
+Therefore, we cannot process the resulting byte-code program.
+
+So all in all, we cannot execute a program written in Schelog.
+
+
+Solution for Exercise 2, bottom up
+----------------------------------
+
+a. Since we
+   
+   * have a compiler from Schelog to Scheme written in x86 (given) and
+   
+   * have an x86 microprocessor (given),
+   
+   we can compile Schelog programs to Scheme.  Furthermore that is the only
+   thing we can do with Schelog programs.
+
+b. Since we
+   
+   * have a compiler from Scheme to Java Byte Code written in x86 (given) and
+   
+   * have an x86 microprocessor (given),
+   
+   we can compile Scheme programs to Java Byte Code.  Furthermore that is
+   the only thing we can do with Scheme programs: the Scheme
+   self-interpreter is useless to process programs written in Scheme.
+
+c. Since we
+   
+   * can compile Schelog programs to Scheme (Point a) and
+   
+   * can compile Scheme programs to Java Byte Code (Point b)
+   
+   we can compile Schelog programs to Java Byte Code.
+
+d. However, since we
+   
+   * cannot interpret Java Byte Code programs and
+   
+   * cannot compile Java Byte Code programs either,
+   
+   we cannot process the Java Byte Code programs.
+
+So the answer to the question is no: we cannot execute a program written
+in Schelog (Point d).
+
+
+.. _exercise-Questions-2-to-5-at-exam-in-August-2012:
+
+Exercise 3
+----------
+
+Consider Questions 2 to 5 in the `same exam set`__ as
+:ref:`exercise-Question-1-at-exam-in-August-2012` and reason about
+`their answer`__.
+
+.. __: http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014/exam-dProgSprog-August-2012.pdf
+.. __: http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-August-2012.pdf
+
+
+.. _exercise-standard-question-about-I-and-T-diagrams-Prolog:
+
+Exercise 4
+----------
+
+In this mandatory exercise, you are given:
+
+- an ARM microprocessor,
+- an interpreter for x86 written in ARM,
+- an interpreter for Perl written in x86,
+- a compiler from ML to C written in Perl,
+- a compiler from C to x86 written in ARM, and
+- a compiler from Prolog to ARM written in ML.
+
+Can you execute a program written in Prolog, and if so how?
+
+
+.. _exercise-standard-question-about-I-and-T-diagrams-Prolog-continued-1:
+
+Exercise 5
+----------
+
+This exercise revisits
+:ref:`exercise-standard-question-about-I-and-T-diagrams-Prolog`,
+replacing the interpreter for x86 written in ARM by a compiler from
+x86 to ARM written in ARM.
+
+Can you execute a program written in Prolog, and if so how?
+
+
+.. _exercise-standard-question-about-I-and-T-diagrams-Prolog-continued-2:
+
+Exercise 6
+----------
+
+This exercise revisits
+:ref:`exercise-standard-question-about-I-and-T-diagrams-Prolog`,
+replacing the interpreter for x86 written in ARM by a compiler from
+x86 to ARM written in x86.
+
+Can you execute a program written in Prolog, and if so how?
+
+
+.. index:: bootstrapping
+.. index:: compiler (bootstrapping a)
+
+.. _compiling-a-compiler:
+
+Bootstrapping an ML compiler
+----------------------------
+
+.. index::
+   single: MacQueen, David
+   single: ML
+
+Say that you agree with `David MacQueen
+<http://people.cs.uchicago.edu/~dbm/>`_ that `ML
+<http://en.wikipedia.org/wiki/ML_(programming_language)>`_ is a
+wonderful domain-specific language to write compilers, in that it
+provides expressive support to implement a compiler that you find
+excellent.  You also happen to have a brand new computer, for which
+somehow there is only an executable compiler from C to assembly
+language.  Pictorially:
+
+.. ditaa::
+
+  +-----------------+
+  |                 |
+  | C             A |
+  |                 |
+  +-----+     +-----+
+        |     |
+        |     |
+        | x86 |
+        +-----+
+
+Finally, you have an executable byte-code interpreter (i.e., a virtual
+machine) for this assembly language.  Pictorially:
+
+.. ditaa::
+
+  +-----+
+  |  A  |
+  |     |
+  |     |
+  |     |
+  |     |
+  | x86 |
+  +-----+
+
+.. index::
+   single: Heinlein, Robert A.
+
+You want to write an ML compiler for your new computer.  Naturally,
+you wish to write it in ML, not in C.  The rest of this section
+describes how to bootstrap your ML compiler so that you can run it on
+your new computer.  (Bootstraps are straps at the top of cowboy
+`boots`__: to put on his boots, a cowboy inserts his feet in his
+boots, sticks a finger in each strap, and pulls the boots towards him.
+`Metaphorically`__, if the cowboy pulls vigorously enough, he can lift
+himself off the ground, a paradox that has been illustrated for time
+travel in `Robert Heinlein`__'s short stories `By His Bootstraps`__
+and `---All You Zombies---`__, back in the days.)
+
+.. __: http://simple.wikipedia.org/wiki/Boot#Other_meanings
+.. __: http://simple.wikipedia.org/wiki/Boot
+.. __: http://en.wikipedia.org/wiki/Robert_A._Heinlein
+.. __: http://en.wikipedia.org/wiki/By_His_Bootstraps
+.. __: http://en.wikipedia.org/wiki/%E2%80%94All_You_Zombies%E2%80%94
+
+
+**Phase 0:**
+  Write, in C, a throw-away compiler from ML to assembly language.
+  Your compiler is quick and dirty in that it does not compile very
+  well (i.e., it does not generate good compiled code), and it is not
+  efficient (i.e., it does not run fast).  It *must*, however, be
+  correct, so you keep it as simple as possible:
+
+  .. ditaa::
+  
+    +-----------------+
+    |                 |
+    | ML            A |
+    |        0        |
+    +-----+     +-----+
+          |     |
+          |     |
+          |  C  |
+          +-----+
+
+  We label this quick-and-dirty compiler with the number 0 (zero).
+
+.. index:: compiler (compiling a)
+
+**Phase 1:**
+  Using the executable C compiler, compile the quick-and-dirty
+  compiler into assembly language.  The result is a compiler from ML
+  to assembly language written in assembly language:
+
+  .. ditaa::
+
+    +-----------------+         +-----------------+
+    |                 |         |                 |
+    | ML           A  |         | ML            A |
+    |        0        |         |        1        |
+    +-----+     +-----+         +-----+     +-----+
+          |     | +-----------------+ |     |
+          |     | |                 | |     |
+          |  C  | | C             A | |  A  |
+          |     | |                 | |     |
+          +-----+ +-----+     +-----+ +-----+
+                        |     |
+                        |     |
+                        | x86 |
+                        +-----+
+
+                        +-----+
+                        | x86 |
+                        |     |
+
+  This compiled compiler is still quick and dirty: it does not work
+  fast and it generates inefficient code.  We label it with the
+  number 1 (one).
+
+**Phase 2:**
+  Write, in ML, your gorgeous compiler from ML to assembly language:
+
+  .. ditaa::
+  
+    +-----------------+
+    |                 |
+    | ML            A |
+    |        2        |
+    +-----+     +-----+
+          |     |
+          |     |
+          | ML  |
+          +-----+
+
+  Your compiler is written to work fast and to generate efficient
+  code.  We label it with the number 2 (two).
+
+**Phase 3:**
+  Using the compiled compiler from Phase 1 and the interpreter for A
+  written in x86, compile your gorgeous compiler:
+
+  .. ditaa::
+
+    +-----------------+         +-----------------+
+    |                 |         |                 |
+    | ML           A  |         | ML            A |
+    |        2        |         |        3        |
+    +-----+     +-----+         +-----+     +-----+
+          |     | +-----------------+ |     |
+          |     | |                 | |     |
+          | ML  | | ML            A | |  A  |
+          |     | |        1        | |     |
+          +-----+ +-----+     +-----+ +-----+
+                        |     |
+                        |     |
+                        |  A  |
+                        +-----+
+
+                        +-----+
+                        |  A  |
+                        |     |
+                        |     |
+                        |     |
+                        |     |
+                        | x86 |
+                        +-----+
+
+                        +-----+
+                        | x86 |
+                        |     |
+
+  The result is a compiler from ML to assembly language written in
+  assembly language.  This compiler generates the same efficient code
+  as your gorgeous compiler.  It is however not fast because it was
+  produced by a quick-and-dirty compiler that does not generate fast
+  code.  We label it with the number 3 (three).
+
+**Phase 4:**
+  Using the new compiler (i.e., the result of Phase 3), compile your
+  gorgeous compiler:
+
+  .. ditaa::
+
+    +-----------------+         +-----------------+
+    |                 |         |                 |
+    | ML           A  |         | ML            A |
+    |        2        |         |        4        |
+    +-----+     +-----+         +-----+     +-----+
+          |     | +-----------------+ |     |
+          |     | |                 | |     |
+          | ML  | | ML            A | |  A  |
+          |     | |        3        | |     |
+          +-----+ +-----+     +-----+ +-----+
+                        |     |
+                        |     |
+                        |  A  |
+                        +-----+
+
+                        +-----+
+                        |  A  |
+                        |     |
+                        |     |
+                        |     |
+                        |     |
+                        | x86 |
+                        +-----+
+
+                        +-----+
+                        | x86 |
+                        |     |
+
+  The result is a compiler from ML to assembly language written in
+  assembly language.  This compiler generates the same efficient code
+  as your gorgeous compiler.  It is also fast because it was produced
+  by a good (if slow) compiler.  We label it with the number 4
+  (four).
+
+**Phase 5:**
+  As a verification, if you use the compiler from Phase 4 to compile
+  your gorgeous compiler, *you should obtain textually the same
+  compiled code as in Phase 4*.
+
+  .. epigraph::
+  
+    | Too much of a good thing can be wonderful.
+  
+    -- `Mae West <http://en.wikipedia.org/wiki/Mae_West>`_
+  
+  .. ditaa::
+
+    +-----------------+         +-----------------+
+    |                 |         |                 |
+    | ML           A  |         | ML            A |
+    |        2        |         |        4'       |
+    +-----+     +-----+         +-----+     +-----+
+          |     | +-----------------+ |     |
+          |     | |                 | |     |
+          | ML  | | ML            A | |  A  |
+          |     | |        4        | |     |
+          +-----+ +-----+     +-----+ +-----+
+                        |     |
+                        |     |
+                        |  A  |
+                        +-----+
+
+                        +-----+
+                        |  A  |
+                        |     |
+                        |     |
+                        |     |
+                        |     |
+                        | x86 |
+                        +-----+
+
+                        +-----+
+                        | x86 |
+                        |     |
+
+  Indeed, the compiled compilers (4 and 4') are obtained using the
+  same algorithm that your gorgeous compiler implements.
+
+A word about correctness:
+
+* You assume that the x86 microprocessor is correct.
+
+* You assume that the C compiler is correct.
+
+* You assume that the virtual machine is correct.
+
+* You depend on your quick-and-dirty compiler (Version 0) being correct.
+
+* You depend on your gorgeous compiler (Version 2) being correct.
+
+If a compiled program behaves incorrectly, it it because:
+
+* there is a bug in the source program,
+
+* `there is a bug in your gorgeous compiler
+  <http://users-cs.au.dk/danvy/dilbert-compilers.gif>`_, or
+
+* there is a bug in your quick-and-dirty compiler.
+
+
+.. index:: interpreters (tower of)
+
+.. _exercise-cost-of-interpretation:
+
+Exercise 7
+----------
+
+The goal of this mandatory exercise is to measure the cost of a `tower
+of interpreters <http://www.xkcd.com/676>`_, i.e., of interpreters
+interpreting each other.
+
+To this end, you will need `this self-interpreter for a subset of
+Scheme
+<http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/self-interpreter.scm>`_.
+
+The self-interpreter is loaded by typing::
+
+    (load "self-interpreter.scm")
+
+and started by typing::
+
+    (start-the-interpreter "Say what? ")
+
+where ``"Say what? "`` is the desired prompt.
+
+It is stopped by typing ``(exit)`` at the toplevel.
+
+Here is what happens below.  We repeatedly add 1 and 2, using the
+``time`` procedure to measure the resources (time and space) spent
+performing this addition.
+
+* We first start Petite Chez Scheme, and measure the resources spent
+  performing the addition of 1 and 2.
+
+* We then load the self-interpreter, start it, and measure the
+  resources spent performing the interpretation of the addition of 1
+  and 2.
+
+* We then load the self-interpreter, start it, and measure the
+  resources spent performing the interpretation of the interpretation
+  of the addition of 1 and 2.
+
+* We then load the self-interpreter, start it, and measure the
+  resources spent performing the interpretation of the interpretation
+  of the interpretation of the addition of 1 and 2.
+
+* We then load the self-interpreter, start it, and measure the
+  resources spent performing the interpretation of the interpretation
+  of the interpretation of the interpretation of the addition of 1 and
+  2.
+
+* We then exit the successive interpreters, all the way down to
+  exiting Petite Chez Scheme.
+
+Questions:
+
+1. Please reproduce the following session on your own computer::
+   
+     Petite Chez Scheme Version 8.4
+     Copyright (c) 1985-2011 Cadence Research Systems
+     
+     > (time (+ 1 2))
+     (time (+ 1 ...))
+         no collections
+         0 ms elapsed cpu time
+         0 ms elapsed real time
+         0 bytes allocated
+     3
+     > (load "self-interpreter.scm")
+     > (start-the-interpreter ">> ")
+     There we go again.
+     >> (time (+ 1 2))
+     (time (_eval (car es) ...))
+         no collections
+         0 ms elapsed cpu time
+         0 ms elapsed real time
+         304 bytes allocated
+     3
+     >> (load "self-interpreter.scm")
+     >> (start-the-interpreter ">>> ")
+     There we go again.
+     >>> (time (+ 1 2))
+     (time (_eval (car es) ...))
+         no collections
+         5 ms elapsed cpu time
+         5 ms elapsed real time
+         154128 bytes allocated
+     3
+     >>> (load "self-interpreter.scm")
+     >>> (start-the-interpreter ">>>> ")
+     There we go again.
+     >>>> (time (+ 1 2))
+     (time (_eval (car es) ...))
+         22 collections
+         2843 ms elapsed cpu time, including 3 ms collecting
+         2844 ms elapsed real time, including 4 ms collecting
+         91117200 bytes allocated, including 92718448 bytes reclaimed
+     3
+     >>>> (load "self-interpreter.scm")
+     >>>> (start-the-interpreter ">>>>> ")
+     There we go again.
+     >>>>> (time (+ 1 2))
+     (time (_eval (car es) ...))
+         12118 collections
+         1616068 ms elapsed cpu time, including 1550 ms collecting
+         1625359 ms elapsed real time, including 1519 ms collecting
+         51071280472 bytes allocated, including 51071992424 bytes reclaimed
+     3
+     >>>>> (exit)
+     "So long."
+     >>>> (exit)
+     "So long."
+     >>> (exit)
+     "So long."
+     >> (exit)
+     "So long."
+     > (exit)
+   
+     Process Petite finished
+   
+   The number of ``>`` in the prompt indicates the height of the tower of
+   self-interpreters:
+   
+   * ``>`` is the prompt of Petite Chez Scheme;
+   
+   * ``>>`` is the prompt of the self-interpreter running on top of Petite
+     Chez Scheme;
+   
+   * ``>>>`` is the prompt of the self-interpreter running on top of the
+     self-interpreter running on top of Petite Chez Scheme;
+   
+   * etc.
+   
+   That said, if you prefer to use a natural number, by all means do so::
+   
+     Petite Chez Scheme Version 8.4
+     Copyright (c) 1985-2011 Cadence Research Systems
+     
+     > (load "self-interpreter.scm")
+     > (start-the-interpreter "1> ")
+     There we go again.
+     1> (load "self-interpreter.scm")
+     1> (start-the-interpreter "2> ")
+     There we go again.
+     2> (load "self-interpreter.scm")
+     2> (start-the-interpreter "3> ")
+     There we go again.
+     3> (load "self-interpreter.scm")
+     3> (start-the-interpreter "4> ")
+     There we go again.
+     4> (exit)
+     "So long."
+     3> (exit)
+     "So long."
+     2> (exit)
+     "So long."
+     1> (exit)
+     "So long."
+     > (exit)
+   
+     Process Petite finished
+
+2. Using your favorite plotting software, draw two curves using the numbers above::
+
+           ^
+      time |
+           |
+           |
+           |
+           |
+           |
+           |
+           |                        height of the tower
+           +----+----+----+----+------------------------>
+           0    1    2    3    4    of self-interpreters
+   
+           ^
+     space |
+           |
+           |
+           |
+           |
+           |
+           |
+           |                        height of the tower
+           +----+----+----+----+------------------------>
+           0    1    2    3    4    of self-interpreters
+   
+   Practical hint: the numbers go up rather quickly, so use a logarithmic
+   scale for time and space.
+
+3. Characterize the slowdown in time and in space: is it constant?
+   linear?  quadratic?  polynomial?  exponential?
+
+4. Based on your characterization, can you predict how much time it
+   would take to add one more layer of interpretation to the tower?
+
+   Verify your prediction in practice.
+
+5. Express, in your own words,
+
+   * what happens in the session above,
+
+   * why there is a slowdown as the interpreters are piled up on top
+     of each other, and
+
+   * why this slowdown is the one you have characterized just above.
+
+   (Should you need a hint, here is the `beginning of a train of
+   thoughts <week-1-beginning-of-a-train-of-thoughts.html>`_.)
+
+
+First checkpoint
+----------------
+
+So we have seen that programming languages are notations to express
+computations, we have seen that programs are things that are written
+according to this notation, we have seen that programs can be executed
+to perform a computation, and we have seen that computations are
+operations over some data.  We have seen two examples of programs,
+interpreters and compilers, that respectively execute and translate
+other programs.  And we have seen how interpreters can execute
+interpreters and compilers, and how compilers can translate
+interpreters and compilers.  (So now would probably be a good time to
+take a break and rewatch
+`The Matrix`__,
+`The Thirteenth Floor`__,
+`Inception`__,
+`Paprika`__,
+`Caprica`__,
+`eXistenZ`__,
+or even, hey,
+`Last Action Hero`__.
+And of course, there is always `Snow Crash`__.)
+
+.. __: http://en.wikipedia.org/wiki/The_Matrix
+.. __: http://en.wikipedia.org/wiki/Inception
+.. __: http://en.wikipedia.org/wiki/Paprika_(2006_film)
+.. __: http://en.wikipedia.org/wiki/The_Thirteenth_Floor
+.. __: http://en.wikipedia.org/wiki/EXistenZ
+.. __: http://en.wikipedia.org/wiki/Last_Action_Hero
+.. __: https://en.wikipedia.org/wiki/Caprica_%28TV_series%29
+.. __: https://en.wikipedia.org/wiki/Snow_Crash
+
+All of that, however, does not tell us about what a computation is,
+nor about what a notation for computation could be.  But they come
+hand in hand, just like `language and thought`__ (one uses language to
+express one's thoughts, but one needs to have thoughts to express them
+in a language).  So let us review typical notions of computation and
+the corresponding style of notation: imperative, declarative, etc.
+
+.. __: http://plato.stanford.edu/archives/win2010/entries/relativism/supplement2.html
+
+
+.. _a-plea-for-precision:
+
+A plea for precision
+--------------------
+
+A program is something written in a programming language, and a
+compiler translates a program from one programming language to
+another.  So please pretty please resist the all-too-frequent
+sloppiness of saying that compilers compile programming languages,
+because they don't.  This nonsense not only hints at muddled thinking
+(as `Boileau
+<http://en.wikipedia.org/wiki/Nicolas_Boileau-Despr%C3%A9aux>`_ wrote
+in his `Art of Poetry
+<http://en.wikiquote.org/wiki/Nicolas_Boileau-Despr%C3%A9aux#The_Art_of_Poetry_.281674.29>`_,
+"what one understands well, one expresses clearly"): it also does not
+scale at all in the longer run.
+
+.. index:: pleonasm (redundant)
+
+So let's not talk about IT Technology either, nor about online web
+services, CPS style, self-recursion, flying UFOs (or unidentified UFO
+objects, for that matter), manga cartoons from Japan, and other
+redundant `pleonasms <http://en.wikipedia.org/wiki/Pleonasm>`_.
+
+
+.. _exercise-pleonasms:
+
+Exercise 8
+----------
+
+In this mandatory exercise, you are being asked to find a known
+pleonasm (e.g., an ATM machine) and to invent a plausible one (e.g., a
+travel journey-quest trip).
+
+
+.. index:: programming (imperative)
+.. index:: Von Neumann (architecture)
+
+
+Imperative programming
+----------------------
+
+.. epigraph::
+
+  | `Knox <http://en.wikipedia.org/wiki/Dilly_Knox>`_: "Forgive me for asking a crass and naive question --
+  | but what is the point of devising a machine that cannot be built
+  | in order to prove that there are certain mathematical statements
+  | that cannot be proved?
+  | Is there any practical value in all this?"
+  | 
+  | `Turing <http://en.wikipedia.org/wiki/Alan_Turing>`_: The possibilities are boundless.
+
+  -- `Breaking the Code <http://en.wikipedia.org/wiki/Breaking_the_Code>`_
+
+.. index:: command (syntactic unit)
+
+In the `Von Neumann architecture
+<http://en.wikipedia.org/wiki/Von_Neumann_architecture>`_, both
+programs and data are stored in a memory.  Every computational step is
+a *command* that maps a state of this memory to another state of this
+memory, imperatively.  A computation is a series of commands.  It may
+yield an error state, a final state, or it may diverge (or run for a
+longer time than we care to wait for).  Notationally, the syntactic
+units are commands, these commands specify state changes, and the
+corresponding programming languages are said to be `imperative
+<http://en.wikipedia.org/wiki/Imperative_programming>`_.
+
+For example, imagine a program that works over two memory locations.
+The first one (call it ``x``) is initialized with 5, and the second
+(call it ``a``) with 1.  The program repeatedly checks whether the
+content of ``x`` is 0, and stops if it is so.  Otherwise, it multiplies
+the content of ``x`` by the content of ``a`` and stores the result at
+location ``a``, it decrements the content of ``x``, and it iterates.
+Let us follow the computation step by step:
+
+* Initially, the content of ``x`` is 5 and the content of ``a`` is 1.
+
+* Since the content of ``x`` is 5, it is not 0.  We therefore multiply
+  5 by the content of ``a``, which is 1.  The result of this
+  multiplication is 5, which we store at location ``a``.  We then
+  decrement the content of ``x`` (i.e., we subtract 1 from the content
+  of ``x`` and we store the result at location ``x``), and we iterate.
+
+* So at this point of the computation, the content of ``x`` is 4 and
+  the content of ``a`` is 5.
+
+* Since the content of ``x`` is 4, it is not 0.  We therefore multiply
+  4 by the content of ``a``, which is 5.  The result of this
+  multiplication is 20, which we store at location ``a``.  We then
+  decrement the content of ``x``, and we iterate.
+
+* So at this point of the computation, the content of ``x`` is 3 and
+  the content of ``a`` is 20.
+
+* Since the content of ``x`` is 3, it is not 0.  We therefore multiply
+  3 by the content of ``a``, which is 20.  The result of this
+  multiplication is 60, which we store at location ``a``.  We then
+  decrement the content of ``x``, and we iterate.
+
+* So at this point of the computation, the content of ``x`` is 2 and
+  the content of ``a`` is 60.
+
+* Since the content of ``x`` is 2, it is not 0.  We therefore multiply
+  2 by the content of ``a``, which is 60.  The result of this
+  multiplication is 120, which we store at location ``a``.  We then
+  decrement the content of ``x``, and we iterate.
+
+* So at this point of the computation, the content of ``x`` is 1 and
+  the content of ``a`` is 120.
+
+* Since the content of ``x`` is 1, it is not 0.  We therefore multiply
+  1 by the content of ``a``, which is 120.  The result of this
+  multiplication is 120, which we store at location ``a``.  We then
+  decrement the content of ``x``, and we iterate.
+
+* So at this point of the computation, the content of ``x`` is 0 and
+  thus we stop the computation.
+
+The result of this program is at location ``a``: it is the `factorial
+<http://en.wikipedia.org/wiki/Factorial>`_ of 5, i.e., 5 * 4 * 3 * 2 *
+1 * 1, i.e., 120.  Semantically, the computation was a series of state
+changes over the memory, and syntactically, the program was a list of
+statements (a.k.a. "commands") triggering each of these state changes.
+
+Note, in the description above, the distinction between a location and
+the content of the memory at that location.  It is the same distinction
+as the one between your home and the people living there.
+
+
+.. index:: programming (functional)
+
+Functional programming
+----------------------
+
+The world of functional programming is, in principle, stateless: one
+expresses how to map some input to some output with a combination of
+function calls.  For example (and please take the following as a
+simple illustration, since we haven't seen anything yet about the
+syntax of Scheme), here is a functional program computing the
+factorial of a given number.  Below, to visualize how the computation
+proceeds, each function that plays a role is *traced*, i.e., when it
+is called, its name and the value of its arguments are printed, and
+when it returns, its name and the result are printed as well::
+
+  Petite Chez Scheme Version 8.4
+  Copyright (c) 1985-2011 Cadence Research Systems
+  
+  > (trace  = - *)
+  
+  Warning in trace: redefining *; existing references will not be traced
+  Warning in trace: redefining -; existing references will not be traced
+  Warning in trace: redefining =; existing references will not be traced
+  (= - *)
+  > (define factorial
+      (lambda (x a)
+        (if (= x 0)
+            a
+            (factorial (- x 1) (* x a)))))
+  > (trace factorial)
+  (factorial)
+  > (factorial 5 1)
+  |(factorial 5 1)
+  | (= 5 0)
+  | #f
+  | (- 5 1)
+  | 4
+  | (* 5 1)
+  | 5
+  |(factorial 4 5)
+  | (= 4 0)
+  | #f
+  | (- 4 1)
+  | 3
+  | (* 4 5)
+  | 20
+  |(factorial 3 20)
+  | (= 3 0)
+  | #f
+  | (- 3 1)
+  | 2
+  | (* 3 20)
+  | 60
+  |(factorial 2 60)
+  | (= 2 0)
+  | #f
+  | (- 2 1)
+  | 1
+  | (* 2 60)
+  | 120
+  |(factorial 1 120)
+  | (= 1 0)
+  | #f
+  | (- 1 1)
+  | 0
+  | (* 1 120)
+  | 120
+  |(factorial 0 120)
+  | (= 0 0)
+  | #t
+  |120
+  120
+  > 
+
+Overall, the factorial function is called with two arguments, 5 and 1,
+and calls itself as it decrements 5 towards 0.  On the
+way, it calls auxiliary functions that check equality, subtract, and
+multiply.
+
+Here is a more traditional definition of the factorial function that
+matches its mathematical definition ("the factorial of 0 is 1 and the
+factorial of n is n times the factorial of n minus one").  For
+brevity, we untrace the subtraction function::
+
+  > (untrace -)
+  (-)
+  > (define traditional-factorial
+      (lambda (n)
+        (if (= n 0)
+            1
+            (* n (traditional-factorial (- n 1))))))
+  > (trace traditional-factorial)
+  (traditional-factorial)
+  > (traditional-factorial 5)
+  |(traditional-factorial 5)
+  | (= 5 0)
+  | #f
+  | (traditional-factorial 4)
+  | |(= 4 0)
+  | |#f
+  | |(traditional-factorial 3)
+  | | (= 3 0)
+  | | #f
+  | | (traditional-factorial 2)
+  | | |(= 2 0)
+  | | |#f
+  | | |(traditional-factorial 1)
+  | | | (= 1 0)
+  | | | #f
+  | | | (traditional-factorial 0)
+  | | | |(= 0 0)
+  | | | |#t
+  | | | 1
+  | | |(* 1 1)
+  | | |1
+  | | (* 2 1)
+  | | 2
+  | |(* 3 2)
+  | |6
+  | (* 4 6)
+  | 24
+  |(* 5 24)
+  |120
+  120
+  > 
+
+Overall, ``traditional-factorial`` calls itself from 5 to
+0, and the multiplications are carried out at return time.  Scheme
+being our domain of discourse here, we will come back to
+this kind of programs in more detail in the coming weeks.
+
+.. index:: evaluator
+.. index:: expression (syntactic unit)
+.. index:: expressions
+
+Notationally, the syntactic units of functional programs are
+*expressions*.  Expressions form the syntactic units of functional
+programs.  Interpreting an expression yields a value.  For this
+reason, an interpreter for functional programs is often called an
+*evaluator*.
+
+
+.. index:: programming (logic)
+
+Logic programming
+-----------------
+
+The world of logic programming is one of *relations*.  Having
+specified relations between things, one then issues a query to check
+whether some things are related.  This query can then be invalidated
+(no relation exists), validated (at least one relation exists), or it
+may diverge (or run for a longer time than we care to wait for).
+
+For example, let us define a relation between two numbers so that this
+relation is satisfied if the second number is the factorial of the
+first.
+
+.. infrule:: the factorial relation
+  :noindex:
+
+  BASE_CASE ---------------
+            (factorial 0 1)
+
+                  (factorial x a)
+  INDUCTION_CASE ----------------- where x' = x + 1 and a' = x' * a
+                 (factorial x' a')
+
+In words:
+
+* The first rule is unconditional.  It says that ``0`` and ``1`` are
+  in the factorial relation.
+
+* The second rule is conditional.  It says that whenever ``x`` and
+  ``a`` are in the factorial relation, then ``x + 1`` and ``(x + 1) *
+  a`` are also in the factorial relation.
+
+The programmer may then issue the query as to whether 5 and 120 are in
+the factorial relation::
+
+  (factorial 5 120)
+
+Using the two rules, the run-time system successfully internally
+constructs the following proof tree, instantiating ``x``, ``x'``,
+``a`` and ``a'`` as it goes::
+
+        BASE_CASE ---------------
+                  (factorial 0 1)
+   INDUCTION_CASE ---------------
+                  (factorial 1 1)
+   INDUCTION_CASE ---------------
+                  (factorial 2 2)
+   INDUCTION_CASE ---------------
+                  (factorial 3 6)
+   INDUCTION_CASE ----------------
+                  (factorial 4 24)
+   INDUCTION_CASE -----------------
+                  (factorial 5 120)
+
+Having successfully constructed this tree with the two rules as
+building blocks, the run-time system returns the positive answer that
+5 and 120 are in the factorial relation.
+
+Here are 3 other examples of queries.
+
+* Given a query as to whether 0 and 0 are in the factorial relation::
+  
+    (factorial 0 0)
+  
+  the run-time system would fail to construct a proof tree, and would
+  answer that the query is not satisfied.
+  
+* Given a query as to whether there exists an ``a`` such that 5 and
+  ``a`` are in the factorial relation::
+  
+    (factorial 5 a)
+  
+  the run-time system would successfully construct a proof tree, and
+  would answer that the query is satisfied whenever ``a`` is 120.
+  
+* And given a query as to whether there exists an ``n`` such that ``n``
+  and 120 in the factorial relation::
+  
+    (factorial n 120)
+  
+  the run-time system would successfully construct a proof tree, and
+  would answer that the query is satisfied whenever ``n`` is 5.
+
+
+.. index:: rewriting
+
+Rewriting
+---------
+
+In the world of rewriting, a program is a term that, after it is
+initially written, is rewritten and rewritten, based on given
+rewriting rules and according to some strategy, until it can no longer
+be rewritten, at which point it is the result of the computation.  For
+example, multiplication is specified with a rewriting rule saying that
+whenever each of the terms ``x`` and ``y`` is a number (for example 5
+and 11), the term ``x * y`` should be rewritten into the product of
+these numbers (here: 55).
+
+Here are the rewriting rules for the factorial program::
+
+        0! -> 1
+  (n + 1)! -> (n + 1) * n!
+
+A term such as ``5!`` is then rewritten into ``5 * 4!``,
+which is rewritten into ``5 * (4 * 3!)``,
+which is rewritten into ``5 * (4 * (3 * 2!))``,
+which is rewritten into ``5 * (4 * (3 * (2 * 1!)))``,
+which is rewritten into ``5 * (4 * (3 * (2 * (1 * 0!))))``,
+which is rewritten into ``5 * (4 * (3 * (2 * (1 * 1))))``,
+which is rewritten into ``5 * (4 * (3 * (2 * 1)))``,
+which is rewritten into ``5 * (4 * (3 * 2))``,
+which is rewritten into ``5 * (4 * 6)``,
+which is rewritten into ``5 * 24``,
+which is rewritten into ``120``,
+which is the result.
+
+Rewriting is an active topic of research and has obvious applications,
+e.g., for the theory and practice of macros.
+
+
+Other computational paradigms
+-----------------------------
+
+Purely imperative programming, purely functional programming, purely
+logic programming and rewriting are, in some sense, extreme
+computational paradigms.  Common programming practice is more mixed:
+for example, one can both express pure functions and write macros in
+C, to say nothing of object-oriented programming.  (Later in the
+course, we shall see
+how to represent objects in Scheme.)
+
+
+.. index::
+   single: Aristotle
+   single: Dijkstra, Edsger W. (computer science)
+   single: Naur, Peter (datalogi)
+
+Second checkpoint
+-----------------
+
+If indeed programs are written according to a notation to express
+computations and if indeed there are several computational paradigms,
+maybe we should examine more precisely what computations are and what
+computing is about.  In the American English term "Computer Science",
+the emphasis is on the computer (i.e., on Aristotle's `efficient
+cause`__).  However, as `Edsger Dijkstra
+<http://en.wikipedia.org/wiki/Edsger_W._Dijkstra>`_ put it once,
+Computer Science is no more [only] about computers than astronomy is
+[only] about telescopes, and indeed one often sees the term "Computing
+Science" (as in "School of Computing" and "Computing Laboratory")
+instead.  In France, `Philippe Dreyfus
+<http://en.wikipedia.org/wiki/Philippe_Dreyfus>`_ proposed the term
+"informatique" in 1962 (translated into German by `Gerhard Stoltenberg
+<http://en.wikipedia.org/wiki/Gerhard_Stoltenberg>`_ as "Informatik"
+in 1968 and used today as "informatics", e.g., at `DTU
+<http://en.wikipedia.org/wiki/Department_of_Informatics_and_Mathematical_Modelling,_Technical_University_of_Denmark>`_
+here in Denmark),
+where the emphasis is on the automated aspect of information
+processing (i.e., on Aristotle's `formal cause`__).  The modern term
+"Information Technology" abstracts all of these concerns into a
+methodological umbrella, and is therefore not so much of a help as
+terminology goes.  `Peter Naur
+<http://en.wikipedia.org/wiki/Peter_Naur>`_'s translation into Danish
+is "datalogi", where the emphasis is on the representation and
+processing of data (i.e., Aristotle's `material cause`__).  So let us
+complete our periscope tour by looking at data and their
+representation in a computer, to assess how this representation should
+be processed towards the satisfaction of the user (i.e., Aristotle's
+`final cause`__).
+
+.. __: http://en.wikipedia.org/wiki/Four_causes#Efficient_cause
+.. __: http://en.wikipedia.org/wiki/Four_causes#Formal_cause
+.. __: http://en.wikipedia.org/wiki/Four_causes#Material_cause
+.. __: http://en.wikipedia.org/wiki/Four_causes#Final_cause
+
+
+.. index:: BNF
+
+Finite description of infinite data
+-----------------------------------
+
+The notion of *formal grammar* provides a finite recipe to construct
+arbitrarily big data, *inductively*.
+Symmetrically, the notion of *structural recursion* makes it possible
+to write finite programs to process data that were constructed inductively.
+(We will come back to structural recursion in the next lecture.)
+
+A formal grammar works much in the same way as an informal grammar in
+natural languages, where, for example, a sentence can be a subject
+followed by a verb and a complement, and punctuated with a period, and
+where a subject can be ``I`` or ``you``, where a verb can be ``like``
+or ``do not like``, and where a complement can be ``ice-cream`` or
+``carbonated beverages``:
+
+.. bnf::
+   :noindex:
+   :namespace: I_like_ice_cream
+
+    <sentence> ::= <subject> <verb> <complement>.
+  
+     <subject> ::= I
+                 | You
+  
+        <verb> ::= like
+                 | do not like
+  
+   <complement> ::= ice-cream
+                  | carbonated beverages
+
+In such a grammar, what is between brackets is called a
+"non-terminal", and what is not is called a "terminal".
+The symbol ``::=`` is read "can give rise to", and the vertical bar
+is read "or".  This particular notation for grammars is called a "`BNF
+<http://en.wikipedia.org/wiki/Backus%E2%80%93Naur_Form>`_".
+
+A sentence is *well formed* with respect to a given grammar if it can
+be derived / generated from this grammar.  So for example "I like
+ice-cream." is well formed according to this grammar, but "I like
+you." is not.  Indeed, we can construct the following derivation for
+"I like ice-cream.", but we cannot for "I like you."::
+
+  <sentence>
+  ->
+  <subject> <verb> <complement>.
+  ->
+  I <verb> <complement>.
+  ->
+  I like <complement>.
+  ->
+  I like ice-cream.
+
+In practice, this grammatical derivation is represented as the
+following derivation tree (a.k.a. *abstract-syntax tree*)::
+
+          <sentence> ----------+
+          /   |    \           |
+  <subject> <verb> <complement>.
+      |       |         |
+      I      like   ice-cream
+
+The grammar above only accounts for a finite number of sentences,
+namely::
+
+  I like ice-cream.
+  
+  I like carbonated beverages.
+  
+  I do not like ice-cream.
+  
+  I do not like carbonated beverages.
+  
+  You like ice-cream.
+  
+  You like carbonated beverages.
+  
+  You do not like ice-cream.
+  
+  You do not like carbonated beverages.
+
+(See `this outside web page <http://theproofistrivial.com/>`_ for
+another example of a grammar for a finite number of sentences.  To
+appreciate this web page you will need to reload it a few times.)
+
+In contrast, the following variation accounts for an infinite number
+of sentences:
+
+.. bnf::
+   :noindex:
+   :namespace: I_like_that_I_like_ice_cream
+
+    <sentence> ::= <subject> <verb> <complement>
+  
+     <subject> ::= I
+                 | You
+  
+        <verb> ::= like
+                 | do not like
+  
+   <complement> ::= ice-cream.
+                  | carbonated beverages.
+                  | that <sentence>
+
+The sentence ``I like that you like that I like ice-cream.``, for
+example, is well formed according to this grammar since it gives rise
+to the following abstract-syntax tree::
+
+          <sentence>
+          /   |    \
+  <subject> <verb> <complement>
+      |       |         |
+      I      like  that <sentence>
+                        /   |    \
+                <subject> <verb> <complement>
+                    |       |         |
+                   you     like  that <sentence>
+                                      /   |    \
+                              <subject> <verb> <complement>
+                                  |       |         |
+                                  I      like   ice-cream.
+
+.. index:: syntax (abstract)
+.. index:: syntax (concrete)
+.. index:: parsing
+.. index:: unparsing
+.. index:: parser
+.. index:: unparser
+
+* **Parsing from concrete syntax to abstract syntax:**
+  if a concrete-syntax representation
+  (typically a string of characters)
+  is syntactically correct,
+  then it can be represented as an abstract-syntax tree.
+  Parsing is implemented by a *parser*.
+
+* **Unparsing from abstract syntax to concrete syntax:**
+  if an abstract-syntax tree is constructed correctly,
+  then it can be represented as a concrete-syntax string.
+  Unparsing is implemented by an *unparser*.
+
+Note: Later in the course, you will be asked to write an
+abstract-syntax checker, i.e., a program verifying whether a given
+tree is constructed correctly with respect to a grammar for a subset
+of Scheme.
+
+Formal grammars are a topic of study in themselves in any course about
+regularity and automata.
+
+
+.. index:: representation (soundness of a)
+.. index:: representation (completeness of a)
+
+Soundness and completeness
+--------------------------
+
+A recipe for representing something is *sound* whenever, using this
+recipe, one can only obtain proper representations.  It is *complete*
+whenever any of the things we want to represent can be represented
+using the recipe.
+
+
+Example of a sound representation
+---------------------------------
+
+The following grammar provides a *sound* representation of `natural
+numbers <http://en.wikipedia.org/wiki/Natural_number>`_, if we
+interpret ``0`` as the natural number 0 and ``1 + n`` as adding 1 to
+the interpretation of ``n``::
+
+  n ::= 0 | 1 + n
+
+Indeed, the sentences that are well formed according to this grammar
+are interpreted as adding 1 arbitrarily many times to 0.  And adding 1
+arbitrarily many times to 0 yields a natural number -- it cannot yield
+something else.
+
+
+Example of an unsound representation
+------------------------------------
+
+The following grammar provides an *unsound* representation of natural
+numbers, if we interpret ``0`` as the natural number 0, ``1 + n`` as
+adding 1 to the interpretation of ``n``, and ``-1 + n`` as adding -1
+to the interpretation of ``n``, i.e., as subtracting 1 from the
+interpretation of ``n``::
+
+  n ::= 0 | 1 + n | -1 + n
+
+Indeed, subtracting 1 arbitrarily many times from 0 yields a negative
+integer, and natural numbers are not negative.
+
+
+Example of a complete representation
+------------------------------------
+
+The following grammar provides a *complete* representation of natural
+numbers, if we interpret ``0`` as the natural number 0 and ``1 + n``
+as adding 1 to the interpretation of ``n``::
+
+  n ::= 0 | 1 + n
+
+Indeed, any natural number can be obtained by adding 1 enough times to
+0, and therefore it can be represented by a well-formed sentence
+according to this grammar.
+
+
+Example of an incomplete representation
+---------------------------------------
+
+The following grammar provides an *incomplete* representation of natural
+numbers, if we interpret ``0`` as the natural number 0 and ``2 + n``
+as adding 2 to the interpretation of ``n``::
+
+  n ::= 0 | 2 + n
+
+Indeed, while adding 2 enough times to 0 gives any existing even
+number, this recipe does not produce the representation of an odd
+number.
+
+
+.. index:: induction (mathematical)
+.. index:: induction (structural)
+
+A sound and complete representation of natural numbers
+------------------------------------------------------
+
+As stated above, the following grammar provides a representation of
+natural numbers that is both *sound* and *complete*, if we interpret
+``0`` as the natural number 0 and ``1 + n`` as adding 1 to the
+interpretation of ``n``::
+
+  n ::= 0 | 1 + n
+
+This syntactic representation of natural numbers is due to `Peano`__.
+Concretely, it says that ``0`` represents the natural number 0, and
+that given any representation of a natural number ``n``, ``n + 1``
+also represents a natural number.  This representation of natural
+numbers can therefore be constructed *inductively* with Peano's
+construction.
+
+.. __: http://en.wikipedia.org/wiki/Natural_number#Peano_axioms
+
+The data, in our computers, are such representations, and our
+computations are operations over these representations.  The best we
+can hope is that our data properly represent whatever they are
+supposed to represent, that our programs operate over data in a way
+that is consistent with what these data represent, and that the
+results our programs yield represent something meaningful.  (This is
+largely a job for programming-languages implementers.)
+
+.. index:: induction (proof technique)
+
+Peano's representation also suggests us how to prove properties
+indexed by natural numbers.  If we can
+
+* prove a property at index 0, and
+
+* prove that if this property holds at index k, for any k,
+  it also holds at index 1 + k,
+
+then this property holds for any natural number, since all the natural
+numbers can be constructed from 0 by adding 1 sufficiently many times.
+This method of proving properties is called `Mathematical
+Induction`__.  It is summarized in the following rule::
+
+  P(0) holds    for all natural numbers k, if P(k) holds, then P(1 + k) also holds
+  --------------------------------------------------------------------------------
+                for all natural numbers n, P(n) holds
+
+This rule, like all inference rules, is read as follows: if ``P(0)``
+holds and for all natural numbers ``k``, ``P(k)`` holds implies that
+``P(1 + k)`` also holds, then ``P(n)`` holds for all natural numbers
+``n``.
+
+.. index:: induction proof (base case)
+.. index:: induction proof (induction step)
+.. index:: induction proof (induction hypothesis)
+
+In practice, the induction rule over natural numbers is stated more
+concisely as follows (noting logical implication as ``=>``)::
+
+  P(0)    for all k, P(k) => P(1 + k)
+  -----------------------------------
+          for all n, P(n)
+
+* ``P(0)`` is the *base case*;
+
+* ``for all k, P(k) => P(1 + k)`` is the *induction step*; and
+
+* in this induction step, ``P(k)`` is the *induction hypothesis*.
+
+.. epigraph::
+
+  | There is a thin line
+  | between assumptions and conclusion.
+
+In practice also, one indifferently writes ``1 + k`` or ``k + 1`` in
+the induction step.
+
+Since induction proofs were apparently covered only in some elective
+math courses in Gymnasium, they are abundantly illustrated in
+`a separate lecture note <week-1-induction-proofs.html>`_, to
+conclude this first lecture.  (Induction will be the proof technique
+of choice to prove properties of structurally recursive programs.)
+
+.. __: http://en.wikipedia.org/wiki/Mathematical_induction
+
+
+.. index::
+   single: Peano, Giuseppe
+
+Final checkpoint
+----------------
+
+So a programming language is a notation to express computations, a
+computation consists of operations over data, data are representations
+of information, and good representations are sound and complete, so
+that all our representations correspond to what we want to represent,
+and so that we can represent everything that we want to represent.
+For example, `Giuseppe Peano`__ has shown that natural numbers can be
+represented soundly and completely with the grammar::
+
+  n ::= 0 | 1 + n
+
+.. __: http://en.wikipedia.org/wiki/Giuseppe_Peano
+
+Therefore, each of the terms generated with this grammar corresponds
+to a natural number, and each of the programs processing these data
+(i.e., these representations of natural numbers) corresponds to a
+mathematical operation over these natural numbers.  These programs
+compute, and therefore represent, mathematical operations.
+
+.. epigraph::
+
+  | One man's program
+  | is another program's data.
+
+Most of the data we consider here are constructed
+inductively according to some grammar, and the programs that process
+these data traverse them recursively, following the structure of this
+grammar.
+
+In particular, programs themselves are data that are constructed
+inductively according to a grammar (namely the grammar of the
+programming language they are written in), and programs that process
+these other programs (e.g., interpreters and compilers) traverse them
+recursively, following the structure of this grammar.
+
+.. epigraph::
+
+  | The inarticulate speak longest.
+
+  -- Japanese proverb
+
+The goal of this course is to give you a sense of this *notation to
+express computations* that we call *a programming language*.  The
+reason of being for a programming language is to make it possible for
+someone to write programs.  The syntax of this language (i.e., how
+programs are written) should therefore be expressive, conveniently
+concise, and preferably intuitive.  The semantics of this language
+(i.e., what programs mean) should be intuitively clear.  It should be
+easy to write syntactically correct programs, and semantically
+incorrect (a.k.a. buggy) programs should be easy to fix.  It should
+also be as simple as possible to develop and maintain programs.  And
+while we are at it, espresso machines should be available 24/7,
+preferably with freshly ground, recently roasted beans that were
+organically grown and imported in a fair-trade fashion.  Each of these
+concerns has shaped each of the many programming languages in
+existence, `bells, whistles, and gongs
+<http://www.eps.mcgill.ca/jargon/jargon.html#bells%20whistles%20and%20gongs>`_.
+
+
+.. index::
+   single: equalizer (the great)
+
+The great equalizer
+-------------------
+
+.. index::
+   single: Naur, Peter (syntax of programming languages)
+
+`Peter Naur <http://en.wikipedia.org/wiki/Peter_Naur>`_ once told the
+author that syntax is the first thing one forgets about a programming
+language.  In this course, the author therefore has made the
+pedagogical choice
+
+* of working with one programming language (Scheme) to minimize the
+  time it takes to learn its syntax relative to the rest of the
+  course, and
+
+* of using Scheme to illustrate the many facets of computation and the
+  various notations that account for these facets.
+
+.. epigraph::
+
+   | God made men
+   | but `Samuel Colt`__ made them equal.
+
+   -- popular saying
+
+.. __: http://en.wikipedia.org/wiki/Samuel_Colt
+
+In addition, choosing Scheme and Emacs puts all the students on an
+equal footing.
+
+
+.. index::
+   single: Steele, Guy L. (growing a language)
+
+.. _exercise-growing-a-language:
+
+Exercise 9
+----------
+
+Summarize `Guy Steele
+<http://en.wikipedia.org/wiki/Guy_Steele>`_'s article `Growing a
+Language <http://www.cs.au.dk/~hosc/local/HOSC-12-3-pp221-236.pdf>`_
+in a couple of paragraphs, in English.
+
+
+.. index:: large and friendly letters
+.. index:: DON'T PANIC
+
+DON'T PANIC
+-----------
+
+.. seealso::
+
+   `The Hitchhiker's Guide to the Galaxy`__
+
+.. __: http://en.wikipedia.org/wiki/The_Hitchhiker's_Guide_to_the_Galaxy
+
+.. seealso::
+   `Harry Potter and the Methods of Rationality`__
+
+.. __: http://hpmor.com
+
+.. epigraph::
+
+  | Humor is the affectionate communication of insight.
+
+  -- `Leo Rosten <http://en.wikipedia.org/wiki/Leo_Rosten>`_
+
+
+Reminder
+--------
+
+The self-interpreter for a subset of Scheme is available `over here
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/self-interpreter.scm>`_.
+
+The supplementary note about induction proofs is available `over there
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/more-about-induction-proofs.pdf>`_.
+
+
+Version
+-------
+
+Added the bottom-up solutions to
+:ref:`exercise-standard-question-about-I-and-T-diagrams` and 
+:ref:`exercise-Question-1-at-exam-in-August-2012`, and
+refurbished the statement of :ref:`exercise-cost-of-interpretation`
+[26 Sep 2015]
+
+Fixed a typo and two URLs, thanks to Arch Wilhes's eagle eye
+[25 Sep 2015]
+
+Added the reference to Piet Hein's Grook about things taking thyme
+[19 Aug 2015]
+
+Created
+[19 Aug 2015]
+

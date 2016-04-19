@@ -1,0 +1,437 @@
+.. -*- mode: rst -*-
+
+Note for Week 8 about the apply procedure in Scheme
+===================================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercise
+------------------
+
+* :ref:`exercise-mystery-procedures-using-apply`: two mystery procedures
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-8-apply.scm>`_
+  (latest version: 15 Sep 2015).
+
+
+Goal
+----
+
+The goal of this lecture note is to introduce Scheme's predefined
+procedure ``apply``, to illustrate it on a variety of examples, and to
+use it to make our unit tests more flexible.
+
+
+Applying a procedure to a list of values
+----------------------------------------
+
+Scheme's predefined procedure ``apply`` takes a procedure, a proper
+list of values, and applies this procedure to these values.
+
+* For example, applying ``apply`` to ``(lambda (x1) (+ x1))`` and
+  ``(list 1)`` is equivalent to applying ``(lambda (x1) (+ x1))`` to
+  ``1``::
+
+    > (apply (lambda (x1)
+               (+ x1))
+             (list 1))
+    1
+    > ((lambda (x1) (+ x1)) 1)
+    1
+    > 
+
+* For example, applying ``apply`` to ``(lambda (x1 x2) (+ x1 x2))`` and
+  ``(list 1 10)`` is equivalent to applying ``(lambda (x1 x2) (+ x1 x2))`` to
+  ``1`` and ``10``::
+
+    > (apply (lambda (x1 x2)
+               (+ x1 x2))
+             (list 1 10))
+    11
+    > ((lambda (x1 x2) (+ x1 x2)) 1 10)
+    11
+    > 
+
+* For example, applying ``apply`` to ``(lambda (x1 x2 x3) (+ x1 x2 x3))`` and
+  ``(list 1 10 100)`` is equivalent to applying ``(lambda (x1 x2 x3)
+  (+ x1 x2 x3))`` to ``1``, ``10``, and ``100``::
+
+    > (apply (lambda (x1 x2 x3)
+               (+ x1 x2 x3))
+             (list 1 10 100))
+    111
+    > ((lambda (x1 x2 x3) (+ x1 x2 x3)) 1 10 100)
+    111
+    > 
+
+* For example, applying ``apply`` to ``(trace-lambda ephemeral (x1 x2
+  x3 x4) (+ x1 x2 x3 x4))`` and ``(list 1 10 100 1000)`` is equivalent
+  to applying ``(trace-lambda ephemeral (x1 x2 x3 x4) (+ x1 x2 x3
+  x4))`` to ``1``, ``10``, ``100``, and ``1000``::
+
+    > ((trace-lambda ephemeral (x1 x2 x3 x4) (+ x1 x2 x3 x4)) 1 10 100 1000)
+    |(ephemeral 1 10 100 1000)
+    |1111
+    1111
+    > 
+
+* Finally, applying ``apply`` to ``(lambda () (+))`` and ``(list)`` is
+  equivalent to applying ``(lambda () (+))`` to no argument::
+
+    > (apply (lambda ()
+               (+))
+             (list))
+    0
+    > ((lambda () (+)))
+    0
+    > 
+
+The last argument of ``apply`` *must* be a proper list::
+
+    > (apply (lambda (x)
+               x)
+             1)
+    
+    Exception in apply: 1 is not a proper list
+    Type (debug) to enter the debugger.
+    > (apply (lambda (x)
+               x)
+             (list 42))
+    42
+    > 
+
+Any procedure can be passed to ``apply``::
+
+    > (apply + (list 1 10 100))
+    111
+    > (apply apply (list + (list 1 10 100)))
+    111
+    > (apply apply (list apply (list + (list 1 10 100))))
+    111
+    > 
+
+The key to understanding the scenario just above is that for any
+values ``v0``, ``v1``, ..., and ``vN``, evaluating ``(apply v0 (list
+v1 ... vN))`` is equivalent to evaluating ``(v0 v1 ... vN)``.
+Therefore,
+
+* evaluating ``(apply + (list 1 10 100))`` is equivalent to evaluating
+  ``(+ 1 10 100)``;
+
+* evaluating ``(apply apply (list + (list 1 10 100)))`` is equivalent
+  to evaluating ``(apply + (list 1 10 100))``; and
+
+* evaluating ``(apply apply (list apply (list + (list 1 10 100))))``
+  is equivalent to evaluating ``(apply apply (list + (list 1 10
+  100)))``.
+
+
+.. _exercise-map-like-procedure:
+
+Exercise 1
+----------
+
+Design a map-like procedure ``foo`` such that applying ``foo`` to
+``list`` and ``'(1 2 3)`` gives the same result as applying ``apply``
+to ``append`` and ``(map1 list '(1 2 3))``::
+
+  > (apply append (map1 list '(1 2 3)))
+  (1 2 3)
+  > 
+
+(Procedure ``map1`` was defined in the section on
+:ref:`mapping-procedure-over-proper-lists`.)
+
+Give your procedure a more meaningful name than ``foo``.
+
+
+Exam-like question
+------------------
+
+.. epigraph::
+
+   | Like.
+
+   -- Loki
+
+What is the result of evaluating ``(apply (lambda xs (reverse xs))
+(list 1 2 3 4 5))``?
+
+* an error
+
+* ``((1 2 3 4 5))``
+
+* ``((5 4 3 2 1))``
+
+* ``((-1 -2 -3 -4 -5))``
+
+* ``((-5 -4 -3 -2 -1))``
+
+* ``(1 2 3 4 5)``
+
+* ``(-1 -2 -3 -4 -5)``
+
+* ``(5 4 3 2 1)``
+
+* ``(-5 -4 -3 -2 -1)``
+
+* no result, because evaluation diverges
+
+
+.. _exercise-mystery-procedures-using-apply:
+
+Exercise 2
+----------
+
+In this mandatory exercise, you are asked to characterize
+what the following two mystery procedures do:
+   
+.. code-block:: scheme
+
+  (define mystery-1
+    (lambda (v)
+      (apply (lambda (x . xs)
+               x)
+             v)))
+
+  (define mystery-2
+    (lambda (v)
+      (apply (lambda (x . xs)
+               xs)
+             v)))
+
+If you had to give them three-letter names, which names would you
+choose?
+
+Hint: apply each of them to a non-empty list.
+
+Food for thought:
+
+* What happens if you apply either of them to the empty list?
+  Why does it happen?
+
+* What happens if you apply either of them to a proper list?
+  Why does it happen?
+
+* What happens if you apply either of them to a list that is not
+  proper?  Why does it happen?
+
+* What happens if you apply either of them to something else than a
+  list?  Why does it happen?
+
+
+.. _exercise-apply-and-variadic-procedures:
+
+Exercise 3
+----------
+
+The goal of this exercise is to study a variadic procedure that
+returns its last actual parameter and how it interacts with ``apply``
+through recursive calls.  Here is a unit test for it:
+
+.. code-block:: scheme
+
+  (define test-last-actual
+    (lambda (candidate)
+      (and (equal? (candidate 1) 1)
+           (equal? (candidate 1 2) 2)
+           (equal? (candidate 1 2 3) 3)
+           ;;;
+           )))
+  
+Which of the following procedures pass this unit test?  Briefly
+explain why it does or why it does not.
+
+.. code-block:: scheme
+
+  (define last-actual_v1
+    (lambda actuals
+      (if (null? actuals)
+          (errorf 'last-actual_v1 "not enough actual parameters")
+          (letrec ([visit (lambda (a as)
+                            (if (null? as)
+                                a
+                                (visit (car as) (cdr as))))])
+            (visit (car actuals) (cdr actuals))))))
+  
+  (define last-actual_v2
+    (lambda actuals
+      (if (null? actuals)
+          (errorf 'last-actual_v2 "not enough actual parameters")
+          (list-ref actuals (1- (length actuals))))))
+  
+  (define last-actual_v3
+    (lambda actuals
+      (if (null? actuals)
+          (errorf 'last-actual_v3 "not enough actual parameters")
+          (list-ref actuals (length (cdr actuals))))))
+  
+  (define last-actual_v4
+    (lambda actuals
+      (cond
+        [(null? actuals)
+         (errorf 'last-actual_v3 "not enough actual parameters")]
+        [(null? (cdr actuals))
+         (car actuals)]
+        [else
+         (apply last-actual_v4 (cdr actuals))])))
+  
+  (define last-actual_v5
+    (lambda (actual . actuals)
+      (if (null? actuals)
+          actual
+          (apply last-actual_v5 actuals))))
+  
+  (define last-actual_v6
+    (lambda (actual . actuals)
+      (letrec ([visit (lambda (a as)
+                        (if (null? as)
+                            a
+                            (visit (car as) (cdr as))))])
+        (visit actual actuals))))
+
+  (define test-all-the-versions-of-last-actual
+    (lambda ()
+      (list (list 'last-actual_v1 ': (test-last-actual last-actual_v1))
+            (list 'last-actual_v2 ': (test-last-actual last-actual_v2))
+            (list 'last-actual_v3 ': (test-last-actual last-actual_v3))
+            (list 'last-actual_v4 ': (test-last-actual last-actual_v4))
+            (list 'last-actual_v5 ': (test-last-actual last-actual_v5))
+            (list 'last-actual_v6 ': (test-last-actual last-actual_v6)))))
+  
+Food for thought:
+
+* How would you define ``test-all-the-versions-of-last-actual`` using
+  `quasiquote <week-8-quasiquotation.html>`_?
+
+
+.. index::
+   single: unit tests (flexibility in)
+
+.. _flexibility-in-unit-tests:
+
+Flexibility in unit tests
+-------------------------
+
+Brynja the Systematic, from a Viking tribe of Southern Jutland,
+observes that for all their `information content
+<week-3-lists-and-defensive-programming.html#information-content-in-unit-tests>`_
+and for their `resilience
+<week-5-sequencing.html#resilience-in-unit-tests>`_, the unit-test
+utilities developed by Harald the Bold and Alfrothul the Resplendent
+only work for unary procedures.  But between variadic user-defined
+procedure and the ``apply`` procedure just above, there is enough
+expressive power to write a unit-test utility that will work for
+procedures of any arity.  The key idea is to put the input last in the
+``try-candidate`` procedure, and to make it variadic:
+
+.. code-block:: scheme
+
+  (define try-candidate-variadically
+    (lambda (name candidate expected-output . input)
+      (or (equal? (apply candidate input)
+                  expected-output)
+          (begin
+            (printf "~s: error for ~s~n" name input)
+            #f))))
+
+To test this procedure, Brynja chooses to apply it to a variadic
+procedure with a varying number of actual parameters.  The following
+unit-test procedure for ``try-candidate-variadically`` verifies that adding
+``1`` and ``2`` gives ``3``, that adding ``1``, ``2``, and ``3`` gives
+``6``, and that variously multiplying numbers gives the expected
+product:
+
+.. code-block:: scheme
+
+  (define test-try-candidate-variadically
+    (lambda (candidate)
+      (and-all (candidate '+ + 3 1 2)
+               (candidate '+ + 6 1 2 3)
+               (candidate '* * 1)
+               (candidate '* * 2 2)
+               (candidate '* * 6 2 3)
+               (candidate '* * 6 1 2 3)
+               (candidate '* * 120 1 2 3 4 5)
+               ;;;
+               )))
+
+Brynja applies her unit-test procedure::
+
+  > (test-try-candidate-variadically try-candidate-variadically)
+  #t
+  > 
+
+Success.
+
+Food for thought:
+
+* In the definition of ``test-try-candidate-variadically``, why are
+  the two first actual parameters of ``candidate`` a quoted symbol and
+  then that symbol?
+
+* In the definition of ``test-try-candidate-variadically``, doesn't
+  the last test look familiar?
+
+At any rate, and in the spirit of Alfrothul's unit-test procedure, the
+new procedure should also emit error messages for tests that failed.
+So Brynja clones ``test-try-candidate-variadically`` to test whether
+applying the candidate always yields ``0`` -- which it never does in
+these tests:
+
+.. code-block:: scheme
+
+  (define negative-test-try-candidate-variadically
+    (lambda (candidate)
+      (and-all (candidate '+ + 0 1 2)
+               (candidate '+ + 0 1 2 3)
+               (candidate '* * 0)
+               (candidate '* * 0 2)
+               (candidate '* * 0 2 3)
+               (candidate '* * 0 1 2 3)
+               (candidate '* * 0 1 2 3 4 5)
+               ;;;
+               )))
+
+Brynja applies this negative unit test::
+
+  > (negative-test-try-candidate-variadically try-candidate-variadically)
+  *: error for (1 2 3 4 5)
+  *: error for (1 2 3)
+  *: error for (2 3)
+  *: error for (2)
+  *: error for ()
+  +: error for (1 2 3)
+  +: error for (1 2)
+  #f
+  > 
+
+She then checks that all the seven error messages are issued, mutters
+"Godt nok." to herself, saves her emacs buffers, packs her things, and
+leaves the room, politely saluting Loki on her way out.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-8-apply.scm>`_
+  (latest version: 15 Sep 2015).
+
+
+Version
+-------
+
+Created
+[15 Sep 2015]

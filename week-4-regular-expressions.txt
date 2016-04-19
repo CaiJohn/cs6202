@@ -1,0 +1,396 @@
+.. -*- mode: rst -*-
+
+Note for Week 4 about regular expressions
+=========================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+.. epigraph::
+
+   | The `empty set <http://en.wikipedia.org/wiki/Empty_set>`_.  Always the empty set.
+
+   -- `Nicolas Bourbaki <http://en.wikipedia.org/wiki/Nicolas_Bourbaki>`_
+
+None.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-4-regular-expressions.scm>`_
+  (latest version: 01 Sep 2015).
+
+
+.. index:: regular expressions (implementing the BNF of)
+
+Goal
+----
+
+The goal of this lecture note is to implement the BNF of regular
+expressions as presented `in Week 2 <week-2.html#a-bnf-for-regular-expressions>`_:
+
+.. bnf:: regular expressions
+   :noindex:
+   :namespace: regular-expressions
+
+   <regexp> ::= (empty)
+              | (atom <atom>)
+              | (any)
+              | (seq <regexp> <regexp>)
+              | (disj <regexp> <regexp>)
+              | (star <regexp>)
+              | (plus <regexp>)
+              | (var <name>)
+
+   <atom> ::= ...any Scheme integer...
+
+   <name> ::= ...any Scheme identifier...
+
+.. index:: BNF (constructors)
+.. index:: BNF (predicates)
+.. index:: BNF (accessors)
+
+To implement a BNF, we need *constructors*, *predicates*, and
+*accessors*.
+
+* Each constructor simply constructs a tagged proper list, whose first
+  element is the tag.  There are 8 productions in the BNF of regular
+  expressions above, and therefore we define 8 constructors:
+
+  .. code-block:: scheme
+
+    (define make-empty
+      (lambda ()
+        (list 'empty)))
+
+    (define make-atom
+      (lambda (a)
+        (list 'atom a)))
+
+    (define make-any
+      (lambda ()
+        (list 'any)))
+
+    (define make-seq
+      (lambda (re1 re2)
+        (list 'seq re1 re2)))
+
+    (define make-disj
+      (lambda (re1 re2)
+        (list 'disj re1 re2)))
+
+    (define make-star
+      (lambda (re)
+        (list 'star re)))
+
+    (define make-plus
+      (lambda (re)
+        (list 'plus re)))
+
+    (define make-var
+      (lambda (name)
+        (list 'var name)))
+
+  We are now in position to construct regular expressions, either with
+  these constructors... or without, thanks to quote:
+
+  .. code-block:: scheme
+
+    (define re0
+      (make-seq (make-atom 10)
+                (make-seq (make-var 'x)
+                          (make-atom 30))))
+
+    (define re0-alt
+      '(seq (atom 10) (seq (var x) (atom 30))))
+
+    (define re1
+      (make-seq (make-disj (make-var 'x) (make-star (make-any)))
+                (make-plus (make-seq (make-var 'z) (make-var 'x)))))
+
+    (define re1-alt
+      '(seq (disj (var x) (star (any)))
+            (plus (seq (var z) (var x)))))
+
+  To make sure, let us test whether the canonically constructed
+  abstract-syntax trees are equal to the quoted ones::
+
+    > (equal? re0 re0-alt)
+    #t
+    > (equal? re1 re1-alt)
+    #t
+    >
+
+* Each predicate simply verifies whether its argument is a tagged
+  proper list of the appropriate length, using a suitable auxiliary
+  procedure, ``proper-list-of-given-length?``:
+
+  .. code-block:: scheme
+
+    (define proper-list-of-given-length?
+      (lambda (v n)
+        (or (and (null? v)
+                 (= n 0))
+            (and (pair? v)
+                 (> n 0)
+                 (proper-list-of-given-length? (cdr v)
+                                               (1- n))))))
+
+    (define is-empty?
+      (lambda (v)
+        (and (pair? v)
+             (equal? (car v) 'empty)
+             (proper-list-of-given-length? (cdr v) 0))))
+
+    (define is-atom?
+      (lambda (v)
+        (and (pair? v)
+             (equal? (car v) 'atom)
+             (proper-list-of-given-length? (cdr v) 1))))
+
+    (define is-any?
+      (lambda (v)
+        (and (pair? v)
+             (equal? (car v) 'any)
+             (proper-list-of-given-length? (cdr v) 0))))
+
+    (define is-seq?
+      (lambda (v)
+        (and (pair? v)
+             (equal? (car v) 'seq)
+             (proper-list-of-given-length? (cdr v) 2))))
+
+    (define is-disj?
+      (lambda (v)
+        (and (pair? v)
+             (equal? (car v) 'disj)
+             (proper-list-of-given-length? (cdr v) 2))))
+
+    (define is-star?
+      (lambda (v)
+        (and (pair? v)
+             (equal? (car v) 'star)
+             (proper-list-of-given-length? (cdr v) 1))))
+
+    (define is-plus?
+      (lambda (v)
+        (and (pair? v)
+             (equal? (car v) 'plus)
+             (proper-list-of-given-length? (cdr v) 1))))
+
+    (define is-var?
+      (lambda (v)
+        (and (pair? v)
+             (equal? (car v) 'var)
+             (proper-list-of-given-length? (cdr v) 1))))
+
+* Finally, each accessor assumes a well-formed input and simply picks
+  the corresponding sub-expression:
+
+  .. code-block:: scheme
+
+    (define atom-1
+      (lambda (v)
+        (list-ref v 1)))
+
+    (define seq-1
+      (lambda (v)
+        (list-ref v 1)))
+
+    (define seq-2
+      (lambda (v)
+        (list-ref v 2)))
+
+    (define disj-1
+      (lambda (v)
+        (list-ref v 1)))
+
+    (define disj-2
+      (lambda (v)
+        (list-ref v 2)))
+
+    (define star-1
+      (lambda (v)
+        (list-ref v 1)))
+
+    (define plus-1
+      (lambda (v)
+        (list-ref v 1)))
+
+    (define var-1
+      (lambda (v)
+        (list-ref v 1)))
+
+
+.. index:: syntax checker
+
+A syntax checker for regular expressions
+----------------------------------------
+
+All in all, we are now in position to write a *syntax checker*.  A
+syntax checker is a procedure that decides whether a given value is a
+well-formed regular expression.  Here is its unit test:
+
+.. code-block:: scheme
+
+  (define test-well-formed-regular-expressions
+    (lambda (check)
+      (and (check re0)
+           (check re1)
+           ;;; add more tests here
+           )))
+
+Given a procedure implementing a syntax checker, this testing
+procedure successively applies it to each of the two well-formed
+regular expressions to verify that they syntax-check.
+
+.. index:: syntax checker (for regular expressions)
+
+The syntax checker attempts to traverse its input recursively as per
+the inductive definition of regular expressions (i.e., the BNF).  If
+it can, the input is syntactically correct and the result is ``#t``.
+If it cannot, the input is not syntactically correct and the result is
+``#f``:
+
+.. code-block:: scheme
+
+  (define check-regular-expression
+    (lambda (v)
+      (cond
+        [(is-empty? v)
+         #t]
+        [(is-atom? v)
+         (number? (atom-1 v))]
+        [(is-any? v)
+         #t]
+        [(is-seq? v)
+         (and (check-regular-expression (seq-1 v))
+              (check-regular-expression (seq-2 v)))]
+        [(is-disj? v)
+         (and (check-regular-expression (disj-1 v))
+              (check-regular-expression (disj-2 v)))]
+        [(is-star? v)
+         (check-regular-expression (star-1 v))]
+        [(is-plus? v)
+         (check-regular-expression (plus-1 v))]
+        [(is-var? v)
+         (symbol? (var-1 v))]
+        [else
+         #f])))
+
+Let us test this syntax checker::
+
+  > (test-well-formed-regular-expressions check-regular-expression)
+  #t
+  > 
+
+Success.
+
+Let us also test whether this syntax checker properly rejects an
+ill-formed regular expression::
+
+  > (check-regular-expression "something else entirely")
+  #f
+  >
+
+Food for thought: testing the syntax checker with well-formed regular
+expressions is good, but just as rigorously, we should also
+test it negatively with ill-formed regular expressions as well, to verify
+that it does not accept them.  How would you do that?
+
+
+.. index::
+   single: expressions (regular, names in)
+
+Names in regular expressions
+----------------------------
+
+The `web service
+<http://users-cs.au.dk/zerny/dProgSprog/regexp-matcher.php>`_ yields 0
+environment in case of mismatch, and 1 or more environments in case of
+match.  The environment associates the *names* introduced in the given
+regular expression (with the constructor ``var``) and the
+corresponding value in the given list:
+
+* For example, matching ``(atom 10)`` against the list ``(10)``
+  succeeds and yields the empty environment.
+
+* For example, matching ``(var x)`` against the list ``(10)``
+  succeeds and yields an environment (represented as an A-list)
+  binding ``x`` to ``10``.
+
+* For example, matching ``(seq (var x) (var y))`` against the list
+  ``(10 20)`` succeeds and yields an environment binding ``x`` to
+  ``10`` and ``y`` to ``20``.
+
+* For example, matching ``(seq (var x) (var x))`` against the list
+  ``(10 20)`` fails because ``x`` can only be bound to one value in
+  the given list.
+
+* For example, matching ``(seq (var x) (var x))`` against the list
+  ``(20 20)`` succeeds and yields an environment binding ``x`` to
+  ``20``.
+
+.. index::
+   single: expressions (regular, multiple matches for)
+
+Names are useful to visualize the multiple possible results of
+regular-expression matching:
+
+* For example, ``(disj (var x) (var y))`` is matched against ``(10)``
+  in two ways and therefore the matcher yields two possible
+  environments, which you should visualize with the `web
+  service
+  <http://users-cs.au.dk/zerny/dProgSprog/regexp-matcher.php>`_.
+
+* For example, in how many ways do you think that ``(seq (star (any))
+  (star (any)))`` matches each of the following lists?
+
+  * ``()``
+
+  * ``(10)``
+
+  * ``(10 20)``
+
+  * ``(10 20 30)``
+
+  * ``(10 20 30 40)``
+
+  Hint: use the `web service
+  <http://users-cs.au.dk/zerny/dProgSprog/regexp-matcher.php>`_.
+
+
+Checkpoint
+----------
+
+We have investigated the BNF of regular expressions and how to
+implement it.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-4-regular-expressions.scm>`_
+  (latest version: 01 Sep 2015).
+
+
+Version
+-------
+
+Corrected a reference to Week 2,
+thanks to Arch Wilhes's eagle eye
+[09 Oct 2015]
+
+Created
+[01 Sep 2015]

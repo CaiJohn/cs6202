@@ -1,0 +1,418 @@
+.. -*- mode: rst -*-
+
+Note for Week 5 about variadic procedures
+=========================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+* :ref:`exercise-a-number-of-variadic-procedures`:
+  a number of variadic procedures
+
+* :ref:`exercise-variadic-append`:
+  a variadic procedure for concatenating proper lists
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-5-variadic-procedures.scm>`_
+  (latest version: 10 Sep 2015).
+
+
+Goal
+----
+
+The goal of this lecture note is to study variadic user-defined
+procedures.
+
+
+.. _lambda-abstractions-with-non-fixed-arity:
+
+Core special form: lambda-abstractions with non-fixed arity
+-----------------------------------------------------------
+
+.. index:: lambda (abstraction with non-fixed arity)
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <lambda-formals-with-non-fixed-arity> ::= <variable>
+                                           | ({<variable>}+ . <variable>)
+                                             ;;; where all the variables are distinct
+
+A *variadic* procedure takes a variable number of actual parameters.
+We have already met predefined variadic procedures, such as ``+`` and
+``*``.
+
+Scheme offers two ways for the programmer to write variadic
+procedures:
+
+1. The programmer specifies *a variable* (rather than *a list of
+   variables*) as formal parameter of a lambda-abstraction.  All its
+   actual parameters will then be grouped into a proper list and bound
+   to this variable::
+   
+     > ((lambda xs xs))
+     ()
+     > ((lambda xs xs) 1)
+     (1)
+     > ((lambda xs xs) 1 2)
+     (1 2)
+     > ((lambda xs xs) 1 2 3)
+     (1 2 3)
+     > ((lambda xs xs) 1 2 3 4)
+     (1 2 3 4)
+     > ((lambda xs xs) 1 2 3 4 5)
+     (1 2 3 4 5)
+     > 
+   
+2. The programmer specifies *an improper list of formal parameters*.
+   The first formal parameters match the first actual parameters, and
+   the remaining actual parameters are grouped into a proper list and
+   bound to the last formal parameter::
+   
+     > ((lambda (x1 x2 . xs) (list x1 x2 xs)) 10 20 30 40)
+     (10 20 (30 40))
+     > ((lambda (x1 x2 . xs) (list x1 x2 xs)) 10 20 30)
+     (10 20 (30))
+     > ((lambda (x1 x2 . xs) (list x1 x2 xs)) 10 20)
+     (10 20 ())
+     > ((lambda (x1 x2 . xs) (list x1 x2 xs)) 10)
+     
+     Exception: incorrect number of arguments to #<procedure>
+     Type (debug) to enter the debugger.
+     > ((lambda (x1 x2 x3 . xs) (list x1 x2 x3 xs)) 10 20 30 40 50)
+     (10 20 30 (40 50))
+     > 
+
+
+Exercise 1
+----------
+
+1. What does the following mystery procedure do?
+   
+  .. code-block:: scheme
+ 
+    (define mystery-procedure
+      (lambda xs
+        (reverse xs)))
+   
+2. Define your own version of the variadic procedure ``list``.
+
+3. Define a procedure that returns the number of arguments it is
+   applied to, so that it passes the following unit test:
+ 
+   .. code-block:: scheme
+
+     (define test-number-of-actual-parameters
+       (lambda (candidate)
+         (and (= (candidate)
+                 0)
+              (= (candidate 1)
+                 1)
+              (= (candidate 1 2)
+                 2)
+              (= (candidate 1 2 3)
+                 3)
+              (= (candidate 1 2 3 4)
+                 4)
+              (= (candidate 1 2 3 4 5 6 7)
+                 7)
+              ;;;
+              )))
+   
+
+.. _exercise-a-number-of-variadic-procedures:
+
+Exercise 2
+----------
+
+In this mandatory exercise, you are asked to write a number of
+variadic procedures.
+
+a. Write a variadic procedure that tests whether its arguments form a
+   palindrome, i.e., whether reading them from left to right gives the
+   same result as reading them from right to left.  Your variadic
+   procedure should pass the following unit test:
+
+   .. code-block:: scheme
+
+     (define test-variadic-palindrome?
+       (lambda (candidate)
+         (and (equal? (candidate)
+                      #t)
+              (equal? (candidate 1)
+                      #t)
+              (equal? (candidate 1 1)
+                      #t)
+              (equal? (candidate 1 2 1)
+                      #t)
+              (equal? (candidate 1 2 2 1)
+                      #t)
+              (equal? (candidate 1 2 3 2 1)
+                      #t)
+              (equal? (candidate 1 2 3 3 2 1)
+                      #t)
+              ;;;
+              (equal? (candidate 1 2)
+                      #f)
+              (equal? (candidate 1 2 1 2)
+                      #f)
+              (equal? (candidate 1 2 1 2 4 5 2 1 2 1)
+                      #f)
+              ;;;
+              )))
+
+b. Write two versions of a variadic procedure that returns a list
+   containing its 1st, 3rd, 5th, 7th, etc. arguments, so that both
+   versions pass the following unit test:
+
+   .. code-block:: scheme
+
+     (define test-the-odd-arguments
+       (lambda (candidate)
+         (and (equal? (candidate)
+                      '())
+              (equal? (candidate 1)
+                      '(1))
+              (equal? (candidate 1 2)
+                      '(1))
+              (equal? (candidate 1 2 3)
+                      '(1 3))
+              (equal? (candidate 1 2 3 4)
+                      '(1 3))
+              (equal? (candidate 1 2 3 4 5)
+                      '(1 3 5))
+              (equal? (candidate 1 2 3 4 5 6 7 8 9 10)
+                      '(1 3 5 7 9))
+              ;;;
+              )))
+
+   One version of your procedure should be lambda-dropped, i.e.,
+   contain a local recursive procedure.  The other version should be
+   lambda-lifted, i.e., use an auxiliary procedure that is also
+   defined globally.  (See :ref:`exercise-plus-with-letrec`, which was
+   mandatory in `Week 3 <week-3.html>`_, for a reminder about
+   lambda-lifting and lambda-dropping.)
+
+c. Write two versions of a variadic procedure that returns a list
+   containing its 2nd, 4th, 6th, 8th, etc. arguments in the opposite
+   order, so that both versions pass the following unit test:
+
+   .. code-block:: scheme
+
+     (define test-the-even-arguments-in-opposite-order
+       (lambda (candidate)
+         (and (equal? (candidate)
+                      '())
+              (equal? (candidate 1)
+                      '())
+              (equal? (candidate 1 2)
+                      '(2))
+              (equal? (candidate 1 2 3)
+                      '(2))
+              (equal? (candidate 1 2 3 4)
+                      '(4 2))
+              (equal? (candidate 1 2 3 4 5)
+                      '(4 2))
+              (equal? (candidate 1 2 3 4 5 6 7 8 9 10)
+                      '(10 8 6 4 2))
+              ;;;
+              )))
+
+   One version of your procedure should be lambda-dropped, i.e.,
+   contain a local recursive procedure.  The other version should be
+   lambda-lifted, i.e., use an auxiliary procedure that is also
+   defined globally.
+
+d. Write a variadic procedure that returns a self-convolution of its
+   arguments, so that it passes the following unit test:
+
+   .. code-block:: scheme
+
+     (define test-self-convolve
+       (lambda (candidate)
+         (and (equal? (candidate)
+                      '())
+              (equal? (candidate 1)
+                      '((1 . 1)))
+              (equal? (candidate 1 2)
+                      '((1 . 2) (2 . 1)))
+              (equal? (candidate 1 2 3)
+                      '((1 . 3) (2 . 2) (3 . 1)))
+              (equal? (candidate 1 2 3 4)
+                      '((1 . 4) (2 . 3) (3 . 2) (4 . 1)))
+              (equal? (candidate 1 2 3 4 5)
+                      '((1 . 5) (2 . 4) (3 . 3) (4 . 2) (5 . 1)))
+              (equal? (candidate 1 2 3 4 5 6 7 8 9 10)
+                      '((1 . 10) (2 . 9) (3 . 8) (4 . 7) (5 . 6) (6 . 5) (7 . 4) (8 . 3) (9 . 2) (10 . 1)))
+              ;;;
+              )))
+
+e. Write a variadic procedure that convolves its odd and even
+   arguments, so that it passes the following unit test:
+
+   .. code-block:: scheme
+
+     (define test-convolve-the-odd-arguments-and-the-even-arguments
+       (lambda (candidate)
+         (and (equal? (candidate)
+                      '())
+              (equal? (candidate 1)
+                      '())
+              (equal? (candidate 1 2)
+                      '((1 . 2)))
+              (equal? (candidate 1 2 3)
+                      '((1 . 2)))
+              (equal? (candidate 1 2 3 4)
+                      '((1 . 4) (3 . 2)))
+              (equal? (candidate 1 2 3 4 5)
+                      '((1 . 4) (3 . 2)))
+              (equal? (candidate 1 2 3 4 5 6 7 8 9 10)
+                      '((1 . 10) (3 . 8) (5 . 6) (7 . 4) (9 . 2)))
+              ;;;
+              )))
+
+
+.. _our-very-own-definition-of-variadic-addition:
+
+Our very own definition of variadic addition
+--------------------------------------------
+
+Given the following dyadic definition of addition (namely:
+``plus_revisited_alt``), the second illustration for `letrec expressions
+<week-3.html#core-special-form-letrec>`_ last week, we are now
+equipped to define a variadic version:
+
+.. code-block:: scheme
+
+  (define plus-dyadic
+    (lambda (n1 n2)
+      (letrec ([visit (lambda (n1)
+                        (if (= n1 0)
+                            n2
+                            (1+ (visit (1- n1)))))])
+       (if (and (integer? n1)
+                (>= n1 0))
+           (visit n1)
+           (errorf 'plus-dyadic "not a non-negative integer: ~s" n1)))))
+
+This dyadic version passes the unit test::
+
+  > (test-plus plus-dyadic)
+  #t
+  > 
+
+The variadic version should, well, accept any number of arguments, as
+enumerated by the following unit-test procedure:
+
+.. code-block:: scheme
+
+  (define test-plus-variadic
+    (lambda (candidate)
+      (and (equal? (candidate)
+                   0)
+           (equal? (candidate 1)
+                   1)
+           (equal? (candidate 1 10)
+                   11)
+           (equal? (candidate 1 10 100)
+                   111)
+           (equal? (candidate 1 10 100 1000)
+                   1111)
+           ;;;
+           )))
+
+The key of our definition is a variadic lambda-abstraction whose
+formal parameter will denote the list of all the actual parameters.
+We proceed by structural recursion over this list:
+
+.. code-block:: scheme
+
+  (define plus-variadic
+    (lambda ns
+      (letrec ([visit (lambda (ns)
+                        (if (null? ns)
+                            0
+                            (plus-dyadic (car ns)
+                                         (visit (cdr ns)))))])
+        (visit ns))))
+
+This definition not only passes the unit test for dyadic
+addition procedures, it also passes the unit test for variadic
+addition procedures::
+
+  > (test-plus plus-variadic)
+  #t
+  > (test-plus-variadic plus-variadic)
+  #t
+  > 
+
+Food for thought:
+
+* A recursive call to a variadic procedure is unlikely to do go well.
+  Can you see why?
+
+
+.. _exercise-variadic-append:
+
+Exercise 3
+----------
+
+In this mandatory exercise, you are asked to implement a variadic
+version of ``append_proper-list``.
+
+A word of explanation: so far in the present lecture note, all uses
+and definitions of ``append`` and ``append_proper-list``
+have been with two formal parameters and
+two actual parameters.  You are asked to define a version of
+``append_proper-list`` that can be applied to any number of actual
+parameters (i.e., 0, 1, 2, etc.) and that, if all these actual
+parameters are proper lists, returns their concatenation::
+
+  > (append_proper-list (list 'a 'b 'c) (list 'd 'e) (list 'f))
+  (a b c d e f)
+  > 
+
+Key questions:
+
+* What happens if your variadic version of ``append_proper-list`` is
+  applied to *one* actual parameter?
+
+* What happens if your variadic version of ``append_proper-list`` is
+  applied to *zero* actual parameters?
+
+* What happens if one of the actual parameters of your variadic
+  version of ``append_proper-list`` is *the empty list*?
+
+* What happens if one of the actual parameters of your variadic
+  version of ``append_proper-list`` is *not a proper list*?
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-5-variadic-procedures.scm>`_
+  (latest version: 10 Sep 2015).
+
+
+Version
+-------
+
+Added :ref:`exercise-a-number-of-variadic-procedures`
+[10 Sep 2015]
+
+Created
+[08 Sep 2015]

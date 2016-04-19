@@ -1,0 +1,671 @@
+.. -*- mode: rst -*-
+
+At the DatLab Study Cafe
+========================
+
+.. epigraph::
+
+    | Levity is good.
+    | It relieves tension and the fear of death.
+
+    -- `Terminator 3 <http://www.imdb.com/title/tt0181852/quotes?qt=qt0315909>`_
+
+.. index:: Socratic dialogue
+
+This lecture note is a metaphorical dialogue of the `Socratic kind`__
+to illustrate the design of a structurally recursive procedure in
+Scheme.
+
+.. __: http://en.wikipedia.org/wiki/Socratic_dialogue
+
+The actors in presence are Yoshiki and Esmeralda, two visiting
+students who are teaming up to solve an exercise in dProgSprog, the
+first-year course on Programming Languages in the Department of
+Computer Science at Aarhus University, in Denmark.  The scene takes
+place at the `DatLab Study Cafe`__ on Friday 1 May 2015.  The weather
+is ravishingly beautiful outside -- something to envy even in Singapore.
+
+.. __: http://www.cs.au.dk/datlab
+
+Yoshiki: We are asked to write a procedure ``proper-list-last`` that,
+when applied to a list, returns its last element.  Let's hack it, this
+being Denmark, the sun won't last all day.
+
+.. epigraph::
+
+  | Type :kbd:`C-h k` to describe a key
+  | (e.g., :kbd:`C-h k C-h k` to describe the key :kbd:`C-h k`)
+
+  -- from the Emacs manual
+
+Esmeralda: Just a sec, let me be sure I understand.  So if we apply
+``proper-list-last``, e.g., to the list ``(1 2 3)``, it should return ``3``.
+Right?
+
+Yoshiki (taking control of the keyboard): Right.  Let me open a new file.
+:kbd:`C-x` :kbd:`C-f` proper-list-last.scm :kbd:`enter` ;;;
+proper-list-last.scm :kbd:`enter` :kbd:`enter` and then...
+
+.. code-block:: scheme
+
+  ;;; proper-list-last.scm
+
+  (define test-proper-list-last
+    (lambda (candidate)
+      (and (equal? (candidate '(1)) 1)
+           (equal? (candidate '(1 2)) 2)
+           (equal? (candidate '(1 2 3)) 3)
+           ;;; 
+           )))
+
+Yoshiki (pushing the keyboard away): There we are, that's what we are
+shooting for.
+
+Esmeralda: And if we apply ``proper-list-last`` to an empty list?
+
+Yoshiki: You mean *the* empty list?  There is only one, you know.
+
+Esmeralda (rolling her eyes): Yes, yes, the empty list.  What should
+happen if we apply ``proper-list-last`` to the empty list?  What is
+the last element of the empty list?
+ 
+Yoshiki: There isn't any.  (Pause.)  We'll raise an error.  In fact I
+know just the thing: we'll call a predefined procedure named
+``errorf`` that kind of does like :kbd:`C-g` in Emacs.
+
+Esmeralda: OK.  And if we apply ``proper-list-last`` to an improper
+list?  Or to something else than a list?
+
+Yoshiki: Remind me what an "improper list" is?
+
+Esmeralda: It's a list that doesn't end with the empty list.  Its last
+pair is a dotted pair.
+
+Yoshiki: Aren't they all.  Doesn't matter.  We'll raise an error.
+Here we go.  First shot.  I am calling it ``proper-list-last-1`` and it
+traverses the input list.  It's got a base case, for the last element
+of the list, and an inductive case, if we are in the middle of the
+list.  In the base case, it returns the last element of the list, and
+in the inductive case, it calls itself tail-recursively on the cdr of
+the list.  Easy money:
+
+.. code-block:: scheme
+
+  (define proper-list-last-1
+    (lambda (xs)
+      (if (null? (cdr xs))
+          (car xs)
+          (proper-list-last-1 (cdr xs)))))
+
+Yoshiki: Wow.  It doesn't even call ``errorf``.  Hum.  Anyway
+-- :kbd:`C-c d` --  let me test it::
+
+  > > (test-proper-list-last proper-list-last-1)
+  #t
+  > 
+
+Yoshiki: Hurrah, it works.
+
+Esmeralda (seizing the keyboard): And if we apply it to the empty
+list?  Or to an improper list or something that is not a list at all?
+Let me see::
+
+  > (proper-list-last-1 '())
+  
+  Exception in cdr: () is not a pair
+  Type (debug) to enter the debugger.
+  > (proper-list-last-1 'x)
+  
+  Exception in cdr: x is not a pair
+  Type (debug) to enter the debugger.
+  > (proper-list-last-1 '(1 2 . x))
+  
+  Exception in cdr: x is not a pair
+  Type (debug) to enter the debugger.
+  > 
+
+Yoshiki: See?  Errors?
+
+Esmeralda: Yeah.  Pretty useless ones though, as error messages go:
+they are only about the representation, not about what is represented.
+Remember Magritte?
+
+Yoshiki (whisking the keyboard back off the table): That's because we
+don't call ``errorf``.  Let me fix the problem of the non-empty list.
+I am calling this revised version ``proper-list-last-2``.
+If it is applied to a pair, it does what
+``proper-list-last-1`` did, and otherwise it calls
+``errorf``, complaining that the input is not, er..., a non-empty
+list.  There we go:
+
+.. code-block:: scheme
+
+  (define proper-list-last-2
+    (lambda (xs)
+      (if (pair? xs)
+          (if (null? (cdr xs))
+              (car xs)
+              (proper-list-last-1 (cdr xs)))
+          (errorf 'proper-list-last-2
+                  "not a non-empty list: ~s"
+                  xs))))
+
+Esmeralda: Never mind about the double negation in the error message,
+someone might find it cute.  Let's continue: you should call
+``proper-list-last-2``, not ``proper-list-last-1``.
+
+Yoshiki: Sorry.  :kbd:`C-d` 2.  It's still ``proper-list-last-2``:
+
+.. code-block:: scheme
+
+  (define proper-list-last-2
+    (lambda (xs)
+      (if (pair? xs)
+          (if (null? (cdr xs))
+              (car xs)
+              (proper-list-last-2 (cdr xs)))
+          (errorf 'proper-list-last-2
+                  "not a non-empty list: ~s"
+                  xs))))
+
+Yoshiki: And now -- :kbd:`C-c d` -- we can test it.  First the unit test::
+
+  > > (test-proper-list-last proper-list-last-2)
+  #t
+  > 
+
+Yoshiki: And then a negative test::
+
+  > (proper-list-last-2 '())
+  
+  Exception in proper-list-last-2: not a non-empty list: ()
+  Type (debug) to enter the debugger.
+  > 
+
+Yoshiki: See?  It works as it should for non-empty lists, and it
+gives a useful error message for the empty list.  In fact, it will
+work just as well for something which is not a list at all::
+
+  > (proper-list-last-2 'x)
+  
+  Exception in proper-list-last-2: not a non-empty list: x
+  Type (debug) to enter the debugger.
+  > 
+
+Esmeralda (deftly recovering the keyboard): Indeed.  But the error
+message should still be useless for an improper list::
+
+  > (proper-list-last-2 '(1 2 . x))
+  
+  Exception in proper-list-last-2: not a non-empty list: x
+  Type (debug) to enter the debugger.
+  > 
+
+Yoshiki (re-acquiring the keyboard): Aha!  So what we need to do is
+to check that if the cdr of ``xs`` is something else than the empty
+list or a pair, because then ``xs`` denotes an improper list.  Let me
+add a test in the inner if-expression.  Tell you what, I'll write a
+cond-expression to test whether the cdr of ``xs`` is the empty list,
+or whether it is a pair; otherwise we will call ``errorf`` with an
+accurate error message.  Here is the revised^2 version.  I am calling
+it ``proper-list-last-3``:
+
+.. code-block:: scheme
+
+  (define proper-list-last-3
+    (lambda (xs)
+      (if (pair? xs)
+          (cond
+            [(null? (cdr xs))
+             (car xs)]
+            [(pair? (cdr xs))
+             (proper-list-last-2 (cdr xs))]
+            [else
+             (errorf 'proper-list-last-2
+                     "not a proper list: ~s"
+                     xs)])
+          (errorf 'proper-list-last-2
+                  "not a non-empty list: ~s"
+                  xs))))
+
+Yoshiki (focused): And now -- :kbd:`C-c d` -- let me test it negatively::
+
+  > > (proper-list-last-3 '(1 2 . x))
+  
+  Exception in proper-list-last-2: not a non-empty list: x
+  Type (debug) to enter the debugger.
+  > 
+
+Yoshiki (losing his footing): Drat, it doesn't work.  It's not the
+right error message at all.
+
+Esmeralda (observant): Actually the error message is not even from the
+right procedure.
+
+Yoshiki: I see: ``proper-list-last-3`` still calls
+``proper-list-last-2``.  Sorry about that.  :kbd:`M-%`
+last-2 :kbd:`C-m` last-3 :kbd:`C-m` :kbd:`space` :kbd:`space`
+:kbd:`space`.  Here we go:
+
+.. code-block:: scheme
+
+  (define proper-list-last-3
+    (lambda (xs)
+      (if (pair? xs)
+          (cond
+            [(null? (cdr xs))
+             (car xs)]
+            [(pair? (cdr xs))
+             (proper-list-last-3 (cdr xs))]
+            [else
+             (errorf 'proper-list-last-3
+                     "not a proper list: ~s"
+                     xs)])
+          (errorf 'proper-list-last-3
+                  "not a non-empty list: ~s"
+                  xs))))
+
+Yoshiki: And now -- :kbd:`C-c d` -- for testing.
+First, the unit test::
+
+  > > (test-proper-list-last proper-list-last-3)
+  #t
+  > 
+
+Yoshiki: All right.  Then, the empty list::
+
+  > (proper-list-last-3 '())
+  
+  Exception in proper-list-last-3: not a non-empty list: ()
+  Type (debug) to enter the debugger.
+  > 
+
+Yoshiki: Doing good.  Now, something else than a list::
+
+  > (proper-list-last-3 'x)
+  
+  Exception in proper-list-last-3: not a non-empty list: x
+  Type (debug) to enter the debugger.
+  > 
+
+Yoshiki (on a roll): All righty.  And now for an improper list::
+
+  > (proper-list-last-3 '(1 2 3 . x))
+  
+  Exception in proper-list-last-3: not a proper list: (3 . x)
+  Type (debug) to enter the debugger.
+  > 
+
+Yoshiki: Yay, we are done.
+
+Esmeralda: Though this last error message still sucks: it mentions the
+last pair of the input, even though it is the whole input which is
+problematic.
+
+Yoshiki: So sue me.
+
+Esmeralda (diving for the keyboard): Wait, my turn now.  What we need
+is a letrec-expression and two distinct formal parameters.  Clickety
+click, :kbd:`M-x` replace-string :kbd:`C-j` last-3 :kbd:`C-j` last-4
+:kbd:`C-j`.  Look, here is Version 4:
+
+.. code-block:: scheme
+
+  (define proper-list-last-4
+    (lambda (ys)
+      (letrec ([visit (lambda (xs)
+                        (if (pair? xs)
+                            (if (null? (cdr xs))
+                                (car xs)
+                                (visit (cdr xs)))
+                            (errorf 'proper-list-last-4
+                                    "not a proper list: ~s"
+                                    ys)))])
+        (if (pair? ys)
+            (visit ys)
+            (errorf 'proper-list-last-4
+                    "not a non-empty list: ~s"
+                    ys)))))
+
+Esmeralda: See?  The original input is denoted by ``ys``, and we test
+it upfront, with the error message ``"not a non-empty list"`` if it is
+not a pair.  And if it's a pair, we call ``visit``, which takes care
+of the other error case with the original input list, when its last
+cdr is not the empty list.  And -- :kbd:`C-c d` -- it works too::
+
+    > > (test-proper-list-last proper-list-last-4)
+    #t
+    > (proper-list-last-4 '())
+    
+    Exception in proper-list-last-4: not a non-empty list: ()
+    Type (debug) to enter the debugger.
+    > (proper-list-last-4 'x)
+    
+    Exception in proper-list-last-4: not a non-empty list: x
+    Type (debug) to enter the debugger.
+    > (proper-list-last-4 '(1 2 3 . x))
+    
+    Exception in proper-list-last-4: not a proper list: (1 2 3 . x)
+    Type (debug) to enter the debugger.
+    > 
+
+Yoshiki: Yup, we are done here.  Let's ask the teacher since he is here.
+Hey, Sensei, got a sec to look at our definition of ``proper-list-last``?
+
+The teacher: Of course.  Let me see.  (Pause.)  OK.  It works, but it is not
+quite the right thing.
+
+Yoshiki: What do you mean?  It works.
+
+The teacher: Well, see, the first time you call ``visit``, you know that
+its argument is a pair.  Yet the first thing ``visit`` does is to test
+whether its argument is a pair.  That's redundant.  You want a minute
+to think about it?
+
+Yoshiki (reluctantly): Yes, thanks.
+
+The teacher (heading to another table): Happy thinking.
+
+Esmeralda: I got it.  In ``visit``, we can immediately test for the cdr
+of the argument, since we know it is a pair.  Look.  (Flurry of
+keystrokes, including :kbd:`M-x` replace-string :kbd:`C-j` last-4
+:kbd:`C-j` last-5 :kbd:`C-j`.  Incidentally, it's funny how Esmeralda
+types :kbd:`C-j` (i.e., the newline character) whereas Yoshiki goes for
+:kbd:`C-m` (i.e., the carriage-return character as gotten by the
+:kbd:`enter` key).  Maybe he was raised on a diet of Windows, whereas
+she is more of the Linux persuasion.  Oh, well.)  There:
+
+.. code-block:: scheme
+
+  (define proper-list-last-5
+    (lambda (ys)
+      (letrec ([visit (lambda (xs)
+                        (cond
+                          [(null? (cdr xs))
+                           (car xs)]
+                          [(pair? (cdr xs))
+                           (visit (cdr xs))]
+                          [else
+                           (errorf 'proper-list-last-5
+                                   "not a proper list: ~s"
+                                   ys)]))])
+        (if (pair? ys)
+            (visit ys)
+            (errorf 'proper-list-last-5
+                    "not a non-empty list: ~s"
+                    ys)))))
+
+Esmeralda: And of course -- :kbd:`C-c d` -- it passes the positive
+unit test and it fails if its input is ill-formed::
+
+    > > (test-proper-list-last proper-list-last-5)
+    #t
+    > (proper-list-last-5 '())
+    
+    Exception in proper-list-last-5: not a non-empty list: ()
+    Type (debug) to enter the debugger.
+    > (proper-list-last-5 'x)
+    
+    Exception in proper-list-last-5: not a non-empty list: x
+    Type (debug) to enter the debugger.
+    > (proper-list-last-5 '(1 2 3 . x))
+    
+    Exception in proper-list-last-5: not a proper list: (1 2 3 . x)
+    Type (debug) to enter the debugger.
+    > 
+
+Esmeralda and Yoshiki (una voce): Sensei!
+
+The teacher (galloping back): Yes?
+
+Esmeralda: Here is our new version.
+
+The teacher (looking, and then stating the obvious).  I see.
+
+Yoshiki (expecting some kind of appreciation or even praise; after
+all, there is quite a lot of parentheses here, of both kinds even,
+can't the teacher see them?):
+So?
+
+The teacher: Man, that's quite a lot of repeated calls to cdr you got
+here.
+
+Yoshiki: Well, yes.
+
+Esmeralda (to herself): Yeah, duh, this is Scheme, what do you expect?
+
+The teacher: Of course you hope that the compiler will eliminate the
+common sub-expression ``(cdr xs)``, but you could cache it instead?
+
+Yoshiki: Cache it?
+
+The teacher: Yes -- for example, make ``visit`` take two arguments: the
+car of the pair, and its cdr.  Try it, I'll watch you.
+
+Yoshiki: OK.  First, I'll clone the fifth version into a sixth
+version.  (Clickety clickety click, including :kbd:`M-x`
+replace-string :kbd:`C-m` last-5 :kbd:`C-m` last-6 :kbd:`C-m`, but let's
+not get distracted here.)  Then I will make ``visit`` take two
+arguments.  Here is the incomplete version: the body of ``visit`` is
+untouched yet.  Doing good?
+
+.. code-block:: scheme
+
+  (define proper-list-last-6
+    (lambda (ys)
+      (letrec ([visit (lambda (z zs)
+                        (cond
+                          [(null? (cdr xs))
+                           (car xs)]
+                          [(pair? (cdr xs))
+                           (visit (cdr xs))]
+                          [else
+                           (errorf 'proper-list-last-6
+                                   "not a proper list: ~s"
+                                   ys)]))])
+        (if (pair? ys)
+            (visit (car ys) (cdr ys))
+            (errorf 'proper-list-last-6
+                    "not a non-empty list: ~s"
+                    ys)))))
+
+The teacher: Yes, you are doing good.
+
+Yoshiki (boldly): So now, there is no need to call cdr, since ``zs``
+denotes its result.  :kbd:`M-x` replace-string :kbd:`C-m` (cdr xs)
+:kbd:`C-m` zs :kbd:`C-m`.  There we go:
+
+.. code-block:: scheme
+
+  (define proper-list-last-6
+    (lambda (ys)
+      (letrec ([visit (lambda (z zs)
+                        (cond
+                          [(null? zs)
+                           (car xs)]
+                          [(pair? zs)
+                           (visit zs)]
+                          [else
+                           (errorf 'proper-list-last-6
+                                   "not a proper list: ~s"
+                                   ys)]))])
+        (if (pair? ys)
+            (visit (car ys) (cdr ys))
+            (errorf 'proper-list-last-6
+                    "not a non-empty list: ~s"
+                    ys)))))
+
+The teacher: Right.  And what about ``(car xs)``?
+
+Yoshiki: It should be ``z``.  :kbd:`M-C-k` ``z``:
+
+.. code-block:: scheme
+
+  (define proper-list-last-6
+    (lambda (ys)
+      (letrec ([visit (lambda (z zs)
+                        (cond
+                          [(null? zs)
+                           z]
+                          [(pair? zs)
+                           (visit zs)]
+                          [else
+                           (errorf 'proper-list-last-6
+                                   "not a proper list: ~s"
+                                   ys)]))])
+        (if (pair? ys)
+            (visit (car ys) (cdr ys))
+            (errorf 'proper-list-last-6
+                    "not a non-empty list: ~s"
+                    ys)))))
+
+The teacher: Right.  And what about the recursive call to ``visit``?
+
+Esmeralda (jumping in): It should have ``(car zs)`` and ``(cdr zs)`` as
+actual parameters:
+
+.. code-block:: scheme
+
+  (define proper-list-last-6
+    (lambda (ys)
+      (letrec ([visit (lambda (z zs)
+                        (cond
+                          [(null? zs)
+                           z]
+                          [(pair? zs)
+                           (visit (car zs) (cdr zs))]
+                          [else
+                           (errorf 'proper-list-last-6
+                                   "not a proper list: ~s"
+                                   ys)]))])
+        (if (pair? ys)
+            (visit (car ys) (cdr ys))
+            (errorf 'proper-list-last-6
+                    "not a non-empty list: ~s"
+                    ys)))))
+
+The teacher: Looking good.  Can you test it?
+
+Esmeralda: Of course -- :kbd:`C-c d`.  Here is our positive unit test::
+
+    > > (test-proper-list-last proper-list-last-6)
+    #t
+    > 
+
+Esmeralda: And here are our negative tests::
+
+    > (proper-list-last-6 '())
+    
+    Exception in proper-list-last-6: not a non-empty list: ()
+    Type (debug) to enter the debugger.
+    > (proper-list-last-6 'x)
+    
+    Exception in proper-list-last-6: not a non-empty list: x
+    Type (debug) to enter the debugger.
+    > (proper-list-last-6 '(1 2 3 . x))
+    
+    Exception in proper-list-last-6: not a proper list: (1 2 3 . x)
+    Type (debug) to enter the debugger.
+    > 
+
+The teacher: Wonderful.  Can you tell me how many times ``cdr`` is called,
+for a given list of length n?
+
+Esmeralda: Just a sec.
+
+The teacher: You can trace ``cdr`` and count the number of times it is
+called, if you like.
+
+Esmeralda: No need: n times.
+
+The teacher: And how many times is ``car`` called?
+
+Yoshiki: Easy: n times too.
+
+The teacher: Right.  But shouldn't it be called only once?  After all,
+we only care about the car of the last pair, not about the car of all
+the previous pairs.
+
+Esmeralda and Yoshiki (together): Of course -- we should just pass *the
+list* as the first argument, not its car.
+
+The teacher: Show me.
+
+Esmeralda (her fingers dancing on the keyboard): Look:
+
+.. code-block:: scheme
+
+  (define proper-list-last-7
+    (lambda (ys)
+      (letrec ([visit (lambda (xs zs)
+                        (cond
+                          [(null? zs)
+                           (car xs)]
+                          [(pair? zs)
+                           (visit zs (cdr zs))]
+                          [else
+                           (errorf 'proper-list-last-7
+                                   "not a proper list: ~s"
+                                   ys)]))])
+        (if (pair? ys)
+            (visit ys (cdr ys))
+            (errorf 'proper-list-last-7
+                    "not a non-empty list: ~s"
+                    ys)))))
+
+Yoshiki (snatching the keyboard, and typing while talking): Actually,
+``visit`` does not need two arguments.  We can use a local declaration
+instead:
+
+.. code-block:: scheme
+
+  (define proper-list-last-8
+    (lambda (ys)
+      (letrec ([visit (lambda (xs)
+                        (let ([zs (cdr xs)])
+                          (cond
+                            [(null? zs)
+                             (car xs)]
+                            [(pair? zs)
+                             (visit zs)]
+                            [else
+                             (errorf 'proper-list-last-8
+                                     "not a proper list: ~s"
+                                     ys)])))])
+        (if (pair? ys)
+            (visit ys) 
+            (errorf 'proper-list-last-8
+                    "not a non-empty list: ~s"
+                    ys)))))
+
+Yoshiki: And then, :kbd:`C-c d`::
+
+  > > (test-proper-list-last proper-list-last-8)
+  #t
+  > 
+
+.. epigraph::
+
+    | Wisdom is fine as long as it doesn't slow your gun hand.
+
+    -- `Elizabeth Moon <http://www.elizabethmoon.com/books-vattawar.html#victory>`_
+
+.. index::
+   single: Feynman, Richard P. (the O-ring ice-water demonstration)
+
+The teacher: Good job, each of you.  And by the way, to (almost) quote
+`Richard Feynman`__ at the end of his `O-ring ice-water
+demonstration`__, I believe this programming pattern has some
+significance for the problem of syntax-checking cond-expressions and
+case-expressions in your next assignment.
+
+.. __: http://en.wikipedia.org/wiki/Richard_Feynman
+.. __: http://en.wikipedia.org/wiki/O-ring
+
+
+Version
+-------
+
+Created
+[25 Aug 2015]
+

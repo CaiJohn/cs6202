@@ -1,0 +1,1743 @@
+.. -*- mode: rst -*-
+
+Note for Week 8
+===============
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Main mandatory exercise
+-----------------------
+
+* :ref:`exercise-syntax-checker-for-scheme-part-2`: a self-applicable
+  syntax checker for Scheme, Part II/II
+
+
+Express mandatory exercises
+---------------------------
+
+* :ref:`exercise-curry3-uncurry3`: Currying and uncurrying
+
+* :ref:`exercise-vanilla-fold-left-and-right`: fold left and fold right
+
+* :ref:`exercise-mystery-procedures-using-apply`: two mystery procedures
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-8.scm>`_
+  (latest version: 01 Oct 2015).
+
+
+Goal
+----
+
+The goal of this lecture note is to obtain code reuse from code
+abstraction.  The note touches upon closures, currying and uncurrying,
+the visitor patterns for natural numbers, ``fold-right_nat`` and
+``fold-left_nat``, and the visitor patterns for proper lists,
+``fold-right_proper-list`` and ``fold-left_proper-list``.
+(Proof-theoretically, these fold procedures implement primitive
+iteration over natural numbers and over proper lists.)
+
+We already started with `quasiquotation in Scheme
+<week-8-quasiquotation.html>`_
+We then move on to `Scheme's predefined procedure apply
+<week-8-apply.html>`_, and how `bindings are mutable in
+Scheme <week-8-set-bang.html>`_.
+
+
+.. index:: code reuse
+
+Code reuse
+----------
+
+.. epigraph::
+
+   | Thank you.
+
+   -- Alastor "Mad Eye" Moody
+
+The constantly vigilant, sorry, CONSTANTLY VIGILANT reader will of
+course have noticed that much code is repeated, e.g., in the
+definitions of BNF accessors.  For example, just above, the accessors
+``define-1``, ``time-1`` and ``if-1`` all are defined to be the same
+lambda-abstraction:
+
+.. code-block:: scheme
+
+  (lambda (v)
+    (list-ref v 1))
+
+The *what* of these accessors is specific to each of them (accessing
+the first sub-component of: a definition, a time-expression, and an
+if-expression), but because our data representation is uniform, the
+*how* of these accessors is the same (accessing the second element of
+a list).  This situation calls for *code reuse*: the implementation is
+independently defined, and the accessors are defined as instances of
+this implementation:
+
+.. code-block:: scheme
+
+  ;;; the single "how"'s:
+  (define list-ref-1
+    (lambda (v)
+      (list-ref v 1)))
+
+  (define list-ref-2
+    (lambda (v)
+      (list-ref v 2)))
+
+  ;;; the many "what"'s:
+  (define define-1
+    list-ref-1)
+
+  (define time-1
+    list-ref-1)
+
+  (define if-1
+    list-ref-1)
+
+  (define if-2
+    list-ref-2)
+
+
+Code abstraction
+----------------
+
+To increment a procedure argument by a constant, one can define
+specialized procedures such as the following ones:
+
+.. code-block:: scheme
+
+  (define test-plus1
+    (lambda (candidate)
+      (and-all (try-candidate-transparently candidate 0 1 'test-plus1)
+               (try-candidate-transparently candidate -1 0 'test-plus1)
+               (try-candidate-transparently candidate 7 8 'test-plus1)
+               (try-candidate-transparently candidate -8 -7 'test-plus1)
+               ;;;
+               )))
+
+  (define plus1
+    (lambda (n)
+      (+ 1 n)))
+
+  (define plus2
+    (lambda (n)
+      (+ 2 n)))
+
+  (define plus3
+    (lambda (n)
+      (+ 3 n)))
+
+These procedures are simple to write and simple to test, but at the
+price of much code replication and adjustment.  Instead, one can
+*lambda-abstract* the varying part of this code (here: ``1``, ``2``,
+and ``3``) and obtain a generic adder function:
+
+.. code-block:: scheme
+
+  (define adder
+    (lambda (m)
+      (lambda (n)
+        (+ m n))))
+
+Thus equipped, one can obtain the effect of the definitions above using
+the generic adder function by applying it to the literal to add,
+thereby instantiating the generic procedure with a specific integer:
+
+.. code-block:: scheme
+
+  (define plus1_alt
+    (adder 1))
+
+  (define plus2_alt
+    (adder 2))
+
+  (define plus3_alt
+    (adder 3))
+
+As a case in point, we can verify that ``plus1`` and ``plus1_alt``
+pass the same unit test::
+
+  > (test-plus1 plus1)
+  #t
+  > (test-plus1 plus1_alt)
+  #t
+  > 
+
+Along the same line, rather than writing specialized procedures such
+as
+
+.. code-block:: scheme
+
+  (define adder
+    (lambda (m)
+      (lambda (n)
+        (+ m n))))
+
+  (define muller
+    (lambda (m)
+      (lambda (n)
+        (* m n))))
+
+one can lambda-abstract the varying part of this code and obtain a generic
+operator-application function:
+
+.. code-block:: scheme
+
+  (define super-duper
+    (lambda (p)
+      (lambda (m)
+        (lambda (n)
+          (p m n)))))
+
+Thus equipped, one can obtain the effect of the definitions above
+using the generic ``super-duper`` function by applying it to the
+operator to apply:
+
+.. code-block:: scheme
+
+  (define adder_alt
+    (super-duper +))
+
+  (define muller_alt
+    (super-duper *))
+
+As a case in point, we can obtain another version of ``plus1`` and
+verify that it passes the unit test::
+
+  > (define adder_alt (super-duper +))
+  > (define plus1_alt_alt (adder_alt 1))
+  > (test-plus1 plus1_alt_alt)
+  #t
+  > 
+
+Or again, without any intermediate naming::
+
+  > (test-plus1 ((super-duper +) 1))
+  #t
+  > 
+
+
+.. index:: closure
+.. index::
+   single: Landin, Peter (closure)
+
+Closures
+--------
+
+In the example just above, ``adder_alt`` denotes a *higher-order
+value* -- or again a `closure`__, since `Peter Landin`__: a procedure
+that makes the predicate ``procedure?`` yield ``#t`` and that can be
+applied.
+
+.. __: http://en.wikipedia.org/wiki/Closure_(computer_science)#Etymology
+.. __: http://en.wikipedia.org/wiki/Peter_Landin
+
+
+.. index:: lambda (calculus)
+.. index::
+   single: Church, Alonzo
+.. index::
+   single: Curry, Haskell
+.. index:: currying
+.. index::
+   single: currying (un-)
+.. index::
+   single: Strachey, Christopher (currying)
+
+.. _currying-and-uncurrying:
+
+Currying and uncurrying
+-----------------------
+
+.. index::
+   single: Goldberg, Mayer
+
+.. epigraph::
+
+   | The lambda-calculus has many applications.
+
+   -- `Mayer Goldberg <http://www.little-lisper.org/website/>`_
+
+On a related note, `Haskell Curry`__, who co-invented `the
+lambda-calculus`__ with `Alonzo Church`__, has shown that a binary
+function can be encoded as a unary function yielding a unary function.
+He did it using a function similar to ``super-duper``, that has
+since been named after him, by `Christopher Strachey`__:
+
+.. __: http://en.wikipedia.org/wiki/Haskell_Curry
+.. __: http://en.wikipedia.org/wiki/Lambda_calculus
+.. __: http://en.wikipedia.org/wiki/Alonzo_Church
+.. __: http://en.wikipedia.org/wiki/Christopher_Strachey
+
+.. code-block:: scheme
+
+  (define curry
+    (lambda (p)
+      (lambda (x1)
+        (lambda (x2)
+          (p x1 x2)))))
+
+A curried procedure takes its arguments one at a time::
+
+  > (((curry +) 1) 2)
+  3
+  > (((curry list) 1) 2)
+  (1 2)
+  > (((curry cons) 1) 2)
+  (1 . 2)
+  > (((curry cons) 1) '())
+  (1)
+  > 
+
+The inverse of ``curry`` reads as follows:
+
+.. code-block:: scheme
+
+  (define uncurry
+    (lambda (p)
+      (lambda (x1 x2)
+        ((p x1) x2))))
+
+An uncurried procedure takes all its arguments at once::
+
+  > ((uncurry (curry +)) 10 20)
+  30
+  > 
+
+
+.. _exercise-curry3-uncurry3:
+
+Exercise 1
+----------
+
+In this mandatory exercise, you are asked to
+write a *ternary* version of ``curry`` and ``uncurry`` (call it
+``curry3`` and ``uncurry3``) such that::
+
+  > ((((curry3 +) 1) 10) 100)         ;;; three arguments, one at a time
+  111
+  > ((uncurry3 (curry3 +)) 1 10 100)  ;;; three arguments at once
+  111
+  > 
+
+
+.. _exercise-n-ary-curry:
+
+Exercise 2
+----------
+
+1. Write an n-ary version of ``curry``:
+
+   .. code-block:: scheme
+
+     (define Curry
+       (lambda (n p)
+         (errorf 'Curry "not implemented yet")))
+
+   Given a positive integer ``n`` and an ``n``-ary procedure ``p``,
+   ``Curry`` should return a curried procedure that expects ``n``
+   arguments, one at a time, and yields the result of applying ``p``
+   to these ``n`` arguments::
+   
+     > ((((Curry 3 +) 1) 10) 100)
+     111
+     > ((Curry 1 *) 10)
+     10
+     > ((((Curry 3 *) 1) 2) 3)
+     6
+     > ((((((Curry 5 *) 1) 2) 3) 4) 5)
+     120
+     > 
+
+2. Define a curried version of ``Curry`` that takes its two arguments
+   one at a time.  You will then be in position to define alternative
+   versions of ``curry`` and ``curry3``:
+
+   .. code-block:: scheme
+   
+     (define curried-Curry
+       (lambda (n)
+         (lambda (p)
+           (errorf 'curried-Curry "not implemented yet"))))
+     
+     (define curry_alt
+       (curried-Curry 2))
+     
+     (define curry3_alt
+       (curried-Curry 3))
+
+   Would it work to define ``curried-Curry`` as the result of applying
+   ``curry`` to ``Curry``?
+
+3. What could / should be the result of applying ``curried-Curry`` to
+   ``0``?  (Be computationally sensible.)
+
+4. What would an n-ary version of ``uncurry`` look like?
+
+.. epigraph::
+
+   | Sigtryg the Square (concerned): Er, guys, how do you eat curried chicken?
+   | Harald, Alfrothul, and Brynja (in one voice): One bite at a time.
+
+
+From code reuse to code abstraction
+-----------------------------------
+
+Let us get back to the example of code reuse for BNF accessors:
+
+.. code-block:: scheme
+
+  ;;; the single "how"'s:
+  (define list-ref-1
+    (lambda (v)
+      (list-ref v 1)))
+
+  (define list-ref-2
+    (lambda (v)
+      (list-ref v 2)))
+
+This simple example begs for code abstraction, which we achieve by
+lambda-abstracting the index:
+
+.. code-block:: scheme
+
+  ;;; the generic "how":
+  (define make-list-ref
+    (lambda (i)
+      (lambda (v)
+        (list-ref v i))))
+
+The specific procedures are then obtained by instantiating the generic
+procedure with the suitable index:
+
+.. code-block:: scheme
+
+  ;;; the single "how"'s:
+  (define list-ref-1_alt
+    (make-list-ref 1))
+
+  (define list-ref-2_alt
+    (make-list-ref 2))
+
+The chief benefit of code reuse and code abstraction is that the
+resulting programs are easier to debug and to maintain.
+
+
+Regular expressions, revisited
+------------------------------
+
+Let us revisit `regular expressions
+<week-4-regular-expressions.html>`_ and re-implement their BNF in a
+more generic way:
+
+.. bnf:: regular expressions
+   :noindex:
+   :namespace: regular-expressions
+
+   <regexp> ::= (empty)
+              | (atom <atom>)
+              | (any)
+              | (seq <regexp> <regexp>)
+              | (disj <regexp> <regexp>)
+              | (star <regexp>)
+              | (plus <regexp>)
+              | (var <name>)
+
+   <atom> ::= ...any Scheme integer...
+
+   <name> ::= ...any Scheme identifier...
+
+Let us first define generic BNF constuctors:
+
+.. code-block:: scheme
+
+  (define make-0-ary-constructor
+    (lambda (name)
+      (lambda ()
+        (list name))))
+  
+  (define make-1-ary-constructor
+    (lambda (name)
+      (lambda (x1)
+        (list name x1))))
+  
+  (define make-2-ary-constructor
+    (lambda (name)
+      (lambda (x1 x2)
+        (list name x1 x2))))
+
+We are now equipped to define the BNF constructors for regular
+expressions:
+
+.. code-block:: scheme
+
+  (define make-empty
+    (make-0-ary-constructor 'empty))
+  
+  (define make-atom
+    (make-1-ary-constructor 'atom))
+  
+  (define make-any
+    (make-0-ary-constructor 'any))
+  
+  (define make-seq
+    (make-2-ary-constructor 'seq))
+  
+  (define make-disj
+    (make-2-ary-constructor 'disj))
+  
+  (define make-star
+    (make-1-ary-constructor 'star))
+  
+  (define make-plus
+    (make-1-ary-constructor 'plus))
+  
+  (define make-var
+    (make-1-ary-constructor 'var))
+
+Let us define generic BNF predicates:
+
+.. code-block:: scheme
+
+  (define make-fixed-arity-predicate
+    (lambda (name i)
+      (lambda (v)
+        (and (pair? v)
+             (equal? (car v) name)
+             (proper-list-of-given-length? (cdr v) i)))))
+  
+  (define make-0-ary-predicate
+    (lambda (name)
+      (make-fixed-arity-predicate name 0)))
+  
+  (define make-1-ary-predicate
+    (lambda (name)
+      (make-fixed-arity-predicate name 1)))
+  
+  (define make-2-ary-predicate
+    (lambda (name)
+      (make-fixed-arity-predicate name 2)))
+
+We are now equipped to define the BNF predicates for regular
+expressions:
+
+.. code-block:: scheme
+
+  (define is-empty?
+    (make-0-ary-predicate 'empty))
+  
+  (define is-atom?
+    (make-1-ary-predicate 'atom))
+  
+  (define is-any?
+    (make-0-ary-predicate 'any))
+  
+  (define is-seq?
+    (make-2-ary-predicate 'seq))
+  
+  (define is-disj?
+    (make-2-ary-predicate 'disj))
+  
+  (define is-star?
+    (make-1-ary-predicate 'star))
+  
+  (define is-plus?
+    (make-1-ary-predicate 'plus))
+  
+  (define is-var?
+    (make-1-ary-predicate 'var))
+
+Finally, let us define generic BNF accessors:
+
+.. code-block:: scheme
+
+  (define make-accessor
+    (lambda (i)
+      (lambda (v)
+        (list-ref v i))))
+  
+  (define accessor-1
+    (make-accessor 1))
+  
+  (define accessor-2
+    (make-accessor 2))
+
+We are now equipped to define the BNF accessors for regular
+expressions:
+
+.. code-block:: scheme
+
+  (define atom-1
+    accessor-1)
+  
+  (define seq-1
+    accessor-1)
+  
+  (define seq-2
+    accessor-2)
+  
+  (define disj-1
+    accessor-1)
+  
+  (define disj-2
+    accessor-2)
+  
+  (define star-1
+    accessor-1)
+  
+  (define plus-1
+    accessor-1)
+  
+  (define var-1
+    accessor-1)
+
+Implementing a BNF like this is simpler (there is less code to debug),
+more easily maintainable (each functionality is implemented in one
+place, and in one place only), and more readable (the name of each
+constructor, predicate, and accessor signals what it stands for, and
+its denotation reflects the common way it is implemented).
+
+
+.. index:: fold_nat (right)
+
+The visitor pattern for natural numbers
+---------------------------------------
+
+All the recursive procedures over natural numbers we have seen so far
+(``plus``, ``times``, ``power``, ``fac``) follow the inductive definition
+of the said natural numbers:
+
+.. bnf:: natural numbers
+   :noindex:
+   :namespace: natural-numbers
+
+   <natural-number> ::= 0
+                      | 1 + <natural-number>
+
+Schematically, all their definitions follow the following pattern:
+
+.. code-block:: scheme
+
+  (define ...
+    (lambda (n)
+      (letrec ([visit (lambda (i)
+                        (if (zero? i)
+                            ...
+                            ... (visit (1- i)) ...))])
+        (visit n))))
+
+For example, here is again a definition of addition and a definition
+of multiplication:
+
+.. code-block:: scheme
+
+  (define plus
+    (lambda (m n)
+      (letrec ([visit (lambda (i)
+                        (if (zero? i)
+                            n
+                            (1+ (visit (1- i)))))])
+        (visit m))))
+
+  (define times
+    (lambda (m n)
+      (letrec ([visit (lambda (i)
+                        (if (zero? i)
+                            0
+                            (+ n (visit (1- i)))))])
+        (visit m))))
+
+These definitions satisfy the unit tests for addition and for
+multiplication::
+
+  > (test-plus plus)
+  #t
+  > (test-times times)
+  #t
+  > 
+
+Let us capture this feeling of `déjà programmé`__ with the following
+visiting pattern for natural numbers, where the base case and the
+inductive case are parameterized:
+
+.. __: http://en.wikipedia.org/wiki/D%C3%A9j%C3%A0_vu
+
+.. code-block:: scheme
+
+  (define fold-right_nat
+    (lambda (zero-case succ-case)
+      (lambda (n)
+        (letrec ([visit
+                  (lambda (i)
+                    (if (zero? i)
+                        zero-case
+                        (succ-case (visit (1- i)))))])
+          (visit n)))))
+  
+  (define fold-right_nat-traced
+    (lambda (zero-case succ-case)
+      (lambda (n)
+        (letrec ([visit
+                  (trace-lambda visit_fold-right_nat (i)
+                    (if (zero? i)
+                        zero-case
+                        (succ-case (visit (1- i)))))])
+          (visit n)))))
+
+We can now define, e.g., addition and multiplication as instances of
+``fold-right_nat``:
+
+.. code-block:: scheme
+
+  (define plus_alt
+    (lambda (m n)
+      ((fold-right_nat n
+                       (lambda (c)
+                         (1+ c)))
+       m)))
+
+  (define times_alt
+    (lambda (m n)
+      ((fold-right_nat 0
+                       (lambda (c)
+                         (+ n c)))
+       m)))
+
+These alternative definitions pass the unit tests for addition and
+multiplication::
+
+  > (test-plus plus_alt)
+  #t
+  > (test-times times_alt)
+  #t
+  > 
+
+If you are curious to see *how* the computation goes, use
+``fold-right_nat-traced`` instead of ``fold-right_nat``.  And if you
+are curious to see *what* the computation is doing, use `quasiquote
+<week-8-quasiquotation.html>`_ to obtain a code generator:
+
+.. code-block:: scheme
+
+  (define times_alt-gen
+    (lambda (m n)
+      `(lambda (,n)
+         ,((fold-right_nat 0
+                           (lambda (c)
+                             `(+ ,n ,c)))
+           m))))
+
+Here is this code generator in action::
+
+  > (times_alt-gen 5 'z)
+  (lambda (z) (+ z (+ z (+ z (+ z (+ z 0))))))
+  > 
+
+Applying this residual procedure can to ``10`` performs the
+multiplication of ``5`` by ``10``::
+
+  > ((lambda (z) (+ z (+ z (+ z (+ z (+ z 0)))))) 10)
+  50
+  > (times_alt 5 10)
+  50
+  > 
+
+
+.. _exercise-generic-power-and-fac:
+
+Exercise 3
+----------
+
+This exercise is about using ``fold-right_nat``.
+
+* Use ``fold-right_nat`` to define the power procedure, and put this
+  procedure through the ``test-power`` unit test.
+
+* Use ``fold-right_nat`` to define the factorial procedure, and put this
+  procedure through the ``test-fac`` unit test.
+
+NB. The first part of this exercise is easy.
+The second part is more challenging.
+
+
+.. index:: fold_nat (left)
+
+The visitor pattern for natural numbers with an accumulator
+-----------------------------------------------------------
+
+On the occasion, we use an accumulator in our recursive definitions.
+For example, here is a definition of addition and a definition of
+multiplication that use an accumulator:
+
+.. code-block:: scheme
+
+  (define plus-acc
+    (lambda (m n)
+      (letrec ([visit (lambda (i a)
+                        (if (zero? i)
+                            a
+                            (visit (1- i) (1+ a))))])
+        (visit m n))))
+
+  (define times-acc
+    (lambda (m n)
+      (letrec ([visit (lambda (i a)
+                        (if (zero? i)
+                            a
+                            (visit (1- i) (+ n a))))])
+        (visit m 0))))
+
+These definitions pass their respective unit test::
+
+  > (test-plus plus-acc)
+  #t
+  > (test-times times-acc)
+  #t
+  > 
+
+Schematically, these definitions with an accumulator follow the
+following pattern:
+
+.. code-block:: scheme
+
+  (define ...
+    (lambda (n)
+      (letrec ([visit (lambda (i a)
+                        (if (zero? i)
+                            a
+                            (visit (1- i) ...)))])
+        (visit n ...))))
+
+The following visiting pattern for natural numbers captures this
+schema.  Again, the base case and the inductive case are
+parameterized:
+
+.. code-block:: scheme
+
+  (define fold-left_nat
+    (lambda (zero-case succ-case)
+      (lambda (n)
+        (letrec ([visit
+                  (lambda (i a)
+                    (if (zero? i)
+                        a
+                        (visit (1- i) (succ-case a))))])
+          (visit n zero-case)))))
+  
+  (define fold-left_nat-traced
+    (lambda (zero-case succ-case)
+      (lambda (n)
+        (letrec ([visit
+                  (trace-lambda visit_fold-left_nat (i a)
+                    (if (zero? i)
+                        a
+                        (visit (1- i) (succ-case a))))])
+          (visit n zero-case)))))
+
+We can now define, e.g., addition and multiplication as instances of
+``fold-left_nat``:
+
+.. code-block:: scheme
+
+  (define plus-acc_alt
+    (lambda (m n)
+      ((fold-left_nat n
+                      (lambda (c)
+                        (1+ c)))
+       m)))
+
+  (define times-acc_alt
+    (lambda (m n)
+      ((fold-left_nat 0
+                      (lambda (c)
+                        (+ n c)))
+       m)))
+
+These alternative definitions pass the unit tests for addition and
+multiplication::
+
+  > (test-plus plus-acc_alt)
+  #t
+  > (test-times times-acc_alt)
+  #t
+  > 
+
+If you are curious to see *how* the computation goes, use
+``fold-left_nat-traced`` instead of ``fold-left_nat``.  If you are
+curious to see *what* the computation is doing, use `quasiquote
+<week-8-quasiquotation.html>`_ to obtain a code generator:
+
+.. code-block:: scheme
+
+  (define times-acc_alt-gen
+    (lambda (m n)
+      `(lambda (,n)
+         ,((fold-left_nat 0
+                          (lambda (c)
+                            `(+ ,n ,c)))
+           m))))
+
+Here is this code generator in action::
+
+  > (times-acc_alt-gen 5 'z)
+  (lambda (z) (+ z (+ z (+ z (+ z (+ z 0))))))
+  > 
+
+Applying this residual procedure to ``10`` performs the
+multiplication of ``5`` by ``10``::
+
+  > ((lambda (z) (+ z (+ z (+ z (+ z (+ z 0)))))) 10)
+  50
+  > (times-acc_alt 5 10)
+  50
+  > 
+
+And if you want to see both what is going on and how it is going, use
+both ``fold-left_nat-traced`` and quasiquote:
+
+.. code-block:: scheme
+
+  (define plus-acc_alt-gen
+    (lambda (m n)
+      `(lambda (,n)
+         ,((fold-left_nat-traced 0
+                          (lambda (c)
+                            `(+ ,n ,c)))
+           m))))
+
+Here is this traced code generator in action::
+
+  > (plus-acc_alt-gen 5 'z)
+  |(visit_fold-left_nat 5 0)
+  |(visit_fold-left_nat 4 (+ z 0))
+  |(visit_fold-left_nat 3 (+ z (+ z 0)))
+  |(visit_fold-left_nat 2 (+ z (+ z (+ z 0))))
+  |(visit_fold-left_nat 1 (+ z (+ z (+ z (+ z 0)))))
+  |(visit_fold-left_nat 0 (+ z (+ z (+ z (+ z (+ z 0))))))
+  |(+ z (+ z (+ z (+ z (+ z 0)))))
+  (lambda (z) (+ z (+ z (+ z (+ z (+ z 0))))))
+  > 
+
+
+About the visitor patterns for natural numbers
+----------------------------------------------
+
+Question: besides the fact that one is tail-recursive and the other
+isn't, is there a difference between ``fold-left_nat`` and
+``fold-right_nat``?
+
+Answer: it can be formally proved that ``fold-left_nat`` and
+``fold-right_nat`` always give the same result when their second
+argument is pure (i.e., it has no observable effects such as printing
+or calling ``errorf``).
+
+
+Exercise 4
+----------
+
+Write defensive versions of ``fold-right_nat`` and
+``fold-left_nat`` that are parameterized by a procedure to call if the
+input is not a non-negative integer.
+
+
+.. index:: fold_proper-list (right)
+.. index:: fold_proper-list (left)
+
+The visitor patterns for proper lists
+-------------------------------------
+
+All the recursive procedures over proper lists we have seen so far
+follow the inductive definition of the said proper lists:
+
+.. bnf:: proper lists
+   :namespace: proper-lists
+   :noindex:
+
+   <proper-list> ::= ()
+                   | (<value> . <proper-list>)
+
+Schematically, all the definitions follow either of the following
+patterns, either without an accumulator or with one:
+
+.. code-block:: scheme
+
+  (define ...
+    (lambda (vs)
+      (letrec ([visit (lambda (ws)
+                        (if (null? ws)
+                            ...
+                            (... (car ws) (visit (cdr ws)))))])
+        (visit vs))))
+
+  (define ...
+    (lambda (vs)
+      (letrec ([visit (lambda (ws a)
+                        (if (null? ws)
+                            a
+                            (visit (cdr ws) (... (car ws) a))))])
+        (visit vs ...))))
+
+The following visiting patterns for proper lists capture these two
+schemas.  Again, the base case and the inductive case are
+parameterized:
+
+.. code-block:: scheme
+
+  (define fold-right_proper-list
+    (lambda (nil-case cons-case)
+      (lambda (vs)
+        (letrec ([visit (lambda (ws)
+                          (if (null? ws)
+                              nil-case
+                              (cons-case (car ws)
+                                         (visit (cdr ws)))))])
+          (visit vs)))))
+  
+  (define fold-left_proper-list
+    (lambda (nil-case cons-case)
+      (lambda (vs)
+        (letrec ([visit (lambda (ws a)
+                          (if (null? ws)
+                              a
+                              (visit (cdr ws) (cons-case (car ws) a))))])
+          (visit vs nil-case)))))
+
+For example, we can define a procedure that computes the length of a
+proper list by instantiating either ``fold-right_proper-list`` or
+``fold-left_proper-list``:
+
+.. code-block:: scheme
+
+  (define length_proper-list_alt
+    (lambda (xs)
+      ((fold-right_proper-list 0
+                               (lambda (x c)
+                                 (1+ c)))
+       xs)))
+
+  (define length-acc_proper-list_alt
+    (lambda (xs)
+      ((fold-left_proper-list 0
+                              (lambda (x c)
+                                (1+ c)))
+       xs)))
+
+Both definitions pass the unit test from `a previous week
+<week-18-lists-and-defensive-programming.html#computing-the-length-of-a-proper-list>`_::
+
+  > (test-length_proper-list length_proper-list_alt)
+  #t
+  > (test-length_proper-list length-acc_proper-list_alt)
+  #t
+  > 
+
+Similarly, we can define a procedure to concatenate two proper lists
+as an instance of ``fold-right_proper-list``:
+
+.. code-block:: scheme
+
+  (define append_proper-list_alt
+    (lambda (xs ys)
+      ((fold-right_proper-list ys
+                               (lambda (x c)
+                                 (cons x c)))
+       xs)))
+
+This definition passes the unit test from `the same previous week
+<week-3-lists-and-defensive-programming.html#concatenating-a-proper-list-to-another-proper-list>`_::
+
+  > (test-append_proper-list append_proper-list_alt)
+  #t
+  > 
+
+If you are curious to see what is going on, use `quasiquote
+<week-8-quasiquotation.html>`_ to obtain a code generator:
+
+.. code-block:: scheme
+
+  (define append_proper-list_alt-gen
+    (lambda (xs ys)
+      `(lambda (,ys)
+         ,((fold-right_proper-list ys
+                                   (lambda (x c)
+                                     `(cons ',x ,c)))
+           xs))))
+
+Here is this code generator in action::
+
+  > (append_proper-list_alt-gen '(a b c) 'zs)
+  (lambda (zs) (cons 'a (cons 'b (cons 'c zs))))
+  > 
+
+Applying this residual procedure to ``(e f g)`` performs the
+concatenation of ``(a b c)`` to ``(e f g)``::
+
+  > ((lambda (zs) (cons 'a (cons 'b (cons 'c zs)))) '(e f g))
+  (a b c e f g)
+  > (append_proper-list_alt '(a b c) '(e f g))
+  (a b c e f g)
+  > 
+
+Likewise, we can revisit
+:ref:`our-very-own-definition-of-variadic-addition`:
+
+.. code-block:: scheme
+
+  (define plus-variadic_alt
+    (lambda ns
+      ((fold-right_proper-list 0 plus-dyadic) ns)))
+
+This definition passes the unit test::
+
+  > (test-plus-variadic plus-variadic_alt)
+  #t
+  > 
+
+Question: what would happen if we used ``fold-left_proper-list``
+instead of ``fold-right_proper-list`` in the definition of
+``plus-variadic_alt``?
+
+
+About the visitor patterns for proper lists
+-------------------------------------------
+
+Question: besides the fact that one is tail-recursive and the other
+isn't, is there a difference between ``fold-left_proper-list`` and
+``fold-right_proper-list``?
+
+Answer: it can be formally proved that ``fold-left_nat`` and
+``fold-right_nat`` always give the same result when their second
+argument is pure (i.e., it has no observable effects such as printing
+or calling ``errorf``) that is associative and commutative.
+
+
+.. _exercise-vanilla-fold-left-and-right:
+
+Exercise 5
+----------
+
+In this mandatory exercise, you are asked to answer the following
+questions:
+
+* Which function does ``(fold-right_nat 0 1+)``
+  implement?
+
+* Which function does ``(fold-left_nat 0 1+)``
+  implement?
+
+* Which function does ``(fold-right_proper-list '() cons)``
+  implement?
+
+* Which function does ``(fold-left_proper-list '() cons)``
+  implement?
+
+Hint: each of these expressions denotes a procedure.
+You should apply the two first procedures to a natural number,
+and the two last procedures to a proper list.
+
+
+.. _exercise-revisit-with-fold-right_proper-list:
+
+Exercise 6
+----------
+
+Revisit the following procedures from `the lecture note about map
+<week-6-map>`_ and define them using ``fold-right_proper-list``.
+
+* ``map1`` in the section on
+  :ref:`mapping-procedure-over-proper-lists`;
+
+* ``map1-append`` in the section on
+  :ref:`mapping-procedure-over-proper-lists-continued`;
+
+* ``all-possible-environments`` in the section on
+  :ref:`enumerating-boolean-environments`; and
+
+* ``powerset`` in the section on
+  :ref:`computing-the-powerset-of-a-set`.
+
+Make your definition go through the unit test of each of these
+procedures.
+
+
+.. _exercise-revisit-with-fold-right_proper-list-defensively:
+
+Exercise 7
+----------
+
+Write defensive versions of ``fold-right_proper-list`` and of
+``fold-left_proper-list`` that are parameterized by a procedure to
+call if the input is not a proper list.
+
+Using each of these two defensive versions, define alternative
+versions of
+
+* ``proper-list-of-numbers?``,
+
+* ``proper-list-of-distinct-numbers?``,
+
+* ``list-of-numbers?``, and
+
+* ``list-of-distinct-numbers?``
+
+as found on `the lecture note about defensive programming
+<week-5-data-driven-programming.html>`_.
+
+Run each of these procedures through their unit test.
+
+
+Exercise 8
+----------
+
+In a fit of inspiration, Arnketil the Cyclist came up with the two
+following definitions.  He claims they implement
+``fold-right_proper-list`` in terms of ``fold-left_proper-list`` and
+vice versa.
+
+.. code-block:: scheme
+
+  (define putative-fold-right_proper-list
+    (lambda (nil-case cons-case)
+      (lambda (vs)
+        (((fold-left_proper-list (lambda (a)
+                                   a)
+                                 (lambda (x h)
+                                   (lambda (a)
+                                     (h (cons-case x a)))))
+          vs)
+         nil-case))))
+  
+  (define putative-fold-left_proper-list
+    (lambda (nil-case cons-case)
+      (lambda (vs)
+        (((fold-right_proper-list (lambda (a)
+                                    a)
+                                  (lambda (x h)
+                                    (lambda (a)
+                                      (h (cons-case x a)))))
+          vs)
+         nil-case))))
+
+You are asked to validate or invalidate Arnketil's claim on a handful
+of examples.  (A unit-test procedure would be nice.  (Hint: look at
+:ref:`exercise-vanilla-fold-left-and-right`.))
+
+
+The visitor pattern for regular expressions
+-------------------------------------------
+
+All the recursive procedures over `regular expressions
+<week-4-regular-expressions.html>`_ we have seen so far follow the
+inductive definition of the said regular expressions:
+
+.. bnf:: regular expressions
+   :noindex:
+   :namespace: regular-expressions
+
+   <regexp> ::= (empty)
+              | (atom <atom>)
+              | (any)
+              | (seq <regexp> <regexp>)
+              | (disj <regexp> <regexp>)
+              | (star <regexp>)
+              | (plus <regexp>)
+              | (var <name>)
+
+   <atom> ::= ...any Scheme integer...
+
+   <name> ::= ...any Scheme identifier...
+
+Schematically, all their definitions follow the following pattern:
+
+.. code-block:: scheme
+
+  (define ...
+    (lambda (v_orig)
+      (letrec ([visit (lambda (v)
+                        (cond
+                          [(is-empty? v)
+                           ...]
+                          [(is-atom? v)
+                           ... (atom-1 v) ...]
+                          [(is-any? v)
+                           ... (any-1 v) ...]
+                          [(is-seq? v)
+                           ... (visit (seq-1 v)) ... (visit (seq-2 v)) ...]
+                          [(is-disj? v)
+                           ... (visit (disj-1 v)) ... (visit (disj-2 v)) ...]
+                          [(is-star? v)
+                           ... (visit (star-1 v)) ...]
+                          [(is-plus? v)
+                           ... (visit (plus-1 v)) ...]
+                          [(is-var? v)
+                           ... (var-1 v) ...]
+                          [else
+                           ... v ...]))])
+        ... (visit v_orig) ...)))
+
+The following visiting pattern for regular expressions captures this
+schema.  All the cases are parameterized:
+
+.. code-block:: scheme
+
+  (define fold-right_regular-expression
+    (lambda (empty-case atom-case any-case seq-case disj-case star-case plus-case var-case else-case)
+      (lambda (v_orig)
+        (letrec ([visit (lambda (v)
+                          (cond
+                            [(is-empty? v)
+                             (empty-case)]
+                            [(is-atom? v)
+                             (atom-case (atom-1 v))]
+                            [(is-any? v)
+                             (any-case)]
+                            [(is-seq? v)
+                             (seq-case (visit (seq-1 v))
+                                       (visit (seq-2 v)))]
+                            [(is-disj? v)
+                             (disj-case (visit (disj-1 v))
+                                        (visit (disj-2 v)))]
+                            [(is-star? v)
+                             (star-case (visit (star-1 v)))]
+                            [(is-plus? v)
+                             (plus-case (visit (plus-1 v)))]
+                            [(is-var? v)
+                             (var-case (var-1 v))]
+                            [else
+                             (else-case v)]))])
+          (visit v_orig)))))
+
+Let us use ``fold-right_regular-expression`` to define a syntax
+checker for regular expressions.  To this end, we of course start by
+writing a positive unit-test procedure as well as a negative one:
+
+.. code-block:: scheme
+
+  (define test-well-formed-regular-expression
+    (lambda (check)
+      (lambda (re)
+        (or (check re)
+            (begin
+              (printf "test-well-formed-regular-expression -- incorrectly rejected: ~s~n"
+                      re)
+              #f)))))
+  
+  (define test-well-formed-regular-expressions
+    (lambda (check)
+      (andmap (test-well-formed-regular-expression check)
+              (list ;;; from week-2.html:
+                    '(atom 10)
+                    '(any)
+                    '(seq (any) (any))
+                    '(seq (atom 10) (any))
+                    '(seq (any) (atom 20))
+                    '(seq (seq (atom 1) (atom 2)) (seq (atom 3) (atom 4)))
+                    '(disj (atom 10) (atom 20))
+                    '(star (atom 10))
+                    '(plus (atom 10))
+                    '(disj (empty) (atom 10))
+                    '(seq (plus (atom 10)) (seq (star (any)) (plus (atom 20))))
+                    ;;; from Exercise 1 in week-2.html:
+                    '(seq (atom 1) (seq (atom 2) (seq (atom 3) (seq (atom 4) (empty)))))
+                    '(seq (atom 1) (seq (atom 2) (seq (atom 3) (atom 4))))
+                    '(seq (seq (empty) (seq (atom 1) (atom 2))) (seq (empty) (seq (atom 3) (atom 4))))
+                    '(seq (seq (seq (atom 1) (atom 2)) (atom 3)) (atom 4))
+                    '(seq (seq (seq (seq (empty) (atom 1)) (atom 2)) (atom 3)) (atom 4))
+                    ;;; from week-4-regular-expressions.scm:
+                    '(seq (atom 10) (seq (var x) (atom 30)))
+                    '(seq (disj (var x) (star (any)))
+                          (plus (seq (var z) (var x))))
+                    ;;; add more well-formed regular expressions here
+                    ))))
+
+  (define test-ill-formed-regular-expression
+    (lambda (check)
+      (lambda (re)
+        (or (not (check re))
+            (begin
+              (printf "test-ill-formed-regular-expression -- incorrectly accepted: ~s~n"
+                      re)
+              #f)))))
+  
+  (define test-ill-formed-regular-expressions
+    (lambda (check)
+      (andmap (test-ill-formed-regular-expression check)
+              (list '(atom)
+                    '(atom . 10)
+                    '(atom 10 20)
+                    '(anything)
+                    '(any thing)
+                    '(disj (anything) (any thing))
+                    '(seq (seq (seq (seq EMPTY (atom 1)) (atom 2)) (atom 3)) (atom 4))
+                    ;;; add more ill-formed regular expressions here
+                    ))))
+
+Finally, let us express the syntax checker using
+``fold-right_regular-expression`` by specifying what to do in each
+case:
+
+* the ``empty`` regular expression is always well formed, so we pass 
+  a 0-ary procedure that always returns ``#t``;
+
+* the ``atom`` regular expression is only well formed if its component
+  is a number, so we pass a unary procedure that tests whether its
+  argument is a number;
+
+* the ``any`` regular expression is always well formed, so we pass, so
+  we pass a 0-ary procedure that always returns ``#t``;
+
+* the ``seq`` expression is only well formed if both its two
+  components are well formed, so we pass a 2-ary procedure that
+  performs a logical conjunction of its two arguments;
+
+* the ``disj`` expression is only well formed if both its two
+  components are well formed, so we pass a 2-ary procedure that
+  performs a logical conjunction of its two arguments;
+
+* the ``star`` expression is only well formed if its component is well
+  formed, so we pass a 1-ary procedure that implements the identity
+  function;
+
+* the ``plus`` expression is only well formed if its component is well
+  formed, so we pass a 1-ary procedure that implements the identity
+  function;
+
+* the ``var`` expression is only well formed if its component is a
+  symbol, so we pass a 1-ary procedure that tests whether its argument
+  is a symbol; and
+
+* otherwise, the input is not a well-formed regular expression, so we
+  pass a procedure that emits an error message.
+
+.. code-block:: scheme
+
+  (define check-silently
+    #t)
+  
+  (define check-regular-expression_alt
+    (fold-right_regular-expression (lambda ()
+                                     #t)
+                                   (lambda (v)
+                                     (number? v))
+                                   (lambda ()
+                                     #t)
+                                   (lambda (r1 r2)
+                                     (and r1 r2))
+                                   (lambda (r1 r2)
+                                     (and r1 r2))
+                                   (lambda (r)
+                                     r)
+                                   (lambda (r)
+                                     r)
+                                   (lambda (v)
+                                     (symbol? v))
+                                   (lambda (v)
+                                     (begin
+                                       (or check-silently
+                                           (printf "check-regular-expression_alt -- unrecognized input: ~s~n" v))
+                                       #f))))
+
+Let us test this syntax checker::
+
+  > (test-well-formed-regular-expressions check-regular-expression_alt)
+  #t
+  > (test-ill-formed-regular-expressions check-regular-expression_alt)
+  #t
+  > 
+
+Success.
+
+
+Exercise 9
+----------
+
+Instead of passing ``(lambda (r1 r2) (and r1 r2))`` in the case of
+disjunctions, Sigtryg the Square passes ``(lambda (r1 r2) (or r1
+r2))``, which makes sense since conceptually, a disjunction of regular
+expressions should be processed with a logical disjunction, not a
+logical conjunction.
+
+Is Sigtryg's syntax checker correct?  Provide an argument or a
+counter-example.
+
+
+Exercise 10
+-----------
+
+Harald the Bold suggests that
+
+* rather than passing ``(lambda (v) (number? v))`` in the case for
+  ``atom``, one could pass ``number?``, and that
+
+* rather than passing ``(lambda (v) (symbol? v))`` in the case for
+  ``var``, one could pass ``symbol?``.
+
+Do you concur with Harald?
+
+
+Exercise 11
+-----------
+
+With a disarming smile, Loki suggests that
+
+* rather than passing ``(lambda (r1 r2) (and r1 r2))`` in the case for
+  ``seq``, one could just pass ``and``, and that
+
+* rather than passing ``(lambda (r1 r2) (and r1 r2))`` in the case for
+  ``disj``, one could also just pass ``and``.
+
+Do you concur with Loki?
+
+
+Exercise 12
+-----------
+
+Flipping the verbosity flag makes the negative unit-procedure test report
+what is syntactically wrong in each of its ill-formed regular
+expressions::
+
+  > check-silently
+  #t
+  > (test-ill-formed-regular-expressions check-regular-expression_alt)
+  #t
+  > (define check-silently
+      #f)
+  > (test-ill-formed-regular-expressions check-regular-expression_alt)
+  check-regular-expression_alt -- unrecognized input: (atom)
+  check-regular-expression_alt -- unrecognized input: (atom . 10)
+  check-regular-expression_alt -- unrecognized input: (atom 10 20)
+  check-regular-expression_alt -- unrecognized input: (anything)
+  check-regular-expression_alt -- unrecognized input: (any thing)
+  check-regular-expression_alt -- unrecognized input: EMPTY
+  #t
+  > 
+
+.. epigraph::
+
+  | Harald: Shouldn't they be told to expand the negative unit test
+  |         with expressions that have _several_ ill-formed sub-expressions?
+  | Alfrothul: At least they should be reminded.
+  | Brynja: Naah.  They are big boys.
+
+Suppose that several things (i.e., not just one) are syntactically
+wrong in an ill-formed regular expression.  How would you modify
+``check-regular-expression_alt`` so that it reports *each* of these
+wrong things?  It this doable at all?
+
+
+Exercise 13
+-----------
+
+.. epigraph::
+
+  | Harald: See, Brynja?
+  |         I am _not_ suggesting anyone to make any unit test here.
+  | Brynja: Very good, Harald, very good.
+
+Use ``fold-right_regular-expression`` to compute the number of
+occurrences of the ``seq`` constructor in a given regular expression.
+
+
+Exercise 14
+-----------
+
+Use ``fold-right_regular-expression`` to construct an association list
+that pairs the name of each constructor with its number of occurrences
+in a given regular expression:
+
+.. code-block:: scheme
+
+  (define test-all-constructors-in-a-regular-expression
+    (lambda (candidate)
+      (and (equal? (candidate '(seq (any) (any)))
+                   '((empty . 0) (atom . 0) (any . 2) (seq . 1) (disj . 0) (star . 0) (plus . 0) (var . 0)))
+           ;;; add more tests here
+           )))
+
+
+Exercise 15
+-----------
+
+Use ``fold-right_regular-expression`` to define a Magritte interpreter
+for regular expressions, and test it.
+
+
+Exercise 16
+-----------
+
+Drawing inspiration from ``fold-left_nat`` and ``fold-left_proper-list``,
+define a fold-left procedure for regular expressions and test it.
+
+
+.. _exercise-on-boolean-expressions-alt:
+
+Exercise 17
+-----------
+
+Drawing inspiration from the fold-right procedure for regular
+expressions, define a fold-right procedure for Boolean expressions as
+defined in `the section on Boolean expressions
+<week-4-boolean-expressions.html#bnf-of-boolean-expressions>`_.
+Using this fold-right procedure,
+
+* define an unparser from the abstract syntax of Boolean expressions to
+  the concrete syntax of Scheme;
+
+* define a syntax checker and verify that it passes the corresponding
+  positive and negative unit tests;
+
+* define an interpreter and verify that it passes the corresponding
+  positive and negative unit tests; and
+
+* define a Magritte interpreter and test it.
+
+
+.. _exercise-on-boolean-expressions-in-boolean-normal-form-alt:
+
+Exercise 18
+-----------
+
+Drawing inspiration from the fold-right procedure for regular
+expressions, define a fold-right procedure for Boolean expressions in
+negational normal form as defined in `the section on Boolean expressions
+in negational normal form
+<week-4-boolean-expressions.html#bnf-of-boolean-expressions-in-negational-normal-form>`_.
+Using this fold-right procedure,
+
+* define an unparser from the abstract syntax of Boolean expressions in
+  negational normal form to the concrete syntax of Scheme;
+
+* define a syntax checker and verify that it passes the corresponding
+  positive and negative unit tests;
+
+* define an interpreter and verify that it passes the corresponding
+  positive and negative unit tests; and
+
+* define a Magritte interpreter and test it.
+
+
+Exercise 19
+-----------
+
+As a continuation of :ref:`exercise-on-boolean-expressions-alt` and
+:ref:`exercise-on-boolean-expressions-in-boolean-normal-form-alt`,
+
+* using the fold-right procedure for Boolean expressions in negational
+  normal form, define a procedure that embeds a Boolean expression in
+  negational normal form into a Boolean expression; and
+
+* using the fold-right procedure for Boolean expressions, define a
+  procedure that normalizes a Boolean expression into a Boolean
+  expression in negational normal form.
+
+Using these two procedures, carry out the programme outlined in the
+second half of Exercise :ref:`exercise-negational-normal-forms` and in
+Section :ref:`on-the-idempotence-of-negational-normalization`.
+
+
+Exercise 20
+-----------
+
+Drawing inspiration from ``fold-left_nat`` and ``fold-left_proper-list``,
+define a fold-left procedure for Boolean expressions and test it.
+
+
+.. _exercise-on-arithmetic-expressions-alt:
+
+Exercise 21
+-----------
+
+Drawing inspiration from the fold-right procedure for regular
+expressions, define a fold-right procedure for arithmetic expressions as
+defined in `the section on arithmetic expressions
+<week-4-arithmetic-expressions.html#bnf-of-arithmethic-expressions>`_.
+Using this fold-right procedure,
+
+* define an unparser from the abstract syntax of arithmetic expressions
+  to the concrete syntax of Scheme;
+
+* define a syntax checker and verify that it passes the corresponding
+  positive and negative unit tests;
+
+* define an interpreter and verify that it passes the corresponding
+  positive and negative unit tests;
+
+* define a Magritte interpreter and test it; and
+
+* define a compiler to the same byte code as in the section on the
+  :ref:`compiler-for-arithmetic-expressions` and verify that it passes the
+  corresponding positive and negative unit tests.
+
+
+Exercise 22
+-----------
+
+Drawing inspiration from ``fold-left_nat`` and ``fold-left_proper-list``,
+define a fold-left procedure for arithmetic expressions and test it.
+
+
+Exercise 23
+-----------
+
+Drawing inspiration from the fold-right procedure for regular
+expressions, define a fold-right procedure for byte-code programs as
+defined in `the section on arithmetic expressions
+<week-4-arithmetic-expressions.html#bnf-of-arithmethic-expressions>`_.
+Using this fold-right procedure,
+
+* define a syntax checker and verify that it passes the corresponding
+  positive and negative unit tests.
+
+
+Exercise 24
+-----------
+
+Drawing inspiration from ``fold-left_nat`` and ``fold-left_proper-list``,
+define a fold-left procedure for byte-code programs  as
+defined in `the section on arithmetic expressions
+<week-4-arithmetic-expressions.html#bnf-of-arithmethic-expressions>`_.
+Using this fold-left procedure,
+
+* define a virtual machine and verify that it passes the corresponding
+  positive and negative unit tests;
+
+* define a byte-code verifier and test it; and
+
+* define a Magritte virtual machine and test it.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-8.scm>`_
+  (latest version: 01 Oct 2015).
+
+
+Version
+-------
+
+Added the exercises about Boolean expressions and arithmetic expressions
+[01 Oct 2015]
+
+Added the material about regular expressions
+[01 Oct 2015]
+
+Added a forward pointer to quasiquotation in the code generators
+associated to ``times_alt``, ``times-acc_alt``, and
+``append_proper-list_alt``
+[30 Sep 2015]
+
+Created
+[15 Sep 2015]

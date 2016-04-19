@@ -1,0 +1,2425 @@
+.. -*- mode: rst -*-
+
+Note for Week 3
+===============
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+* :ref:`exercise-plus-with-letrec`:
+  lambda-lifted vs. lambda-dropped procedures
+
+* :ref:`exercise-proper-list-ref-head-tail`:
+  list-ref, list-head, and list-tail over proper lists
+
+
+Resources
+---------
+
+* The Scheme code for
+  `the finite-state automaton
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3-finite-state-automaton.scm>`_
+  (latest version: 25 Aug 2015).
+
+* The Scheme code for
+  `the equality procedures
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3-equality-procedures.scm>`_
+  (latest version: 25 Aug 2015).
+
+* The Scheme code for
+  `the environments
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3-environments.scm>`_
+  (latest version: 25 Aug 2015).
+
+* The Scheme code for `the rest of the present lecture note for Week 3
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3.scm>`_
+  (latest version: 25 Aug 2015).
+
+
+Recap
+-----
+
+.. epigraph::
+
+  | Marty [picking up the cloth]: It's a key!
+  | Jack Sparrow: No!  Much more better.  It is a _drawing_ of a key.
+
+  -- `Pirates of the Caribbean: Dead Man's Chest <https://en.wikipedia.org/wiki/Pirates_of_the_Caribbean:_Dead_Man%27s_Chest>`_
+
+So there are things, and there are representations of things.  In
+computer science, our data are representations of information, and our
+programs process these data to perform a computation.  Our programs
+are written using a programming language.  Programming languages are
+notations to express computations.  These notations are specified with
+formal grammars, most commonly using a BNF (which, technically, are
+context-free grammars), and so are data.  Data are often specified
+inductively, and the programs that process them are structurally
+recursive.  Programs can be data: an interpreter is a program for
+executing another program, and a compiler is a program for translating
+another program from a source language to a target language.
+
+In this course, we use one programming language of discourse -- Scheme
+-- to illustrate programming-language features both in this language
+(namely conditional expressions, procedures, formal parameters, actual
+parameters, traces, type predicates, recursion, tail recursion, and
+mutual recursion, in `the second lecture note <week-2.html>`_) and
+using this language (namely BNFs, abstract-syntax trees, regular
+expressions, order of evaluation, variadicity, inductive data and
+structurally recursive procedures, structural equality, finite-state
+automata, and binary trees, also in `the second lecture note
+<week-2.html>`_).  In `the first lecture note <week-1.html>`_, we
+used Scheme to measure the cost of multiple layers of interpretation.
+
+.. index:: base (8)
+
+.. epigraph::
+
+  | The scene takes place in the old days,
+  | during a shift.
+  | Two assembly-language programmers,
+  | Anders and Sander,
+  | are perusing an `octal dump <http://en.wikipedia.org/wiki/Od_(Unix)>`_.
+  | Logically, they are counting in base 8
+  | because hey, octal dump.
+  |
+  | Anders (his nose on the printout): 74.
+  | Sander (pencil in hand, and alert): Check.
+  | Anders: 75.
+  | Sander: Check.
+  | Anders: Ah, the stack is popped.  76.
+  | Sander (making a note): Check.
+  | Anders: 77.
+  | Sander: Check.
+  | Anders: 78.
+  | Sander (irritated): But no, dumb dumb!
+  |                     Not 78, we are in base 8.
+  |                     80!
+
+.. _this-third-lecture-note:
+
+In `this third lecture note <week-3.html#this-third-lecture-note>`_,
+besides illustrating self-reference, we continue our introduction to
+Scheme with the empty list, quotation, nested quotation, local
+variables and lexical scope, more sophisticated conditional
+expressions, proper lists, improper lists, raising errors, defensive
+programming, identity and structural equality of Scheme values, and
+continuations.  This puts us in position to revisit structural
+equality and finite-state automata, and to implement
+
+* sets as lists of their elements, without repetition, and
+
+* environments as association lists and as functions mapping names to
+  their denotation, if there is one.
+
+
+.. index:: list (the empty)
+
+The empty list
+--------------
+
+The empty list is written ``()`` and its associated predicate is
+``null?``::
+
+  > (list)
+  ()
+  > (null? (list))
+  #t
+  > (null? 42)
+  #f
+  > (null? (cons 1 2))
+  #f
+  >
+
+.. index:: nil
+
+The empty list has a nickname: nil.  If you want to use it in Scheme,
+presto, define it::
+
+  > (define nil (list))
+  > nil
+  ()
+  > (define null nil)
+  > null
+  ()
+  > 
+
+.. epigraph::
+
+  | `Enlightenment in Scheme <week-2.html#enlightenment>`_, revisited:
+  | the parentheses have disappeared
+  | and the empty list is truly empty.
+
+
+.. index:: quotation
+
+Core special form: quote
+------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <quote-expression> ::= (quote <quotation>)
+
+   <quotation> ::= <number>
+                 | <boolean>
+                 | <character>
+                 | <string>
+                 | <symbol>
+                 | ()
+                 | <quotation-compound>
+
+   <symbol> ::= <identifier>
+
+   <quotation-compound> ::= (<quotation> . <quotation>)
+
+Note: ``(quote <quotation>)`` is abbreviated ``'<quotation>``.
+
+A **quote-expression** is used to introduce a pre-evaluated value.
+
+.. index:: quotation (self)
+
+Numbers, Booleans, characters and strings are self-evaluating in
+Scheme, and so they can indifferently be quoted or not::
+
+  > (quote 2)
+  2
+  > '2
+  2
+  > '#t
+  #t
+  >
+
+.. index:: symbol
+
+Of special interest is the representation of (Scheme) programs as data
+objects.  To this end, a Scheme **symbol** is a special kind of value
+to represent variables and keywords when representing programs as
+data::
+
+  > 'x
+  x
+  > 'lambda
+  lambda
+  > (symbol? 'x)
+  #t
+  > (symbol? "x")
+  #f
+  > (symbol=? 'foo 'foo)
+  #t
+  > (symbol=? 'foo 'bar)
+  #f
+  > 
+
+The empty list can also be quoted::
+
+  > '()
+  ()
+  > (quote ())
+  ()
+  > (equal? '() (list))
+  #t
+  > 
+
+Compound values can also be quoted, as elaborated later in this
+lecture note for lists::
+
+  > (list 'lambda (list 'x) 'x)
+  (lambda (x) x)
+  > '(lambda (x) x)
+  (lambda (x) x)
+  >
+
+Quotation is a convenient notation to represent values syntactically,
+as if they were the result of an evaluation.  (Look how ``(lambda (x)
+x)`` was obtained just above: the first time by explicit list
+construction, and the second time by quotation.)
+
+By default, Petite Chez Scheme pretty-prints its output as if it were
+a Scheme expression::
+
+  > '(define fib3 (lambda (n) (if (= n 0) 0 (if (= n 1) 1 (if (= n 2) 2 (+ (fib3 (- n 1)) (fib3 (- n 2)) (fib3 (- n 3))))))))
+  (define fib3
+    (lambda (n)
+      (if (= n 0)
+          0
+          (if (= n 1)
+              1
+              (if (= n 2)
+                  2
+                  (+ (fib3 (- n 1)) (fib3 (- n 2)) (fib3 (- n 3))))))))
+  > 
+
+.. index:: quotation (nested)
+
+.. epigraph::
+
+  | Han Solo (teasingly): You like me because I'm a scoundrel.
+  | Princess Leia (outraged): What?!?
+  | Han Solo (surprised): What, "What?"?
+  | Luke Skywalker (entering the room): What, "What, "What?"?"?
+
+   -- Star Wars `apocryphal <http://en.wiktionary.org/wiki/apocryphal>`_
+
+.. index:: representation (representation of a)
+
+Nested quotations provide a concise way to represent 
+
+* representations,
+
+* representations of representations,
+
+* representations of representations of representations, etc.,
+
+as you have seen when you installed Emacs and Petite Chez Scheme in
+your Windows box.
+
+Since quotation lets us represent values syntactically, in a way that
+is represented prior to evaluation, evaluating a quoted value has the
+effect of "removing the quote".  This removal is particularly visible
+for nested quotations::
+
+  > '''x
+  ''x
+  > ''x
+  'x
+  > 'x
+  x
+  > x
+
+  Exception: variable x is not bound
+  Type (debug) to enter the debugger.
+  >
+
+.. epigraph::
+
+  | Foresight is a source of déjà vu.
+
+To close, let us revisit the abbreviation of ``(quote <quotation>)``
+as ``'<quotation>``.  The two are indistinguishable, which is good to
+know when programming, e.g., a syntax checker for Scheme::
+
+  > (equal? 'whatever (quote whatever))
+  #t
+  > (equal? ''whatever (quote (quote whatever)))
+  #t
+  > (equal? ''whatever '(quote whatever))
+  #t
+  > (equal? ''whatever (quote 'whatever))
+  #t
+  > (equal? '(quote whatever) (quote 'whatever))
+  #t
+  > 
+
+
+.. index:: clause (in the header of a let-expression)
+.. index:: definiens (in a let-expression)
+.. index:: header (of a let-expression)
+.. index:: body (of a let-expression)
+
+Derived special forms: let
+--------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <let-expression> ::= (let <let-header>
+                          <let-body>)
+
+   <let-body> ::= <expression>
+
+   <let-header> ::= ({<let-binding>}*)
+
+   <let-binding> ::= [<variable> <let-definiens>]
+
+   <let-definiens> ::= <expression>
+
+Note: in most other dialects of Scheme, let-bindings are not delimited
+with square brackets by default but with ordinary parentheses.
+
+A **let-expression** consists of a header and a body:
+
+* The body is an expression.
+
+* The header consists of a number of clauses -- the let-bindings --
+  possibly zero.
+
+* In the header of a let-expression, each clause consists of a
+  variable and a definiens, which is an expression.
+
+* All the variables declared in the header of a let-expression *must*
+  be distinct.
+
+When a let-expression is evaluated, each let-definiens is evaluated
+(in an unspecified order), each name is bound to the corresponding
+value, and the resulting bindings extend the current environment, in
+addition to the current bindings.  The body of the let-expression is
+then evaluated in this extended environment.  Its result is the result
+of evaluating the let-expression.
+
+For example, the following expressions are evaluated in a base
+environment where ``list`` denotes the variadic procedure that packages
+its arguments into a list and that we have used above.
+
+* ``(let () (list))``
+  evaluates to
+  ``()``.
+  
+  The header is empty.  The body is ``(list)``.  It is evaluated in
+  the same environment as that of the let-expression, i.e., the base
+  environment.  There are no actual parameters in the application of
+  ``list``, and so the body evaluates to the empty list.
+
+* ``(let ([a 1]) (list a))``
+  evaluates to
+  ``(1)``.
+
+  The header contains one let-binding.  The variable is ``a``, the
+  definiens is ``1``, and the body is ``(list a)``.  It is evaluated
+  in an extension of the base environment where ``a`` denotes ``1``.
+  There is one actual parameter in the application of ``list`` --
+  ``a`` -- which evaluates to ``1``, and so the body evaluates to the
+  list containing ``1``.
+
+* ``(let ([a 1] [b 2]) (list a b))``
+  evaluates to
+  ``(1 2)``.
+  
+  The header contains two let-bindings.  The variables are ``a`` and
+  ``b``, the definienses are ``1`` and ``2``, and the body is ``(list
+  a b)``.  It is evaluated in an extension of the base environment
+  where ``a`` denotes ``1`` and ``b`` denotes ``2``.  There are two
+  actual parameters in the application of ``list`` -- ``a`` and ``b``
+  -- which evaluate to ``1`` and ``2``, respectively, and so the body
+  evaluates to the list containing ``1`` and ``2``.
+
+* ``(let ([a 1] [b 2] [c 3] [d 4]) (list a b c d))``
+  evaluates to
+  ``(1 2 3 4)``.
+
+  The header contains four let-bindings.  The variables are ``a``,
+  ``b``, ``c``, and ``d``, the definienses are ``1``, ``2``, ``3``,
+  and ``4``, and the body is ``(list a b c d)``.  It is evaluated in
+  an extension of the base environment where ``a`` denotes ``1``,
+  ``b`` denotes ``2``, ``c`` denotes ``3``, and ``d`` denotes ``4``.
+  There are four actual parameters in the application of ``list`` --
+  ``a``, ``b``, ``c``, and ``d`` -- which evaluate to ``1``, ``2``,
+  ``3``, and ``4``, respectively, and so the body evaluates to the
+  list containing ``1``, ``2``, ``3``, and ``4``.
+
+.. index:: scope (lexical)
+
+Let-expressions can be nested.  This nesting is regulated by *lexical
+scope*: the most recently declared variable is the one whose binding
+is in effect.  The following expressions are evaluated in an
+environment where ``list`` is globally bound to a variadic procedure
+that packages its arguments into a list.
+
+* For example, the expression
+
+  .. code-block:: scheme
+
+     (let ([a 1])
+       (let ([b 2])
+         (list a b)))
+
+  evaluates to ``(1 2)``.  Graphically:
+
+  .. ditaa::
+
+    global bindings,
+    including that of list
+    +-----------------+
+    |a denotes 1      |
+    |                 |
+    | +-------------+ |
+    | |b denotes 2  | |
+    | |             | |
+    | |  (list a b) | |
+    | +-------------+ |
+    +-----------------+
+
+  The expression ``(list a b)`` is evaluated in an environment where
+  ``b`` denotes ``2``, ``a`` denotes ``1``, and ``list`` is globally
+  bound.
+
+.. index:: scope (shadowed bindings in lexical)
+
+* When two nested let-expressions declare the same variable, the inner
+  binding "shadows" the outer binding in the extended environment.  So
+  for example, the expression
+
+  .. code-block:: scheme
+
+     (let ([a 1])
+       (let ([a 2])
+         (list a)))
+
+  evaluates to ``(2)``.  Graphically:
+
+  .. ditaa::
+
+    global bindings,
+    including that of list
+    +-----------------+
+    |a denotes 1      |
+    |                 |
+    | +-------------+ |
+    | |a denotes 2  | |
+    | |             | |
+    | |   (list a)  | |
+    | +-------------+ |
+    +-----------------+
+
+  The expression ``(list a)`` is evaluated in an environment where
+  ``a`` denotes ``2`` and ``list`` is globally bound.  The inner
+  binding of ``a`` (to ``2``) shadows its outer binding (to ``1``).
+
+* For another example of shadowing, the expression
+
+  .. code-block:: scheme
+
+     (let ([a 1] [b 2] [c 3])
+       (let ([c b])
+         (list a b c)))
+
+  evaluates to ``(1 2 2)`` because the inner declaration of ``c``
+  binds it to the denotation of ``b``, which is ``2``.  The inner
+  binding of ``c`` (to ``2``) "shadows" its outer binding (to ``3``).
+  Graphically:
+
+  .. ditaa::
+
+    global bindings,
+    including that of list
+    +--------------------------------------------+
+    |a denotes 1                                 |
+    |b denotes 2                                 |
+    |c denotes 3                                 |
+    |                                            |
+    | +----------------------------------------+ |
+    | |c denotes the denotation of b, i.e., 2  | |
+    | |                                        | |
+    | |        (list a b c)                    | |
+    | +----------------------------------------+ |
+    +--------------------------------------------+
+
+  The expression ``(list a b c)`` is evaluated in an environment where
+  ``c`` denotes ``2``, ``b`` denotes ``2``, ``a`` denotes ``1``, and
+  ``list`` is globally bound.  (The outer binding of ``c`` to ``3`` is
+  shadowed.)
+
+* In the previous example, even if ``b`` is re-declared in the scope
+  of ``c``, the denotation of ``c`` is unaffected, and so an
+  expression such as
+
+  .. code-block:: scheme
+
+     (let ([a 1] [b 2] [c 3])
+       (let ([c b])
+         (let ([b 22])
+           (list a b c))))
+
+  evaluates to ``(1 22 2)``.  Graphically:
+
+  .. ditaa::
+
+    global bindings,
+    including that of list
+    +--------------------------------------------+
+    |a denotes 1                                 |
+    |b denotes 2                                 |
+    |c denotes 3                                 |
+    |                                            |
+    | +----------------------------------------+ |
+    | |c denotes the denotation of b, i.e., 2  | |
+    | |                                        | |
+    | | +------------------------------------+ | |
+    | | |b denotes 22                        | | |
+    | | |                                    | | |
+    | | |        (list a b c)                | | |
+    | | +------------------------------------+ | |
+    | +----------------------------------------+ |
+    +--------------------------------------------+
+
+  The expression ``(list a b c)`` is evaluated in an environment where
+  ``b`` denotes ``22``, ``c`` denotes ``2``, ``a`` denotes ``1``, and
+  ``list`` is globally bound.  (The outer bindings of ``c`` to ``3``
+  and of ``b`` to ``2`` are shadowed.)
+
+* Environment extensions co-exist without interference, and an
+  expression such as
+
+  .. code-block:: scheme
+
+    (let ([x 11])
+      (list (let ([y 22])
+              (list x y))
+            (let ([y 33])
+              (list x y))))
+
+  evaluates to ``((11 22) (11 33))``.  Graphically:
+
+  .. ditaa::
+
+    global bindings,
+    including that of list
+    +------------------+
+    |x denotes 11      |
+    |                  |
+    | list             |
+    |                  |
+    | +--------------+ |
+    | |y denotes 22  | |
+    | |              | |
+    | |  (list x y)  | |
+    | +--------------+ |
+    |                  |
+    | +--------------+ |
+    | |y denotes 33  | |
+    | |              | |
+    | |  (list x y)  | |
+    | +--------------+ |
+    +------------------+
+
+  * The first occurrence of ``(list x y)`` is evaluated in an
+    environment where ``y`` denotes ``22``, ``x`` denotes ``11``, and
+    ``list`` is globally bound.
+
+  * The second occurrence of ``(list x y)`` is evaluated in an
+    environment where ``y`` denotes ``33``, ``x`` denotes ``11``, and
+    ``list`` is globally bound.
+
+  Note: the order in the boxes does not matter, what matters is their
+  nesting.  For example, the boxes above can be drawn just as well
+  as follows:
+
+  .. ditaa::
+
+    global bindings, including that of list
+    +----------------------------------------+
+    |x denotes 11                            |
+    |                                        |
+    |      +--------------+ +--------------+ |
+    |      |y denotes 22  | |y denotes 33  | |
+    | list |              | |              | |
+    |      |  (list x y)  | |  (list x y)  | |
+    |      +--------------+ +--------------+ |
+    +----------------------------------------+
+
+  Likewise, the Scheme expression could also have been written
+  horizontally:
+
+  .. code-block:: scheme
+
+    (let ([x 11])
+      (list (let ([y 22]) (list x y)) (let ([y 33]) (list x y))))
+
+  One should write and draw whatever is simplest and most readable.
+
+* Finally, shadowed bindings in lexical scope and non-interfering
+  co-existence of environment extensions combine harmoniously.  So for
+  example, an expression such as
+
+  .. code-block:: scheme
+
+    (let ([x 11])
+      (list (let ([y 22])
+              (let ([x 44])
+                (list x y)))
+            (list x x)
+            (let ([y 33])
+              (let ([y 55])
+                (list x y)))))
+
+  evaluates to ``((44 22) (11 11) (11 55))``.  Graphically:
+
+  .. ditaa::
+
+    global bindings, including that of list
+    +-----------------------------------------------------------+
+    |x denotes 11                                               |
+    |                                                           |
+    | list +------------------+ (list x x) +------------------+ |
+    |      |y denotes 22      |            |y denotes 33      | |
+    |      |                  |            |                  | |
+    |      | +--------------+ |            | +--------------+ | |
+    |      | |x denotes 44  | |            | |y denotes 55  | | |
+    |      | |              | |            | |              | | |
+    |      | |  (list x y)  | |            | |  (list x y)  | | |
+    |      | +--------------+ |            | +--------------+ | |
+    |      +------------------+            +------------------+ |
+    +-----------------------------------------------------------+
+
+  * The first occurrence of ``(list x y)`` is evaluated in an
+    environment where ``x`` denotes ``44``, ``y`` denotes ``22``, and
+    ``list`` is globally bound.  (The outer binding of ``x`` to ``11``
+    is shadowed.)
+
+  * The expression ``(list x x)`` is evaluated in an environment where
+    ``x`` denotes ``11`` and ``list`` is globally bound.
+
+  * The second occurrence of ``(list x y)`` is evaluated in an
+    environment where ``y`` denotes ``55``, ``x`` denotes ``11``, and
+    ``list`` is globally bound.  (The outer binding of ``y`` to ``33``
+    is shadowed.)
+
+
+Lexical scope and local procedures
+----------------------------------
+
+.. index::
+   single: environment (initial, in Scheme)
+
+.. index::
+   single: environment (global, in Scheme)
+
+.. index::
+   single: environment (local, in Scheme)
+
+All in all, a variable can be
+
+* pre-declared (e.g., ``list``) and bound in the initial environment,
+
+* declared with ``define`` and bound in the global environment,
+
+* declared as the formal parameter of a lambda-abstraction and locally
+  bound in the current environment, or
+
+* declared as a variable in a let-expression and locally bound in the
+  current environment.
+
+.. index::
+   single: scope (lexical, in Scheme)
+
+Scheme is lexically scoped in that the most recently declared variable
+in the text of a program is the one whose binding is in effect, which
+was depicted above with nested boxes.  This nesting applies for
+declaring local procedures.  So for example, an expression such as
+
+.. code-block:: scheme
+
+  (let ([x 10])
+    (let ([foo (lambda ()
+                 x)])
+      (let ([x 20])
+        (list x (foo)))))
+
+evaluates to ``(20 10)``.  Graphically:
+
+.. ditaa::
+
+  global bindings, including that of list
+  +-------------------------+
+  |x denotes 10        <---\|
+  |                        ||
+  | +---------------------+||
+  | |foo denotes +---+    |||
+  | |            :() +-----/|
+  | |            |   |    | |
+  | |            | x |    | |
+  | |            +---+    | |
+  | |                     | |
+  | | +-----------------+ | |
+  | | |x denotes 20     | | |
+  | | |                 | | |
+  | | | (list x (foo))  | | |
+  | | +-----------------+ | |
+  | +---------------------+ |
+  +-------------------------+
+
+* ``foo`` denotes a parameterless procedure (represented with a dashed
+  box just above) whose lexical scope (represented with an arrow going
+  out of the dashed box just above) contains the binding of ``x`` to
+  ``10``.
+
+* ``(list x (foo))`` is evaluated in an environment where ``x``
+  denotes ``20``, ``foo`` denotes a parameterless procedure, and
+  ``list`` is globally bound.
+
+About the dashed box:
+
+* the top part contains the formal parameters of the
+  lambda-abstraction, and
+
+* the bottom part contains its body.
+
+Here is another example.  The expression
+
+.. code-block:: scheme
+
+  (let ([x 10] [y 20] [z 30])
+    (let ([foo (lambda (y t)
+                 (list x y t))])
+      (let ([x 20])
+        (list x (foo 40 z)))))
+
+evaluates to ``(20 (10 40 30))``.  Graphically:
+
+.. ditaa::
+
+  global bindings, including that of list
+  +----------------------------------+
+  |x denotes 10                 <---\|
+  |y denotes 20                     ||
+  |z denotes 30                     ||
+  |                                 ||
+  | +------------------------------+||
+  | |foo denotes +---------------+ |||
+  | |            :(y t)          +--/|
+  | |            |               | | |
+  | |            | (list x y t)  | | |
+  | |            +---------------+ | |
+  | |                              | |
+  | | +--------------------------+ | |
+  | | |x denotes 20              | | |
+  | | |                          | | |
+  | | | (list x (foo 40 z))      | | |
+  | | +--------------------------+ | |
+  | +------------------------------+ |
+  +----------------------------------+
+
+* ``foo`` denotes a dyadic procedure (the dashed box just above)
+  whose lexical scope (the arrow just above) contains the binding
+  of ``x`` to ``10`` and the global binding of ``list``.
+
+* ``(list x (foo 40 z))`` is evaluated in an environment where ``x``
+  denotes ``20``, ``foo`` denotes a dyadic procedure, ``z`` denotes
+  30, and ``list`` is globally bound.
+
+.. index:: scope (static)
+.. index:: scope (dynamic)
+
+Note: the term "lexical scope" is used interchangeably with the term
+"static scope".  In an implementation, the environment is represented
+as a last-in, first-out "static chain", and the procedure calls are
+represented as a last-in, first-out "dynamic chain".  In a statically
+scoped language such as Scheme, variables are looked up along the
+static chain, and in a dynamically scoped language such as Lisp,
+variables are looked up along the dynamic chain.  So if Scheme was
+dynamically scoped, the expression
+
+.. code-block:: scheme
+
+  (let ([x 10])
+    (let ([foo (lambda ()
+                 x)])
+      (let ([x 20])
+        (list x (foo)))))
+
+would evaluate to ``(20 20)`` because the latest dynamic binding of
+``x`` in the denotation of ``foo`` is ``20``.
+
+
+Core special forms: define, revisited
+-------------------------------------
+
+Global bindings live at the top of the lexical-scope chain,
+as illustrated in the following scenario::
+
+  > (define x0 1)
+  > (let ([x1 10])
+      (let ([x2 100] [x3 1000])
+        (let ([x4 10000] [x5 100000] [x6 1000000])
+          (list x0 x1 x2 x3 x4 x5 x6))))
+  (1 10 100 1000 10000 100000 1000000)
+  > (let ([x1 10])
+      (let ([x2 100] [x3 1000])
+        (let ([x4 10000] [x5 100000] [x6 1000000])
+          (let ([list +])
+            (list x0 x1 x2 x3 x4 x5 x6)))))
+  1111111
+  >
+
+In the second interaction, ``list`` denotes the denotation of ``+``,
+i.e., the addition procedure.  Graphically:
+
+.. ditaa::
+
+  global bindings,
+  including that of x0 to 1,
+  of list to a predefined variadic procedure listing its arguments,
+  and of + to a predefined variadic procedure adding its arguments
+  +----------------------------------------------------+
+  |x1 denotes 10                                       |
+  |                                                    |
+  | +------------------------------------------------+ |
+  | |x2 denotes 100                                  | |
+  | |x3 denotes 1000                                 | |
+  | |                                                | |
+  | | +--------------------------------------------+ | |
+  | | |x4 denotes 10000                            | | |
+  | | |x5 denotes 100000                           | | |
+  | | |x6 denotes 1000000                          | | |
+  | | |                                            | | |
+  | | | +----------------------------------------+ | | |
+  | | | |list denotes the global denotation of + | | | |
+  | | | |                                        | | | |
+  | | | |      (list x0 x1 x2 x3 x4 x5 x6)       | | | |
+  | | | +----------------------------------------+ | | |
+  | | +--------------------------------------------+ | |
+  | +------------------------------------------------+ |
+  +----------------------------------------------------+
+
+
+.. index:: clause (in the header of a let*-expression)
+.. index:: definiens (in a let*-expression)
+.. index:: header (of a let*-expression)
+.. index:: body (of a let*-expression)
+
+Derived special forms: let*
+---------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <letstar-expression> ::= (let* <letstar-header>
+                              <letstar-body>)
+
+   <letstar-body> ::= <expression>
+
+   <letstar-header> ::= ({<letstar-binding>}*)
+
+   <letstar-binding> ::= [<variable> <letstar-definiens>]
+
+   <letstar-definiens> ::= <expression>
+
+Note: in most other dialects of Scheme, let*-bindings are not
+delimited with square brackets by default but with ordinary
+parentheses.
+
+Except for the star in its name, a **let*-expression**  looks like a
+let-expression.  It has a header (a number of clauses -- the
+let*-bindings -- possibly
+zero) and a body (an expression).  A let*-expression such as
+
+.. code-block:: scheme
+
+   (let* ([x1 e1]
+          [x2 e2]
+          ...
+          [xN eN])
+     e0)
+
+abbreviates the following let-expression:
+
+.. code-block:: scheme
+
+   (let ([x1 e1])
+     (let ([x2 e2])
+       ...
+         (let ([xN eN])
+           e0)...))
+
+So for example,
+
+.. code-block:: scheme
+
+  (let* ([a 1] [b 2])
+    (list a b))
+
+abbreviates
+
+.. code-block:: scheme
+
+   (let ([a 1])
+     (let ([b 2])
+       (list a b)))
+
+and evaluates to  ``(1 2)``.
+
+Also, a let*-definiens can refer to an earlier variable in the
+let*-header.  So for example,
+
+.. code-block:: scheme
+
+  (let* ([x 10] [y 20] [x y])
+    (list x y))
+  
+evaluates to ``(20 20)``.  Graphically:
+
+.. ditaa::
+
+  global bindings, including that of list
+  +-------------------------------------------------+
+  |x denotes 10                                     |
+  |                                                 |
+  | +---------------------------------------------+ |
+  | |y denotes 20                                 | |
+  | |                                             | |
+  | | +-----------------------------------------+ | |
+  | | |x denotes the denotation of y, i.e., 20  | | |
+  | | |                                         | | |
+  | | | (list x y)                              | | |
+  | | +-----------------------------------------+ | |
+  | +---------------------------------------------+ |
+  +-------------------------------------------------+
+
+* The definiens ``y`` is evaluated in an environment where ``y``
+  denotes ``20`` and ``x`` denotes ``10``.
+
+* The expression ``(list x y)`` is evaluated in an environment where
+  ``x`` denotes ``20``, ``y`` denotes ``20``, and ``list`` is globally
+  bound.  (The outer binding of ``x`` to ``10`` is shadowed.)
+
+Whereas a let-expression declares local variables and binds them *in
+parallel*, a let*-expression declares local variables and binds them
+*sequentially*::
+
+  > (let* ([x (time 10)] [y (time 20)] [z (time 30)])
+      (list x y z))
+  (time 10)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 20)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 30)
+      no collections
+      0 ms elapsed cpu time
+      1 ms elapsed real time
+      0 bytes allocated
+  (10 20 30)
+  >
+
+
+.. index:: clause (in the header of a letrec-expression)
+.. index:: definiens (in a letrec-expression)
+.. index:: header (of a letrec-expression)
+.. index:: body (of a letrec-expression)
+
+Core special form: letrec
+-------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <letrec-expression> ::= (letrec <letrec-header>
+                             <letrec-body>)
+
+   <letrec-body> ::= <expression>
+
+   <letrec-header> ::= ({<letrec-binding>}*)
+
+   <letrec-binding> ::= [<variable> <letrec-definiens>]
+
+   <letrec-definiens> ::= <lambda-abstraction>
+
+Note: in most other dialects of Scheme, letrec-bindings are not
+delimited with square brackets by default but with ordinary
+parentheses.
+
+A **letrec-expression** also looks like a let-expression.  It has a
+header (a number of clauses -- the letrec-bindings -- possibly zero)
+and a body (an expression).  In the header of a letrec-expression,
+each clause consists of a variable and a definiens, which is a
+lambda-abstraction.  All the variables declared in a letrec-expression
+*must* be distinct.
+
+When a letrec-expression is evaluated, the letrec-definiens
+are evaluated to mutually recursive procedures, each name is bound to
+the corresponding procedure, and the resulting bindings extend the
+current environment, in addition to the current bindings.  The body of
+the letrec-expression is then evaluated in this extended environment.
+Its result is the result of evaluating the letrec-expression.
+
+For example, let us revisit the addition procedure from last week
+(Section :ref:`adding-two-natural-numbers`):
+
+.. code-block:: scheme
+
+  (define plus_revisited
+    (lambda (n1 n2)
+      (letrec ([visit (lambda (n1 n2)
+                        (if (= n1 0)
+                            n2
+                            (1+ (visit (1- n1) n2))))])
+        (visit n1 n2))))
+
+Procedure ``plus_revisited`` is globally defined with a local procedure
+``visit`` that is structurally recursive.  And it passes the unit test
+from last week too::
+
+  > (test-plus plus_revisited)
+  #t
+  > 
+
+Graphically:
+
+.. ditaa::
+
+  global bindings, including that of plus_revisited                                           <----\
+  plus_revisited denotes +-----------------------------------------------------------------------+ |
+                         :(n1 n2)                                                                +-/
+                         |                                                                   /--\|
+                         |                                                                   |  ||
+                         |                                                                   v  ||
+                         | +-------------------------------------------------------------------+||
+                         | |visit denotes +---------------------------------------------------+|||
+                         | |              :(n1 n2)                                            +-/|
+                         | |              |                                                   || |
+                         | |              | (if (... n1 ...) n2 (... (visit (... n1) n2)...)) || |
+                         | |              +---------------------------------------------------+| |
+                         | |                                                                   | |
+                         | | (visit n1 n2)                                                     | |
+                         | +-------------------------------------------------------------------+ |
+                         +-----------------------------------------------------------------------+
+
+* The expression ``(visit n1 n2)``, i.e., the initial call to
+  ``visit``, is evaluated in an environment
+  where
+
+  * ``visit`` denotes a dyadic procedure (the inner dashed box just
+    above) whose lexical scope (the arrow exiting the inner dashed
+    box) contains its recursive binding (the arrow is circular, and so
+    ``visit`` can refer to itself) and where
+
+  * ``n1`` and ``n2`` denote the actual parameters of the anonymous
+    procedure denoted by ``plus_revisited`` (the outer dashed box just
+    above), which is bound in the global environment.
+
+* The expression ``(visit (1- n1) n2)``, i.e., the recursive call to
+  ``visit``, is evaluated in an environment
+  where
+
+  * ``n1`` and ``n2`` denote the actual parameters of the recursive
+    procedure denoted by ``visit``,
+
+  * ``visit`` is bound recursively, and where
+
+  * ``1-`` denotes the predefined procedure that decrements its
+    argument.
+
+In the local definition, instead of passing ``n2`` again and again to
+``visit``, we can instead not pass it at all and let ``n2`` refer to
+the formal parameter of the top-most lambda-abstraction:
+
+.. code-block:: scheme
+
+  (define plus_revisited_alt
+    (lambda (n1 n2)
+      (letrec ([visit (lambda (n1)
+                        (if (= n1 0)
+                            n2
+                            (1+ (visit (1- n1)))))])
+        (visit n1))))
+
+And it passes the unit test too::
+
+  > (test-plus plus_revisited_alt)
+  #t
+  > 
+
+Graphically:
+
+.. ditaa::
+
+  global bindings, including that of plus_revisited_alt                                         <----\
+  plus_revisited_alt denotes +---------------------------------------------------------------------+ |
+                             :(n1 n2)                                                              +-/
+                             |                                                                 /--\|
+                             |                                                                 |  ||
+                             |                                                                 v  ||
+                             | +-----------------------------------------------------------------+||
+                             | |visit denotes +-------------------------------------------------+|||
+                             | |              :(n1)                                             +-/|
+                             | |              |                                                 || |
+                             | |              | (if (... n1 ...) n2 (... (visit (... n1)) ...)) || |
+                             | |              +-------------------------------------------------+| |
+                             | |                                                                 | |
+                             | | (visit n1)                                                      | |
+                             | +-----------------------------------------------------------------+ |
+                             +---------------------------------------------------------------------+
+
+* The expression ``(visit n1)``, i.e., the initial call to
+  ``visit``, is evaluated in an environment where
+
+  * ``visit`` denotes a monadic procedure (the inner dashed box just
+    above) whose lexical scope (the arrow exiting the inner dashed
+    box) contains
+
+    * its recursive binding (the arrow is circular, and so ``visit``
+      can refer to itself) and
+
+    * the binding of ``n2`` to the second actual parameter of the
+      anonymous procedure denoted by ``plus_revisited_alt`` (the outer
+      dashed box just above), which is bound in the global
+      environment,
+
+    and where
+
+  * ``n1`` denotes the first actual parameter of the anonymous
+    procedure denoted by ``plus_revisited_alt``.
+
+* The expression ``(visit (1- n1))``, i.e., the recursive call to
+  ``visit``, is evaluated in an environment where
+
+  * ``n1`` denotes the actual parameter of the recursive procedure
+    denoted by ``visit``,
+
+  * ``visit`` is bound recursively,
+
+  * ``n2`` denotes the second actual parameter of the anonymous
+    procedure denoted by ``plus_revisited_alt``, and where
+
+  * ``1-`` denotes the predefined procedure that decrements its
+    argument.
+
+
+.. index:: lambda (lifting)
+.. index:: lambda (dropping)
+
+.. _exercise-plus-with-letrec:
+
+Exercise 1
+----------
+
+In this mandatory exercise,
+
+* you are asked to trace the letrec-declared lambda-abstraction in the
+  definitions of ``plus_revisited`` and ``plus_revisited_alt`` and to compare what
+  is printed when evaluating, say, ``(plus_revisited 3 5)`` and
+  ``(plus_revisited_alt 3 5)``.  See how in one case ``visit`` has two
+  arguments (and the second one remains the same throughout the
+  calls), and how in the other case ``visit`` has one argument?
+
+  Procedure ``plus_revisited_alt`` is said to be in *lambda-dropped* form.
+  Its definition of ``visit`` forms a lexical block that is
+  scope-sensitive: it refers to a variable that is declared outside
+  the block.
+
+  In contrast, the definition of ``visit``, in Procedure ``plus_revisited``,
+  forms a lexical block that is scope-insensitive: all the variables
+  it refers to are either declared locally to the block, or globally.
+  This block can float to the top level, resulting in what is known as
+  two *recursive equations*:
+
+  .. code-block:: scheme
+
+    (define plus_revisited_visit
+       (lambda (n1 n2)
+         (if (= n1 0)
+             n2
+             (1+ (plus_revisited_visit (1- n1) n2)))))
+
+    (define plus_revisited_lifted
+      (lambda (n1 n2)
+        (plus_revisited_visit n1 n2)))
+
+  The result is a Scheme program in *lambda-lifted* form, that passes
+  the unit test too::
+
+    > (test-plus plus_revisited_lifted)
+    #t
+    > 
+
+  Program transformations exist that lambda-lift a block-structured,
+  scope-sensitive program into recursive equations, and conversely
+  that lambda-drop recursive equations into a block-structured,
+  scope-sensitive program.
+
+* you are also asked to program ``times``, ``power``, and ``fac`` (from
+  `the lecture note of last week <week-2.html>`_) using a local
+  recursive procedure.  If some parameters do not change through the
+  recursive call, omit them and obtain a version in lambda-dropped
+  form.
+
+
+Parity of natural numbers, revisited
+------------------------------------
+
+Let us revisit the two mutually tail-recursive procedures that
+determine whether a natural number is odd or even.  This time, we
+declare them locally with a letrec-expression:
+
+.. code-block:: scheme
+
+  (define one_or_the_other
+    (lambda (n)
+      (letrec ([even? (lambda (n)
+                        (if (= n 0)
+                            #t
+                            (odd? (1- n))))]
+               [odd? (lambda (n)
+                       (if (= n 0)
+                           #f
+                           (even? (1- n))))])
+        (list (even? n) (odd? n)))))
+
+  (define test-one_or_the_other
+    (lambda (candidate)
+      (and (equal? (candidate 0)
+                   '(#t #f))
+           (equal? (candidate 1)
+                   '(#f #t))
+           (equal? (candidate 8)
+                   '(#t #f))
+           (equal? (candidate 9)
+                   '(#f #t))
+           ;;;
+           )))
+
+This procedure passes its unit test::
+
+  > (test-one_or_the_other one_or_the_other)
+  #t
+  > 
+
+Graphically:
+
+.. ditaa::
+
+  global bindings, including that of one_or_the_other            <----\
+  one_or_the_other denotes +----------------------------------------+ |
+                           :(n)                                     +-/
+                           |                                  /----\|
+                           |                                  |/--\||
+                           |                                  ||  |||
+                           |                                  vv  |||
+                           | +-----------------------------------+|||
+                           | |even?   +------------------------+ ||||
+                           | |denotes :(n)                     +--/||
+                           | |        |                        | | ||
+                           | |        | ... (odd? (... n)) ... | | ||
+                           | |        +------------------------+ | ||
+                           | |                                   | ||
+                           | |odd?    +-------------------------+| ||
+                           | |denotes :(n)                      +--/|
+                           | |        |                         ||  |
+                           | |        | ... (even? (... n)) ... ||  |
+                           | |        +-------------------------+|  |
+                           | |                                   |  |
+                           | | (list (even? n) (odd? n))         |  |
+                           | +-----------------------------------+  |
+                           +----------------------------------------+
+
+* The expression ``(list (even? n) (odd? n))``, which contains the
+  initial calls to ``even?`` and to ``odd?``, is evaluated in an
+  environment where
+
+  * ``even?`` and ``odd?`` denote two monadic procedures (the dashed
+    boxes just above) whose lexical scope (the arrows exiting each of
+    the dashed boxes) contains their mutually recursive binding (the
+    arrows are circular and point to the same place, and so ``even?``
+    and ``odd?`` can refer to themselves and to each other), and where
+
+  * ``n`` denotes the actual parameter of the anonymous procedure
+    denoted by ``one_or_the_other``, which is bound in the
+    global environment.
+
+* The expression ``(odd? (1- n))``, i.e., the recursive call to
+  ``odd?``, is evaluated in an environment where
+
+  * ``even?`` and ``odd?`` are bound recursively in a mutual way,
+
+  * ``n`` denotes the actual parameter of the recursive procedure
+    denoted by ``even?``, and where
+
+  * ``1-`` denotes the predefined procedure that decrements its
+    argument.
+
+* The expression ``(even? (1- n))``, i.e., the recursive call to
+  ``even?``, is evaluated in an environment where
+
+  * ``even?`` and ``odd?`` are bound recursively in a mutual way,
+
+  * ``n`` denotes the actual parameter of the recursive procedure
+    denoted by ``odd?``, and where
+
+  * ``1-`` denotes the predefined procedure that decrements its
+    argument.
+
+
+Desugaring let-expressions
+--------------------------
+
+A let-expression such as
+
+.. code-block:: scheme
+
+   (let ([x1 e1] [x2 e2] ... [xN eN]) e0)
+
+is syntactic sugar for
+
+.. code-block:: scheme
+
+   ((lambda (x1 x2 ... xN) e0) e1 e2 ... eN)
+
+Here are two consequences:
+
+* In this let-expression, each definiens ``e1``, ``e2``, ..., and
+  ``eN`` is treated as an actual parameter.  Each of them is
+  evaluated, and this evaluation happens in an *unspecified* order::
+
+    > (let ([x (time 10)] [y (time 20)] [z (time 30)]) (list x y z))
+    (time 20)
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    (time 30)
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    (time 10)
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    (10 20 30)
+    > ((lambda (x y z) (list x y z)) (time 10) (time 20) (time 30))
+    (time 20)
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    (time 30)
+        no collections
+        0 ms elapsed cpu time
+        1 ms elapsed real time
+        0 bytes allocated
+    (time 10)
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    (10 20 30)
+    >
+
+* The constraint that all the variables declared in a let-expression
+  must be distinct is really the same constraint that all formal
+  parameters of a lambda-abstraction must be distinct::
+
+    > (let ([x 1] [x 2]) x)
+
+    Exception: invalid parameter list in (lambda (x x) x)
+    Type (debug) to enter the debugger.
+    >
+
+  (This error message reveals how Petite Chez Scheme desugars
+  let-expressions into applications of lambda-abstractions.)
+
+
+.. index:: sugar (syntactic)
+.. index::
+   single: Landin, Peter (syntactic sugar)
+
+Derived special forms: cond
+---------------------------
+
+In a Scheme program, we typically nest if-expressions in their else
+branch.  Here is an example:
+
+.. code-block:: scheme
+
+    (if 1
+        10
+        (if #\a
+            #\A
+            (if "hello world"
+                "HELLO WORLD"
+                #t)))
+
+Scheme provides *syntactic sugar* (a term due to `Peter Landin
+<http://en.wikipedia.org/wiki/Peter_Landin>`_) for this type of nested
+conditional expressions, in the form of *cond-expressions*.  For
+example, the following cond-expression abbreviates the nested
+if-expressions above:
+
+.. code-block:: scheme
+
+    (cond
+      [1
+       10]
+      [#\a
+       #\A]
+      ["hello world"
+       "HELLO WORLD"]
+      [else
+       #t])
+
+.. index:: cond-expression
+
+The BNF of cond-expressions reads as follows (the non-terminal
+:bnfref:`pure-scheme:cond-clause-binding` is described further down this
+lecture note):
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <cond-expression> ::= (cond
+                           {<cond-clause>}*
+                           [else
+                            <cond-alternative>])
+
+   <cond-clause> ::= <cond-clause-simple>
+                   | <cond-clause-inconsequential>
+                   | <cond-clause-binding>
+
+   <cond-clause-simple> ::= [<cond-test> <cond-consequent>]
+
+   <cond-test> ::= <expression>
+
+   <cond-consequent> ::= <expression>
+
+   <cond-alternative> ::= <expression>
+
+   <cond-clause-inconsequential> ::= [<cond-test>]
+
+Note: in most other dialects of Scheme, cond clauses are not delimited
+with square brackets by default but with ordinary parentheses.
+
+.. index:: clause (in a cond-expression)
+
+A **cond-expression** is evaluated as if it were a series of nested
+if-expressions.  The test is evaluated in each successive cond clause:
+
+* if it evaluates to ``#f``, the next clause is considered (and the
+  consequent is not evaluated);
+
+* otherwise, the consequent (if there is one) is evaluated, and
+  its result is the result of the cond-expression.
+
+If all the successive tests have evaluated to ``#f``, the alternative
+expression is evaluated, and its result is the result of the
+cond-expression.
+
+.. index::
+   single: clause (in a cond-expression, inconsequential)
+
+An inconsequential cond clause yields the result of the test when it
+is not ``#f``::
+
+  > (cond [1] [else 2])
+  1
+  >
+
+
+.. _section-equality-re2visited:
+
+Equality, re2visited
+--------------------
+
+The definition of ``equal?_revisited``, in
+:ref:`section-equality-re1visited`, provides a prime illustration of
+the notational usefulness of cond-expressions.  Due to its nested
+if-expressions, its text slants to the right and threatens to overflow
+the right margin of our screen (or of our printout).  If it were
+written with a cond-expression instead, its text would stand
+vertically.
+
+So let us revisit the definition of equality a second time and
+express it more concisely with a cond-expression:
+
+.. code-block:: scheme
+
+  (define equal?_re2visited
+    (lambda (v1 v2)
+      (cond
+        [(number? v1)
+         (if (number? v2)
+             (= v1 v2)
+             #f)]
+        [(boolean? v1)
+         (if (boolean? v2)
+             (boolean=? v1 v2)
+             #f)]
+        [(char? v1)
+         (if (char? v2)
+             (char=? v1 v2)
+             #f)]
+        [(string? v1)
+         (if (string? v2)
+             (string=? v1 v2)
+             #f)]
+        [(pair? v1)
+         (if (pair? v2)
+             (if (equal?_re2visited (car v1) (car v2))
+                 (equal?_re2visited (cdr v1) (cdr v2))
+                 #f)
+             #f)]
+        [else
+         #f])))
+
+This new definition  passes the unit test::
+
+  > (test-equal? equal?_re2visited)
+  #t
+  > 
+
+It illustrates how a cond-expression is a convenient notation for
+expressing if-expressions whose alternatives are if-expressions.
+
+
+Programming finite-state automata in Scheme, re2visited
+-------------------------------------------------------
+
+The definition of ``state``, in
+:ref:`programming-finite-state-automata-in-Scheme-revisited`, provides
+another illustration of the notational usefulness of cond-expressions.
+So let us revisit this definition and express it more concisely with a
+cond-expression:
+
+.. code-block:: scheme
+
+   (define state_revisited
+     (lambda (s i max b)
+       (cond
+         [(= i max)
+          (if b
+              "yes"
+              "stuck")]
+         [(char=? (string-ref s i) #\0)
+          (state_revisited s (1+ i) max b)]
+         [(char=? (string-ref s i) #\1)
+          (state_revisited s (1+ i) max (not b))]
+         [else
+          "error"])))
+
+   (define other-odd-number-of-ones?_revisited
+     (lambda (s)
+       (state_revisited s 0 (string-length s) #f)))
+
+The three nested tests are now written vertically, which is easier to
+read.
+
+This revisited implementation passes the unit test from last week too::
+
+  > (test-odd-number-of-ones? other-odd-number-of-ones?_revisited)
+  #t
+  > 
+
+Where should one draw the line between if-expressions and
+cond-expressions?  Should we go all the way and write the
+if-expression, in the first cond clause, as a cond-expression?
+
+.. code-block:: scheme
+
+   (define state_re2visited
+     (lambda (s i max b)
+       (cond
+         [(= i max)
+          (cond
+            [b
+             "yes"]
+            [else
+             "stuck"])]
+         ...)))
+
+`There is no accounting for taste
+<http://en.wikipedia.org/wiki/De_gustibus_non_est_disputandum>`_, but
+most Scheme programmers tend to write a cond-expression as soon as two
+if-expressions would be nested.  Otherwise, they use a simple
+if-expression.
+
+
+.. _section-derived-special-forms-and-revisited:
+
+Derived special forms: and, revisited
+-------------------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <and-expression> ::= (and {<expression>}*)
+
+The expression
+
+.. code-block:: scheme
+
+   (and e1 e2 ... eN-1 eN)
+
+abbreviates the following nested conditional expressions:
+
+.. code-block:: scheme
+
+   (if e1
+       (if e2
+           ... (if eN-1
+                   eN
+                   #f) ...
+           #f)
+       #f)
+
+In words: the expressions ``e1``, ``e2``, etc. are evaluated one after
+each other, until one of them yields ``#f``, in which case the whole
+and-expression yields ``#f`` (and the remaining expressions are not
+evaluated: they are "short-circuited"), or until the last one, ``eN``,
+is evaluated; its result is the result of the and-expression.
+
+Example::
+
+  > (and 1 2 3)
+  3
+  > (and 1 #f 3)
+  #f
+  > (and (time 1) (time 2) (time 3))
+  (time 1)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 2)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 3)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  3
+  > (and (time 1) (time #f) (time 3))
+  (time 1)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time #f)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  #f
+  >
+
+Food for thought:
+
+* If you had to decide what should be the result of giving *one*
+  argument to ``and``, what would be this result?  Why?
+  How does your decision compare with the behavior of Petite Chez Scheme?
+
+* If you had to decide what should be the result of giving *no* argument
+  to ``and``, what would be this result?  Why?
+  How does your decision compare with the behavior of Petite Chez Scheme?
+
+
+.. _section-equality-re3visited:
+
+Equality, re3visited
+--------------------
+
+The definition of ``equal?_re2visited``, in
+:ref:`section-equality-re2visited`, provides a good illustration of
+the notational usefulness of and-expressions.  Each of its
+if-expressions solely encode a conjunction.  If they were written with
+an and-expression instead, the definition would be less cluttered.
+
+So let can revisit the definition of equality a third time and
+express it more concisely with and-expressions:
+
+.. code-block:: scheme
+
+  (define equal?_re3visited
+    (lambda (v1 v2)
+      (cond
+        [(number? v1)
+         (and (number? v2)
+              (= v1 v2))]
+        [(boolean? v1)
+         (and (boolean? v2)
+              (boolean=? v1 v2))]
+        [(char? v1)
+         (and (char? v2)
+              (char=? v1 v2))]
+        [(string? v1)
+         (and (string? v2)
+              (string=? v1 v2))]
+        [(pair? v1)
+         (and (pair? v2)
+              (equal?_re3visited (car v1) (car v2))
+              (equal?_re3visited (cdr v1) (cdr v2)))]
+        [else
+         #f])))
+
+This new definition passes the unit test::
+
+  > (test-equal? equal?_re3visited)
+  #t
+  > 
+
+It illustrates how an and-expression is a convenient notation for
+expressing conditional expressions whose consequents are conditional
+expressions.
+
+One could be tempted to locate both type tests in the test parts of
+the cond clauses:
+
+.. code-block:: scheme
+
+  (define equal?_re3visited_alt
+    (lambda (v1 v2)
+      (cond
+        [(and (number? v1) (number? v2))
+         (= v1 v2)]
+        [(and (boolean? v1) (boolean? v2))
+         (boolean=? v1 v2)]
+        [(and (char? v1) (char? v2))
+         (char=? v1 v2)]
+        [(and (string? v1) (string? v2))
+         (string=? v1 v2)]
+        [(and (pair? v1) (pair? v2))
+         (and (equal?_re3visited_alt (car v1) (car v2))
+              (equal?_re3visited_alt (cdr v1) (cdr v2)))]
+        [else
+         #f])))
+
+This new definition passes the unit test::
+
+  > (test-equal? equal?_re3visited_alt)
+  #t
+  > 
+
+Operationally, though, it is not a progress because if a conjunction
+is not satisfied (say, the first argument is a number, but not the
+second argument), the rest of the clauses will still be checked for
+satisfaction until the else clause.  In contrast,
+``equal?_re3visited`` would immediately return ``#f`` in that case.
+
+Question: could you define a variant of ``equal?_re3visited_alt`` that
+only uses inconsequential cond clauses?  Would that be a progress,
+operationally?
+
+
+.. _section-derived-special-forms-or-revisited:
+
+Derived special forms: or, revisited
+------------------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <or-expression> ::= (or {<expression>}*)
+
+
+The expression
+
+.. code-block:: scheme
+
+   (or e1 e2 ... eN-1 eN)
+
+abbreviates the following conditional expression:
+
+.. code-block:: scheme
+
+   (cond
+     [e1]
+     [e2]
+     ...
+     [eN-1]
+     [else
+      eN])
+
+In words: the expressions ``e1``, ``e2``, etc. are evaluated one after
+each other, until one of them yields another value than ``#f``, in
+which case this value is the result of the or-expression (and the
+remaining expressions are not evaluated: they are "short-circuited"),
+or until the last one, ``eN``, is evaluated; its result is the result
+of the or-expression.
+
+.. index::
+   single: Friedman, Daniel P.
+
+Note: the above abbreviation of an or-expression with an
+inconsequential cond-expression is due to `Dan Friedman
+<http://en.wikipedia.org/wiki/Daniel_P._Friedman>`_
+(personal communication, Summer 2011).
+
+Example::
+
+  > (or 1 2 3)
+  1
+  > (or #f 2 3)
+  2
+  > (or #f #f 3)
+  3
+  > (or (time #f) (time #f) (time 3) (time 4))
+  (time #f)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time #f)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time 3)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  3
+  >
+
+Food for thought:
+
+* If you had to decide what should be the result of giving *one*
+  argument to ``or``, what would be this result?  Why?
+  How does your decision compare with the behavior of Petite Chez Scheme?
+
+* If you had to decide what should be the result of giving *no* argument
+  to ``or``, what would be this result?  Why?
+  How does your decision compare with the behavior of Petite Chez Scheme?
+
+
+Parity of natural numbers, re2visited
+-------------------------------------
+
+Let us revisit again the two mutually tail-recursive procedures that
+determine whether a natural number is odd or even.  This time, we
+express them using an or-expression and using an and-expression:
+
+.. code-block:: scheme
+
+  (define one_or_the_other_revisited
+    (lambda (n)
+      (letrec ([even? (lambda (n)
+                        (or (= n 0)
+                            (odd? (1- n))))]
+               [odd? (lambda (n)
+                       (and (not (= n 0))
+                            (even? (1- n))))])
+        (list (even? n) (odd? n)))))
+
+This re2visited implementation passes the unit test::
+
+  > (test-one_or_the_other one_or_the_other_revisited)
+  #t
+  > 
+
+Question: could you define ``odd?`` so that it does not use ``not``?
+
+
+.. _section-equality-re4visited:
+
+Equality, re4visited
+--------------------
+
+The definition of ``equal?_re3visited``, in
+:ref:`section-equality-re3visited`, suggests another illustration of
+or-expressions.  Each of the cond clauses encodes a conjunction.  So
+if the cond-expression were replaced with an or-expression, the
+definition would be phrased as a disjunction of conjunctions.
+
+So let us revisit the definition of equality a fourth time and
+express it with an or-expression:
+
+.. code-block:: scheme
+
+  (define equal?_re4visited
+    (lambda (v1 v2)
+      (or (and (number? v1)
+               (number? v2)
+               (= v1 v2))
+          (and (boolean? v1)
+               (boolean? v2)
+               (boolean=? v1 v2))
+          (and (char? v1)
+               (char? v2)
+               (char=? v1 v2))
+          (and (string? v1)
+               (string? v2)
+               (string=? v1 v2))
+          (and (pair? v1)
+               (pair? v2)
+               (equal?_re4visited (car v1) (car v2))
+               (equal?_re4visited (cdr v1) (cdr v2))))))
+
+Operationally, this new definition is not a progress because if a
+conjunction is not satisfied (say, the first argument is a number, but
+not the second argument, or if it is a number, the two numbers are not
+equal), the rest of the clauses will still be checked for satisfaction
+until the else clause.  In contrast, ``equal?_re3visited`` would
+immediately return ``#f`` in that case.
+
+Still, this new definition passes the unit test::
+
+  > (test-equal? equal?_re4visited)
+  #t
+  > 
+
+
+Derived special forms: cond, revisited
+--------------------------------------
+
+.. index::
+   single: clause (in a cond-expression, binding)
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <cond-clause-binding> ::= [<cond-test> => <expression>]
+
+Because in Scheme, everything which is not ``#f`` is considered as
+true, tested values may be more meaningful than ``#t``.  To "recover"
+such tested values, clauses in cond-expressions may be binding: they
+can be specified with a procedure to apply to the result of the test.
+So for example, since ``10`` is not ``#f``, evaluating
+
+.. code-block:: scheme
+
+   (cond [10 => (lambda (x) x)] [else "Hvad siger du?"])
+
+becomes equivalent to evaluating
+
+.. code-block:: scheme
+
+   ((lambda (x) x) 10)
+
+which yields ``10``.  In the following scenario, the binding clause
+contains a traced lambda-abstraction, for visualization::
+
+  > (cond [10 => (trace-lambda hej (x) x)] [else "Hvad siger du?"])
+  |(hej 10)
+  |10
+  10
+  >
+
+(Note for non-Danish readers: "hej" means "hi" in the sense of
+"hello", and "Hvad siger du?" (emphasis on "si") means "What are you
+saying?".  As no doubt you visiting students have observed already,
+Danes constantly use this idiom when they talk to each other, though
+the more rustic utterance "Hvad?" can be heard too, occasionally.
+Think of it as :kbd:`C-g` in emacs.)
+
+Question: what would be the result of evaluating the following
+expressions, do you think?
+
+* ``(cond [(list 10 20) => car] [else "Hvad siger du?"])``
+
+* ``(cond [(list 10) => list] [else "Hvad siger du?"])``
+
+* ``(cond [(list) => list] [else "Hvad siger du?"])``
+
+* ``(cond [(cdr (cons #t #f)) => list] [else "Hvad siger du?"])``
+
+
+Derived special forms: or, re2visited
+-------------------------------------
+
+The expression
+
+.. code-block:: scheme
+
+   (or e1 e2 ... eN-1 eN)
+
+abbreviates the following conditional expression:
+
+.. code-block:: scheme
+
+   (cond
+     [e1
+      => (lambda (v1) v1)]
+     [e2
+      => (lambda (v2) v2)]
+     ...
+     [eN-1
+      => (lambda (vN-1) vN-1)]
+     [else
+      eN])
+
+Or again, because local names do not matter:
+
+.. code-block:: scheme
+
+   (cond
+     [e1
+      => (lambda (v) v)]
+     [e2
+      => (lambda (v) v)]
+     ...
+     [eN-1
+      => (lambda (v) v)]
+     [else
+      eN])
+
+
+Derived special forms: or, re3visited
+-------------------------------------
+
+The expression
+
+.. code-block:: scheme
+
+   (or e1 e2 ... eN-1 eN)
+
+also abbreviates the following let-expression:
+
+.. code-block:: scheme
+
+   (let ([x1 e1])
+     (if x1
+         x1
+         (let ([x2 e2])
+           (if x2
+               x2
+               ... (let ([xN-1 eN-1])
+                     (if xN-1
+                         xN-1
+                         eN))...))))
+
+where the variables ``x1``, ``x2``, ..., ``xN-1`` are otherwise unused.
+
+
+.. epigraph::
+
+  |     `Buffy <http://en.wikipedia.org/wiki/Buffy_Summers>`__: Yeah, either they were taken, or they ran, or maybe...
+  | `Cordelia <http://en.wikipedia.org/wiki/Cordelia_Chase>`__: You're having too many ors!  Pick one!
+
+  -- `Lovers walk <http://en.wikipedia.org/wiki/Lovers_Walk>`_
+
+
+.. _derived-special-form-case:
+
+Derived special form: case
+--------------------------
+
+.. index:: case-expression
+
+.. index::
+   single: clause (in a case-expression)
+
+For linguistic comfort, Scheme offers the special form
+
+.. code-block:: scheme
+
+    (case e
+      [(v1_1 ... vM1_N1)
+       e1]
+      [(v2_1 ... vM2_N2)
+       e2]
+      ...
+      [(vK_1 ... vMK_NK)
+       eK]
+      [else
+       e0])
+
+to stand for
+
+.. code-block:: scheme
+
+    (let ([v e])
+      (cond
+        [(member v '(v1_1 ... vM1_N1))
+         e1]
+        [(member v '(v2_1 ... vM2_N2))
+         e2]
+        ...
+        [(member v '(vK_1 ... vMK_NK))
+         eK]
+        [else
+         e0]))
+
+where v is a "fresh" variable, i.e., one that does not occur in
+``e1``, ``e2``, ..., ``eK``, and ``e0``, and where each case-clause
+has been mapped into a call to ``member``.  (Procedure `member
+<http://www.scheme.com/tspl4/objects.html#./objects:s51>`_ is
+predefined, takes two arguments -- a value and a list of values -- and
+tests whether the value occurs in the list of values.)
+
+In other words, alternatively to writing, e.g.,
+
+.. code-block:: scheme
+
+  (define 246?
+    (lambda (x)
+      (if (member x '(2 4 6))
+          #t
+          #f)))
+
+one can write a case expression:
+
+.. code-block:: scheme
+
+  (define 246?_alt
+    (lambda (x)
+      (case x
+        [(2 4 6)
+         #t]
+        [else
+         #f])))
+
+
+Programming finite-state automata in Scheme, re3visited
+-------------------------------------------------------
+
+Let us revisit :ref:`programming-finite-state-automata-in-Scheme` in
+the lecture notes from last week.  The automaton in question
+recognizes the strings over the alphabet of zeroes and ones that
+contain an odd number of ones:
+
+.. ditaa::
+
+                 /----\
+                 |    |
+                 v    |0
+          /--------\  |               /--------\
+          |        | -/  1            |/------\|
+          |        | ---------------> ||      ||
+  ------> |        |                  ||      ||
+          |        | <--------------- ||      ||
+          |        |            1  /- |\------/|
+          \--------/               |  \--------/
+                                  0|    ^
+                                   |    |
+                                   \----/
+
+The following procedure implements this finite-state automaton.  The
+two states are implemented with two mutually tail-recursive *local*
+procedures.  State transitions are implemented with tail calls.  The
+computation of ``(string-length s)`` is factored out with a let
+expression.  A case-expression is used to dispatch on the current
+character:
+
+.. code-block:: scheme
+
+  (define odd-number-of-ones?_revisited
+    (lambda (s)
+      (let ([max (string-length s)])
+        (letrec ([state-with-even-number-of-ones
+                  (lambda (i)
+                    (if (= i max)
+                        "stuck"
+                        (case (string-ref s i)
+                          [(#\0)
+                           (state-with-even-number-of-ones (1+ i))]
+                          [(#\1)
+                           (state-with-odd-number-of-ones (1+ i))]
+                          [else
+                           "error"])))]
+                 [state-with-odd-number-of-ones
+                  (lambda (i)
+                    (if (= i max)
+                        "yes"
+                        (case (string-ref s i)
+                          [(#\0)
+                           (state-with-odd-number-of-ones (1+ i))]
+                          [(#\1)
+                           (state-with-even-number-of-ones (1+ i))]
+                          [else
+                           "error"])))])
+          (state-with-even-number-of-ones 0)))))
+
+When Procedure ``odd-number-of-ones?_revisited`` is applied to a
+string, it traverses this string iteratively using an index initialized
+with ``0``.  It stops when the traversal is complete or if the given
+string contains another character than ``#\0`` or ``#\1``.  It
+returns:
+
+* ``"yes"`` if the given string contains only zeroes and ones, and
+  contains an odd number of ones;
+
+* ``"stuck"`` if the given string contains only zeroes and ones, and
+  contains an even number of ones;
+
+* ``"error"`` if the given string contains another character than zero
+  or one.
+
+And it passes the unit test::
+
+  > (test-odd-number-of-ones? odd-number-of-ones?_revisited)
+  #t
+  > 
+
+
+.. _exercise-automaton-odd-number-of-ones-revisited:
+
+Exercise 2
+----------
+
+This exercise revisits :ref:`exercise-automaton-odd-number-of-ones` in
+the lecture notes from last week.
+
+0. Visualize the execution of the automaton by defining the local
+   procedures with ``trace-lambda`` instead of with ``lambda``.
+
+1. Modify the definition of ``odd-number-of-ones?_revisited`` so that
+   it returns ``"no"`` instead of ``"stuck"`` if it is given a string
+   with an even number of ones.  Adjust the unit test and test your modified
+   definition.
+
+2. Further modify your definition of ``odd-number-of-ones?_revisited``
+   so that it returns a one-character string containing the offending
+   character instead of ``"error"``::
+
+     > (odd-number-of-ones?_revisited "xy")
+     "x"
+     > (odd-number-of-ones?_revisited "01xy")
+     "x"
+     >
+
+   (Hint: use a let-expression to name the current character.)
+
+   Adjust the unit test and test your modified definition.
+
+3. Write an alternative definition of ``odd-number-of-ones?_revisited`` that
+   traverses the given string *from right to left* (i.e., from the end
+   to the beginning) instead of from left to right, and that returns
+   ``"yes"``, ``"no"``, or a one-character string.  Adjust the unit
+   test and test your modified definition.
+
+
+Exercise 3
+----------
+
+Implement, in Scheme, an automaton that recognizes the strings over
+the alphabet of zeroes and ones that contain an *even* number of ones,
+using two mutually tail-recursive *local* procedures.  Test it using
+the unit-test procedure of
+:ref:`exercise-automaton-even-number-of-ones` in the lecture notes
+from last week.
+
+
+Programming finite-state automata in Scheme, re4visited
+-------------------------------------------------------
+
+The two states of finite automaton above were implemented with *two*
+local procedures.  Alternatively, they could be implemented with *one*
+local procedure parameterized with a Boolean reflecting the oddness of
+the number of ones encountered so far:
+
+.. code-block:: scheme
+
+  (define other-odd-number-of-ones?_revisited
+    (lambda (s)
+      (let ([max (string-length s)])
+        (letrec ([state
+                  (lambda (i b)
+                    (if (= i max)
+                        (if b
+                            "yes"
+                            "stuck")
+                        (case (string-ref s i)
+                          [(#\0)
+                           (state (1+ i) b)]
+                          [(#\1)
+                           (state (1+ i) (not b))]
+                          [else
+                           "error"])))])
+          (state 0 #f)))))
+
+This alternative implementation passes the unit test::
+
+  > (test-odd-number-of-ones? other-odd-number-of-ones?_revisited)
+  #t
+  > 
+
+Suggestion: trace the calls to ``state`` and compare the resulting
+visualization with your solution to Item 0 of
+:ref:`exercise-automaton-odd-number-of-ones-revisited`.
+
+
+Checkpoint
+----------
+
+We have introduced enough of Scheme to use it as our programming
+language of discourse.  The next lecture notes introduce
+
+* `lists and defensive programming
+  <week-3-lists-and-defensive-programming.html>`_ and
+
+* `environments <week-3-environments.html>`_.
+
+
+Conclusion
+----------
+
+Overall, we have now introduced enough of Scheme to use it as our
+programming language of discourse.  This week, we have used it to
+study one programming-language artifact: environments.  Next week, we
+will turn to studying BNFs, syntax checkers, unparsers, parsers,
+interpreters, compilers, virtual machines, byte-code verifiers,
+decompilers, embeddings, and normalizers.  We will then turn to
+programming a syntax checker for a subset of Scheme.  This syntax
+checker should be self-applicable, i.e., it should be written
+according to the BNF of this subset of Scheme.
+
+
+Summary about let-, let*-, and letrec-expressions
+-------------------------------------------------
+
+* In a let-expression, each definiens is evaluated in the environment
+  of this let expression, all the definienses are evaluated in an
+  unspecified order, and all the local variables are bound in
+  parallel.  This explanation is the same after desugaring the let
+  expression into the application of a lambda-abstraction: after
+  desugaring, each local variable is a formal parameter and each
+  definiens is an actual parameter.  The actual parameters are
+  evaluated in an unspecified order and the bindings happen in
+  parallel.
+
+* In a let*-expression, each definiens is evaluated sequentially from
+  left to right, and after each evaluation, the environment is
+  extended with the binding of the name with the result of the
+  evaluation.  This explanation is the same after desugaring the let*
+  expression into nested let expressions.
+
+* In a letrec-expression, each definiens is evaluated in the
+  environment of the body of this letrec-expression.  Because each
+  definiens is a lambda-abstraction, it doesn't matter in which order
+  the lambda-abstractions are evaluated.
+
+
+Resources
+---------
+
+* The Scheme code for
+  `the finite-state automaton
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3-finite-state-automaton.scm>`_
+  (latest version: 25 Aug 2015).
+
+* The Scheme code for
+  `the equality procedures
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3-equality-procedures.scm>`_
+  (latest version: 25 Aug 2015).
+
+* The Scheme code for
+  `the environments
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3-environments.scm>`_
+  (latest version: 25 Aug 2015).
+
+* The Scheme code for `the rest of the present lecture note for Week 3
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3.scm>`_
+  (latest version: 25 Aug 2015).
+
+
+Version
+-------
+
+Fixed the phrasing in the description of ``even?`` and ``odd?``
+as well as a typo in the narrative of :ref:`section-equality-re4visited`,
+thanks to Arch Wilhes's eagle eye
+[09 Oct 2015]
+
+Fixed a typo in the description of ``plus_revisited_alt``, thanks to
+Matthew Kennedy's eagle eye, and clarified the said description as
+well as the description of ``one_or_the_other``
+[22 Sep 2015]
+
+Duplicated the section about Resources at the beginning of this file
+[27 Aug 2015]
+
+Created
+[25 Aug 2015]

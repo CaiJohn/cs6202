@@ -1,0 +1,1938 @@
+.. -*- mode: rst -*-
+
+Note for Week 3 about lists and defensive programming
+=====================================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercise
+------------------
+
+* :ref:`exercise-proper-list-ref-head-tail`:
+  list-ref, list-head, and list-tail over proper lists
+
+
+Resources
+---------
+
+* The Scheme code for
+  `the equality procedures
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3-equality-procedures.scm>`_
+  (latest version: 25 Aug 2015).
+
+* The Scheme code for `the rest of this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3-lists-and-defensive-programming.scm>`_
+  (latest version: 25 Aug 2015).
+
+
+Goal
+----
+
+The primary goal of this lecture note is to study how lists are
+represented in Scheme, using pairs (as constructed using the ``cons``
+predefined procedure) and the empty list (a predefined value):
+
+* *Proper lists* consists of pairs that are linked from left to right
+  through the cdr field of each pair, and that terminate *with the
+  empty list*.
+
+  For example, evaluating ``(cons 1 (cons 2 '()))`` yields the
+  following proper list:
+  
+  .. ditaa::
+  
+    +-----------+     +-----------+
+    |     |     |     |     |     |
+    |     |     +---> |     |     +---> ()
+    |     |     |     |     |     |
+    +--+--------+     +--+--------+
+       |                 |         
+       |                 |         
+       v                 v         
+  
+       1                 2         
+
+* *Improper lists* consists of pairs that are linked from left to
+  right through the cdr field of each pair, and that terminate *with
+  something else than the empty list*.
+
+  For example, evaluating ``(cons 1 (cons 2 3))`` yields the following
+  improper list:
+  
+  .. ditaa::
+  
+    +-----------+     +-----------+
+    |     |     |     |     |     |
+    |     |     +---> |     |     +---> 3
+    |     |     |     |     |     |
+    +--+--------+     +--+--------+
+       |                 |         
+       |                 |         
+       v                 v         
+  
+       1                 2         
+
+
+.. epigraph::
+
+  | Vigfus the Concatenator: Gosh, do you think an improper list could terminate with a pair?
+  | Mimer (smiling): That's a good question, Vigfus.  What do you think?
+
+We consider how to `compute the length of a proper list
+<week-3-lists-and-defensive-programming.html#computing-the-length-of-a-proper-list>`_,
+how to `concatenate a proper list to another proper list
+<week-3-lists-and-defensive-programming.html#concatenating-a-proper-list-to-another-proper-list>`_,
+how to `represent sets as proper lists of their elements
+<week-3-lists-and-defensive-programming.html#set-as-proper-lists>`_
+without repetition, and how to `program elementary set operations
+<week-3-lists-and-defensive-programming.html#exercise-set-union-intersection-difference>`_.
+
+We also introduce the predefined procedure ``errorf`` that lets us
+interrupt the current computation by `raising an error
+<week-3-lists-and-defensive-programming.html#raising-errors>`_.  This
+predefined procedure makes it possible to adopt `a defensive style of
+programming
+<week-3-lists-and-defensive-programming.html#defensive-programming>`_
+where we first test the types of the actual parameters of a procedure
+before carrying on with its computation.
+
+We then `revisit the notion of unit tests
+<week-3-lists-and-defensive-programming.html#information-content-in-unit-tests>`_,
+and how to make them more useful in practice, we `revisit quotation in
+Scheme
+<week-3-lists-and-defensive-programming.html#quoting-compound-values>`_,
+and we conclude this lecture note with the notions of `structural
+equality
+<week-3-lists-and-defensive-programming.html#structural-equality-between-Scheme-values>`_
+and `identity
+<week-3-lists-and-defensive-programming.html#identity-between-Scheme-values>`_ of Scheme
+values.
+
+.. _vigfus-and-sigtryg:
+
+.. epigraph::
+
+  | Vigfus the Concatenator: Then Mimer answered my question with another question.
+  | Sigtryg the Square: And then?
+  | Vigfus: And then I realized I was confusing the base case and the induction case for lists.
+  |         Can you believe that?
+
+
+.. index:: lists (proper)
+
+Proper lists
+------------
+
+Pairs are used to construct singly linked proper lists as follows:
+
+.. bnf:: proper lists
+   :noindex:
+   :namespace: proper-lists
+
+   <proper-list> ::= ()
+                   | (<cons-able-value> . <proper-list>)
+
+   <cons-able-value> ::= ...any Scheme value, including proper lists...
+
+In other words, a proper list is constructed with nested calls to
+``cons`` where the right-most call is given the empty list as a
+second argument.  In other words again, proper lists are inductively
+specified as either the empty list (the base case) or as the result of
+applying ``cons`` to a Scheme value and to a proper list.
+
+The predicate associated to proper lists is ``list?``::
+
+  > (list? (cons (cons 1 2) '()))
+  #t
+  > (list? (cons 1 (cons 2 (cons 3 '()))))
+  #t
+  > (list? (cons 1 (cons 2 (cons 3 4))))
+  #f
+  >
+
+.. warning::
+
+  The type predicate ``pair?`` operates *in constant time*.  The
+  predicate ``list?`` does not: its argument needs to be traversed to
+  check whether it terminates with the empty list or not.
+
+Proper lists are constructed with pairs but by convention, and unlike
+pairs, they are printed without nested parentheses and without a dot
+at the end::
+
+  > (cons 3 '())
+  (3)
+  > (cons 2 (cons 3 '()))
+  (2 3)
+  > (cons 1 (cons 2 (cons 3 '())))
+  (1 2 3)
+  >
+
+Graphically, proper lists are depicted as traditional linked lists
+with one forward link and no back link in each node:
+
+.. ditaa::
+
+  +-----------+     +-----------+     +-----------+
+  |     |     |     |     |     |     |     |     |
+  |     |     +---> |     |     +---> |     |     +---> ()
+  |     |     |     |     |     |     |     |     |
+  +--+--------+     +--+--------+     +--+--------+
+     |                 |                 |
+     |                 |                 |
+     v                 v                 v
+
+     1                 2                 3
+
+(Food for thought: consider lists that are doubly linked; how would
+you specify them inductively?)
+
+To group a series of values in a list, rather than repeatedly calling
+``cons``, we use the variadic procedure ``list``::
+
+  > (list 1 2 3)
+  (1 2 3)
+  >
+
+.. index:: lists (heterogeneous)
+
+Proper lists can be *heterogeneous*, in that their elements need not
+be uniform::
+
+  > (list 1 "2" (list 3 4))
+  (1 "2" (3 4))
+  >
+
+Graphically:
+
+.. ditaa::
+
+  +-----------+     +-----------+     +-----------+
+  |     |     |     |     |     |     |     |     |
+  |     |     +---> |     |     +---> |     |     +---> ()
+  |     |     |     |     |     |     |     |     |
+  +--+--------+     +--+--------+     +--+--------+
+     |                 |                 |
+     |                 |                 |
+     v                 v                 v
+
+     1                "2"             +-----------+     +-----------+
+                                      |     |     |     |     |     |
+                                      |     |     +---> |     |     +---> ()
+                                      |     |     |     |     |     |
+                                      +--+--------+     +--+--------+
+                                         |                 |
+                                         |                 |
+                                         v                 v
+
+                                         3                 4
+
+The predefined procedure ``string->list`` is unary and maps a string
+to the corresponding proper list of characters::
+
+  > (string->list "hello world")
+  (#\h #\e #\l #\l #\o #\space #\w #\o #\r #\l #\d)
+  > (string->list "")
+  ()
+  >
+
+It is an error to apply ``string->list`` to something else than a
+string.  The left inverse of ``string->list`` is the unary predefined
+procedure ``list->string``.  It is an error to apply ``list->string``
+to something else than a proper list of characters::
+
+  > (list->string (string->list "hello world"))
+  "hello world"
+  > (list->string (string->list ""))
+  ""
+  >
+
+.. index:: lists (nested)
+
+Proper lists can be *nested*.  For example, here is the list of the
+successive suffixes of the proper list ``(3 2 1)``::
+
+  > (list (list 3 2 1) (list 2 1) (list 1) (list))
+  ((3 2 1) (2 1) (1) ())
+  >
+
+Graphically:
+
+.. ditaa::
+
+  +-----------+     +-----------+     +-----------+     +-----------+
+  |     |     |     |     |     |     |     |     |     |     |     |
+  |     |     +---> |     |     +---> |     |     +---> |     |     +---> ()
+  |     |     |     |     |     |     |     |     |     |     |     |
+  +--+--------+     +--+--------+     +--+--------+     +--+--------+
+     |                 |                 |                 |
+     |                 |                 |                 |
+     |                 |                 |                 v
+     |                 |                 |
+     |                 |                 |                 ()
+     |                 |                 v
+     |                 |
+     |                 |              +-----------+
+     |                 |              |     |     |
+     |                 |              |     |     +---> ()
+     |                 |              |     |     |
+     |                 |              +--+--------+
+     |                 |                 |
+     |                 |                 |
+     |                 |                 v
+     |                 |
+     |                 |                 1
+     |                 |
+     |                 v
+     |
+     |              +-----------+     +-----------+
+     |              |     |     |     |     |     |
+     |              |     |     +---> |     |     +---> ()
+     |              |     |     |     |     |     |
+     |              +--+--------+     +--+--------+
+     |                 |                 |
+     |                 |                 |
+     |                 v                 v
+     |
+     |                 2                 1
+     |
+     v
+
+  +-----------+     +-----------+     +-----------+
+  |     |     |     |     |     |     |     |     |
+  |     |     +---> |     |     +---> |     |     +---> ()
+  |     |     |     |     |     |     |     |     |
+  +--+--------+     +--+--------+     +--+--------+
+     |                 |                 |
+     |                 |                 |
+     v                 v                 v
+
+     3                 2                 1
+
+.. index:: lists (shared)
+
+Sublists can be *shared*.  For example, here is the list of the
+shared successive suffixes of the proper list ``(3 2 1)``::
+
+  > (let* ([x0 '()]
+           [x1 (cons 1 x0)]
+           [x2 (cons 2 x1)]
+           [x3 (cons 3 x2)])
+      (list x3 x2 x1 x0))
+  ((3 2 1) (2 1) (1) ())
+  >
+
+Graphically:
+
+.. ditaa::
+
+  +-----------+     +-----------+     +-----------+     +-----------+
+  |     |     |     |     |     |     |     |     |     |     |     |
+  |     |     +---> |     |     +---> |     |     +---> |     |     +---> ()
+  |     |     |     |     |     |     |     |     |     |     |     |
+  +--+--------+     +--+--------+     +--+--------+     +--+--------+
+     |                 |                 |                 |
+     |                 |                 |                 |
+     v                 v                 v                 |
+                                                           |
+  +-----------+     +-----------+     +-----------+        v
+  |     |     |     |     |     |     |     |     |
+  |     |     +---> |     |     +---> |     |     +-----> ()
+  |     |     |     |     |     |     |     |     |
+  +--+--------+     +--+--------+     +--+--------+
+     |                 |                 |
+     |                 |                 |
+     v                 v                 v
+
+     3                 2                 1
+
+Proper lists can be arbitrarily nested, e.g., onion-style::
+
+  > (list 1
+          (list 2
+                (list 3
+                      (list 4
+                            '()
+                            4)
+                      3)
+                2)
+          1)
+  (1 (2 (3 (4 () 4) 3) 2) 1)
+  >
+
+A proper list is terminated by the empty list, no matter what it
+contains, e.g., pairs::
+
+  > (list (cons 1 2) (cons 3 4) (cons 5 6))
+  ((1 . 2) (3 . 4) (5 . 6))
+  > (list? (list (cons 1 2) (cons 3 4) (cons 5 6)))
+  #t
+  >
+
+Graphically:
+
+.. ditaa::
+
+  +-----------+     +-----------+     +-----------+
+  |     |     |     |     |     |     |     |     |
+  |     |     +---> |     |     +---> |     |     +---> ()
+  |     |     |     |     |     |     |     |     |
+  +--+--------+     +--+--------+     +--+--------+
+     |                 |                 |
+     |                 |                 |
+     v                 v                 v
+
+  +-----------+     +-----------+     +-----------+
+  |     |     |     |     |     |     |     |     |
+  |     |     |     |     |     |     |     |     |
+  |     |     |     |     |     |     |     |     |
+  +--+-----+--+     +--+-----+--+     +--+-----+--+
+     |     |           |     |           |     |
+     |     |           |     |           |     |
+     v     v           v     v           v     v
+
+     1     2           3     4           5     6
+
+Naturally, proper lists lend themselves to much structurally recursive
+programming.  Let us give two typical illustrations: one where we
+compute the length of a proper list, and one where we concatenate two
+proper lists.
+
+
+.. _computing-the-length-of-a-proper-list:
+
+Computing the length of a proper list
+-------------------------------------
+
+The length of a proper list can be computed with the predefined
+procedure ``length``::
+
+  > (list)
+  ()
+  > (length (list))
+  0
+  > (list 1 2 3)
+  (1 2 3)
+  > (length (list 1 2 3))
+  3
+  > 
+
+Here is a unit test that accounts for this scenario:
+
+.. code-block:: scheme
+
+  (define test-length_proper-list
+    (lambda (candidate)
+      (and (equal? (candidate (list))
+                   0)
+           (equal? (candidate (list 1 2 3))
+                   3)
+           ;;; add more tests here
+           )))
+
+Petite Chez Scheme's predefined procedure ``length`` passes this unit
+test::
+
+  > (test-length_proper-list length)
+  #t
+  > 
+
+Let us define how to compute the length of a proper list according to
+the following recipe, which follows the inductive structure of proper
+lists:
+
+* in English:
+
+  * Base case:
+    the length of the empty list is 0.
+
+  * Induction case:
+    the length of a non-empty proper list is the successor of the
+    length of the tail of that proper list.
+
+* algebraically, noting cons with the infix operator :: and the empty
+  list with nil:
+
+  * Base case:
+    length nil = 0
+
+  * Induction case:
+    for all values v and proper lists vs,
+    length (v :: vs) = 1 + length vs
+
+* in Scheme:
+
+  .. code-block:: scheme
+  
+    (define length_proper-list
+      (lambda (xs)
+        (letrec ([visit (lambda (ws)
+                          (if (null? ws)
+                              ;;; base case:
+                              0
+                              ;;; induction case:
+                              (1+ (visit (cdr ws)))))])
+          (visit xs))))
+
+  Let us test this definition::
+
+    > (test-length_proper-list length_proper-list)
+    #t
+    > 
+
+  Success.
+  
+
+.. index:: list (concatenation)
+
+.. _concatenating-a-proper-list-to-another-list:
+
+Concatenating a proper list to another proper list
+--------------------------------------------------
+
+Here is a scenario that illustrates the essential properties of
+concatenating proper lists in Scheme, using the predefined procedure
+``append``::
+
+  > (list)
+  ()
+  > (append (list) (list))
+  ()
+  > (list 4 5 6)
+  (4 5 6)
+  > (append (list) (list 4 5 6))
+  (4 5 6)
+  > (append (list 4) (list 5 6))
+  (4 5 6)
+  > (append (list 4 5) (list 6))
+  (4 5 6)
+  > (append (list 4 5 6) (list))
+  (4 5 6)
+  >
+
+Here is a unit test that captures these essential properties:
+
+.. code-block:: scheme
+
+  (define test-append_proper-list
+    (lambda (candidate)
+      (and (equal? (candidate (list) (list))
+                   (list))
+           (equal? (candidate (list) (list 4 5 6))
+                   (list 4 5 6))
+           (equal? (candidate (list 4) (list 5 6))
+                   (list 4 5 6))
+           (equal? (candidate (list 4 5) (list 6))
+                   (list 4 5 6))
+           (equal? (candidate (list 4 5 6) (list))
+                   (list 4 5 6))
+           ;;; add more tests here
+           )))
+
+Petite Chez Scheme's predefined procedure ``append`` passes this unit
+test::
+
+  > (test-proper-list-append append)
+  #t
+  > 
+
+Here is a second scenario to visualize the concatenation of two proper
+lists, where the two input lists and the output list are given a name::
+
+  > (define xs (list 1 2 3))
+  > xs
+  (1 2 3)
+  > (define ys (list 4 5 6))
+  > ys
+  (4 5 6)
+  > (define xs-xs (append xs xs))
+  > (define xs-ys (append xs ys))
+  > (define ys-xs (append ys xs))
+  > (define ys-ys (append ys ys))
+  > xs-xs
+  (1 2 3 1 2 3)
+  > xs-ys
+  (1 2 3 4 5 6)
+  > ys-xs
+  (4 5 6 1 2 3)
+  > ys-ys
+  (4 5 6 4 5 6)
+  > (append xs-xs ys-ys)
+  (1 2 3 1 2 3 4 5 6 4 5 6)
+  > 
+
+Let us define the concatenation of two proper lists according to the
+following recipe, which follows the inductive structure of proper
+lists:
+
+* in English:
+
+  * Base case:
+    concatenating the empty list to a proper list gives that proper list.
+
+  * Induction case:
+    given a non-empty proper list whose car is a value v
+    and whose cdr is the proper list vs,
+    and given a second proper list,
+    concatenating this non-empty list to this second list
+    yields a proper list whose car is v and whose cdr is
+    the result of concatenating vs to this second proper list.
+
+* algebraically, noting cons with the infix operator :: and the empty
+  list with nil:
+
+  * Base case: for all proper lists ws, append_proper-list (nil, ws) = ws
+
+  * Induction case: for all values v and for all proper lists vs and ws,
+    append_proper-list (v :: vs, ws) = v :: append_proper-list (vs, ws)
+
+* in Scheme:
+
+  .. code-block:: scheme
+  
+    (define append_proper-list
+      (lambda (xs ys)
+        (letrec ([visit (lambda (xs ys)
+                          (if (null? xs)
+                              ;;; base case:
+                              ys
+                              ;;; induction case:
+                              (cons (car xs) (visit (cdr xs) ys))))])
+          (visit xs ys))))
+
+  Let us test this definition::
+
+    > (test-append_proper-list append_proper-list)
+    #t
+    > 
+
+  Success.
+
+Three (in the sense of two) questions:
+
+1. Is there any sharing between the two lists that are passed to
+   ``append_proper-list`` and the list it returns?
+
+2. If your answer to the first question is "yes", how would you
+   modify the definition of ``append_proper-list`` so that there is no
+   sharing at all?
+
+3. If your answer to the first question is "no", how would you modify
+   the definition of ``append_proper-list`` so that there is some
+   sharing?
+
+(Hint for the first question: what does ``append_proper-list`` return
+when its first argument is the empty list?)
+
+Food for thought about the predefined list-concatenation procedure in
+Petite Chez Scheme, ``append``:
+
+* If you had to decide what should be the result of giving *more than two*
+  arguments to ``append``, what would be this result?  Why?
+  How does your decision compare with the behavior of Petite Chez Scheme?
+
+* If you had to decide what should be the result of giving *one*
+  argument to ``append``, what would be this result?  Why?
+  How does your decision compare with the behavior of Petite Chez Scheme?
+
+* If you had to decide what should be the result of giving *no* argument
+  to ``append``, what would be this result?  Why?
+  How does your decision compare with the behavior of Petite Chez Scheme?
+
+
+Exercise 1
+----------
+
+In the definition of ``append_proper-list`` just above, the second
+argument of ``visit`` never changes throughout the calls.  Modify this
+definition so that ``visit`` is not passed this unchanging argument,
+and test it (using the unit-test procedure
+``test-append_proper-list``, of course).
+
+Question: How do these two definitions differ?
+(You might want to trace ``visit`` to visualize their execution,
+as in :ref:`exercise-plus-with-letrec` in `the main lecture note of
+this week <week-3.html>`_.)
+
+
+.. index:: errorf
+
+.. _raising-errors:
+
+Raising errors
+--------------
+
+Petite Chez Scheme's ``errorf`` procedure makes it possible to raise
+an error.  It takes at least two arguments: typically the name of a
+faulty procedure, a formatting directive, and further optional
+arguments, depending on the directive:
+
+.. code-block:: scheme
+
+  (define cautious-quotient
+    (lambda (i j)
+      (if (number? i)
+          (if (number? j)
+              (if (= j 0)
+                  (errorf 'cautious-quotient
+                          "cannot divide anything by zero")
+                  (quotient i j))
+              (errorf 'cautious-quotient
+                      "~s is not a number"
+                      j))
+          (errorf 'cautious-quotient
+                  "~s is not a number"
+                  i))))
+
+This definition gives rise to the following scenario::
+
+  > (cautious-quotient 10 4)
+  2
+  > (cautious-quotient "10" 4)
+
+  Exception in cautious-quotient: "10" is not a number
+  Type (debug) to enter the debugger.
+  > (cautious-quotient 10 "4")
+
+  Exception in cautious-quotient: "4" is not a number
+  Type (debug) to enter the debugger.
+  > (cautious-quotient 10 0)
+
+  Exception in cautious-quotient: cannot divide anything by zero
+  Type (debug) to enter the debugger.
+  >
+
+
+.. index:: programming (defensive)
+
+.. _defensive-programming:
+
+Defensive programming
+---------------------
+
+Thus equipped with ``errorf``, we can write more user-friendly
+programs, such as ``cautious-quotient`` above or ``safe-fac`` below:
+
+.. code-block:: scheme
+
+  (define safe-fac
+    (lambda (n)
+      (letrec ([visit (lambda (i)
+                        (if (= i 0)
+                            1
+                            (* i (visit (1- i)))))])
+        (if (and (integer? n)
+                 (>= n 0))
+            (visit n)
+            (errorf 'safe-fac "not a non-negative integer: ~s" n)))))
+
+Applying ``safe-fac`` to a negative integer raises an error, instead
+of silently recursing below the base case.
+
+Incidentally, ``safe-fac`` passes the unit test from last week::
+
+  > (test-fac safe-fac)
+  #t
+  > 
+
+
+.. _exercise-proper-list-ref-head-tail:
+
+Exercise 2
+----------
+
+In this mandatory exercise, you are asked to implement three
+structurally recursive procedures ``proper-list-ref``,
+``proper-list-head`` and ``proper-list-tail`` that respectively
+emulate the predefined procedures ``list-ref``, ``list-tail`` and
+``list-head``::
+
+  > (list-ref (list 0 1 2 3 4 5) 0)
+  0
+  > (list-ref (list 0 10 100 1000 10000 100000) 0)
+  0
+  > (list-ref (list 0 10 100 1000 10000 100000) 1)
+  10
+  > (list-ref (list 0 10 100 1000 10000 100000) 2)
+  100
+  > (list-ref (list 0 10 100 1000 10000 100000) 3)
+  1000
+  > (list-head (list 0 10 100 1000 10000 100000) 2)
+  (0 10)
+  > (list-tail (list 0 10 100 1000 10000 100000) 2)
+  (100 1000 10000 100000)
+  >
+
+Your definitions should behave as the predefined procedures, including
+error cases::
+
+  > (list-ref (list 0 10 100 1000) "hello world")
+
+  Exception in list-ref: index "hello world" is not an exact nonnegative integer
+  Type (debug) to enter the debugger.
+  > (list-tail (list 0 10 100 1000) -1)
+
+  Exception in list-tail: index -1 is not an exact nonnegative integer
+  Type (debug) to enter the debugger.
+  > (list-tail (list 0 10 100 1000) 5)
+
+  Exception in list-tail: index 5 is out of range for list (0 10 100 1000)
+  Type (debug) to enter the debugger.
+  > (list-head (cons 0 (cons 10 (cons 100 1000))) 4)
+
+  Exception in list-head: (0 10 100 . 1000) is not a proper list
+  Type (debug) to enter the debugger.
+  >
+
+Incidentally, the logic between ``proper-list-head`` and
+``proper-list-tail`` is that for any ``vs`` denoting a proper list of
+length n and for any ``i`` denoting an integer between 0 and n,
+concatenating ``(proper-list-head vs i)`` and ``(proper-list-tail vs
+i)`` yields the list denoted by ``vs``::
+
+  > (proper-list-head '(0 1 2 3 4 5 6 7 8) 4)
+  (0 1 2 3)
+  > (proper-list-tail '(0 1 2 3 4 5 6 7 8) 4)
+  (4 5 6 7 8)
+
+Let us manifest this property with the following procedure:
+
+.. code-block:: scheme
+
+  (define head-and-tail
+    (lambda (vs i)
+      (if (list? vs)
+          (let ([n (length vs)])
+            (if (and (integer? i)
+                     (<= 0 i)
+                     (<= i n))
+                (equal? (append (proper-list-head vs i)
+                                (proper-list-tail vs i))
+                        vs)
+                (errorf 'head-and-tail
+                        "not an integer between 0 and ~s: ~s"
+                        n
+                        i)))
+          (errorf 'head-and-tail
+                  "not a proper list: ~s"
+                  vs))))
+
+The property is illustrated in the following scenario::
+
+  > (head-and-tail '(0 1 2 3 4 5 6 7 8) 0)
+  #t
+  > (head-and-tail '(0 1 2 3 4 5 6 7 8) 2)
+  #t
+  > (head-and-tail '(0 1 2 3 4 5 6 7 8) 5)
+  #t
+  > (head-and-tail '(0 1 2 3 4 5 6 7 8) 8)
+  #t
+  > (head-and-tail '(0 1 2 3 4 5 6 7 8) 9)
+  #t
+  >
+
+Here are three unit-test procedures you should find useful:
+
+.. code-block:: scheme
+
+  (define test-proper-list-ref
+    (lambda (candidate)
+      (and (equal? (candidate '(0 1 2 3 4 5) 0)
+                   0)
+           (equal? (candidate '(0 1 2 3 4 5) 3)
+                   3)
+           (equal? (candidate '(0 1 2 3 4 5) 5)
+                   5)
+           ;;; 
+           )))
+
+  (define test-proper-list-head
+    (lambda (candidate)
+      (and (equal? (candidate '(0 1 2 3 4 5) 0)
+                   '())
+           (equal? (candidate '(0 1 2 3 4 5) 3)
+                   '(0 1 2))
+           (equal? (candidate '(0 1 2 3 4 5) 5)
+                   '(0 1 2 3 4))
+           (equal? (candidate '(0 1 2 3 4 5) 6)
+                   '(0 1 2 3 4 5))
+           ;;; 
+           )))
+
+  (define test-proper-list-tail
+    (lambda (candidate)
+      (and (equal? (candidate '(0 1 2 3 4 5) 0)
+                   '(0 1 2 3 4 5))
+           (equal? (candidate '(0 1 2 3 4 5) 3)
+                   '(3 4 5))
+           (equal? (candidate '(0 1 2 3 4 5) 5)
+                   '(5))
+           (equal? (candidate '(0 1 2 3 4 5) 6)
+                   '())
+           ;;; 
+           )))
+
+Note how Petite Chez Scheme's predefined procedures pass these unit
+tests::
+
+  > (test-proper-list-ref list-ref)
+  #t
+  > (test-proper-list-head list-head)
+  #t
+  > (test-proper-list-tail list-tail)
+  #t
+  > 
+
+So should your own procedures.
+
+
+.. _exercise-make-successive-suffixes:
+
+Exercise 3
+----------
+
+Implement a structurally recursive procedure that maps a proper list
+to the list of its successive suffixes, starting from the input list
+and ending with the empty list::
+
+  > (make-successive-suffixes '(4 3 2 1))
+  ((4 3 2 1) (3 2 1) (2 1) (1) ())
+  > (make-successive-suffixes '())
+  (())
+  >
+
+Do not use ``append``, only ``cons``, and share the successive
+suffixes, as in the illustration above.
+
+
+Exercise 4
+----------
+
+Implement a structurally recursive procedure that maps a proper list
+into its onion version::
+
+  > (make-onion '(1 2 3 4))
+  (1 (2 (3 (4 () 4) 3) 2) 1)
+  > (make-onion '(4 3 2 1))
+  (4 (3 (2 (1 () 1) 2) 3) 4)
+  >
+
+Only use ``list``, i.e., not ``append`` and not ``cons``.
+
+
+.. _set-as-proper-lists:
+
+Sets as proper lists
+--------------------
+
+The goal of the following two exercises is to represent sets as the
+list of their elements, without repetition.  The order of elements
+does not matter.
+
+Let us define a predicate (i.e., a procedure returning a Boolean),
+``set?``, to test whether a proper list represents a set.  We use the
+following recipe, which follows the inductive structure of proper
+lists:
+
+* in English:
+
+  * Base case:
+    the empty list represents the empty set.
+
+  * Induction case:
+    a non-empty proper list represents a set if its car does not occur
+    in its cdr (because there should be no repetition in the
+    representation of a set) and if its cdr represents a set.
+
+* algebraically, noting cons with the infix operator :: and the empty
+  list with nil:
+
+  * Base case:
+    set? nil = true
+
+  * Induction case:
+    for all values v and proper lists vs,
+    set? (v :: vs) = (v does not occur in vs) and (set? vs)
+
+* in Scheme, using the predefined procedure ``member`` that was
+  mentioned in the section about the case special form
+  (:ref:`derived-special-form-case`):
+
+  .. code-block:: scheme
+  
+    (define set?
+      (lambda (vs)
+        (if (null? vs)
+            #t
+            (and (not (member (car vs) (cdr vs)))
+                 (set? (cdr vs))))))
+
+
+.. _exercise-set-normalize:
+
+Exercise 5
+----------
+
+In this exercise, you are asked to write a procedure
+``set-normalize`` that is given a list of elements (that can be
+compared with ``equal?``), possibly with duplications, and yields a
+list of the same elements, but without duplication::
+
+  > (set-normalize '())
+  ()
+  > (set-normalize '(a))
+  (a)
+  > (set-normalize '(a b c d))
+  (a b c d)
+  > (set-normalize '(a a b b c c d d))
+  (a b c d)
+  > (set-normalize '(a b a c d c d b))
+  (a c d b)
+  > 
+
+Hint: set up a unit test as follows.
+
+* First of all, Petite Chez Scheme offers a predefined procedure
+  ``sort`` that takes a predicate and a list of values that can be
+  compared with this predicate::
+
+    > (sort < '(2 3 1))
+    (1 2 3)
+    > (sort > '(2 3 1))
+    (3 2 1)
+    > 
+
+  So by that book, we would be wiser to consider sets of numbers.  The
+  scenario above then would read as follows::
+
+    > (sort < (set-normalize '()))
+    ()
+    > (sort < (set-normalize '(1)))
+    (1)
+    > (sort < (set-normalize '(1 2 3 4)))
+    (1 2 3 4)
+    > (sort < (set-normalize '(1 1 2 2 3 3 4 4)))
+    (1 2 3 4)
+    > (sort < (set-normalize '(1 2 1 3 4 3 4 2)))
+    (1 2 3 4)
+    >
+
+* In your unit test, consider sets of numbers:
+
+  .. code-block:: scheme
+
+    (define s0_normalized '())
+    (define s0_a s0_normalized)
+
+    (define s1_normalized '(1))
+    (define s1_a s1_normalized)
+    (define s1_b '(1 1 1))
+
+    (define s2_normalized '(1 2 3 4 5))
+    (define s2_a s2_normalized)
+    (define s2_b '(1 1 1 2 1 2 1 3 4 5))
+    (define s2_c '(2 1 3 3 3 3 5 4))
+
+    ;;; add more definitions here
+
+    (define test-set-normalize
+      (lambda (candidate)
+        (and (let ([result (candidate s0_a)])
+               (and (set? result)
+                    (equal? s0_normalized
+                            (sort < result))))
+
+             (let ([result (candidate s1_a)])
+               (and (set? result)
+                    (equal? s1_normalized
+                            (sort < result))))
+             (let ([result (candidate s1_b)])
+               (and (set? result)
+                    (equal? s1_normalized
+                            (sort < result))))
+
+             (let ([result (candidate s2_a)])
+               (and (set? result)
+                    (equal? s2_normalized
+                            (sort < result))))
+             (let ([result (candidate s2_b)])
+               (and (set? result)
+                    (equal? s2_normalized
+                            (sort < result))))
+             (let ([result (candidate s2_c)])
+               (and (set? result)
+                    (equal? s2_normalized
+                            (sort < result))))
+
+             ;;; add more tests here
+             )))
+
+
+Solution for Exercise 5
+-----------------------
+
+The pedagogical value of this exercise is to make you reflect on the
+representation of sets.  The order of elements in a list representing
+a set is not important, but you should be aware of which repeated
+elements you remove -- the first ones, or the last ones?
+
+Here is a solution:
+
+.. code-block:: scheme
+
+  (define set-normalize
+    (lambda (v)
+      (letrec ([visit (lambda (xs)
+                        (cond
+                          [(null? xs)
+                           '()]
+                          [(pair? xs)
+                           (if (member (car xs) (cdr xs))
+                               (visit (cdr xs))
+                               (cons (car xs) (visit (cdr xs))))]
+                          [else
+                           (errorf 'set-normalize
+                                   "not a proper list: ~s"
+                                   v)]))])
+        (visit v))))
+
+Let us test this definition::
+
+  > (test-set-normalize set-normalize)
+  #t
+  > 
+
+Success.
+
+Incidentally, which repeated elements are removed?  The first ones, or
+the last ones?
+
+
+.. _exercise-set-union-intersection-difference:
+
+Exercise 6
+----------
+
+In this exercise, you are asked to implement set union, set
+intersection, and set difference in the line of `the dRegAut course
+<http://cs.au.dk/~amoeller/dRegAut/notation.html>`_ over
+representations of sets, i.e., lists of elements without duplication::
+
+  > (set-union '(a b c d) '(e f g h))
+  (a b c d e f g h)
+  > (set-union '(a b c d e) '(d e f g h))
+  (a b c d e f g h)
+  > (set-union '(a b c d e f g h) '())
+  (a b c d e f g h)
+  > (set-union '() '(a b c d e f g h))
+  (a b c d e f g h)
+  > (set-intersection '(a b c d) '(e f g h))
+  ()
+  > (set-intersection '(a b c d e) '(d e f g h))
+  (d e)
+  > (set-difference '(a b c d e) '(d e f g h))
+  (a b c)
+  >
+
+Note: the definition
+
+.. code-block:: scheme
+
+  (define set-union
+    (lambda (s1 s2)
+      (set-normalize (append s1 s2))))
+
+is not satisfactory --
+you should use only ``cons`` to construct the result.
+
+Hint: set up a unit test that uses sets of numbers, as in
+:ref:`exercise-set-normalize`.
+
+.. code-block:: scheme
+
+  (define s0 '())
+
+  (define s0_U_s0 s0)
+
+  (define s1 '(1 3 5 7))
+  (define s2 '(2 4 6 8))
+  (define s3 '(1 2 3 4))
+  (define s4 '(5 6 7 8))
+  ;;; add more definitions here
+
+  (define s0_U_s1 s1)
+  (define s1_U_s0 s1)
+
+  (define s1_U_s1 s1)
+
+  (define s1_U_s2 '(1 2 3 4 5 6 7 8))
+  (define s1_U_s3 '(1 2 3 4 5 7))
+  ;;; (define s1_U_s4 ...)
+
+  ;;; (define s2_U_s3 ...)
+  ;;; (define s2_U_s4 ...)
+
+  ;;; (define s3_U_s4 ...)
+
+  (define s2_U_s1 '(1 2 3 4 5 6 7 8))
+  (define s3_U_s1 '(1 2 3 4 5 7))
+  ;;; (define s4_U_s1 ...)
+
+  ;;; (define s3_U_s2 ...)
+  ;;; (define s4_U_s2 ...)
+
+  ;;; (define s4_U_s3 ...)
+
+  ;;; add more definitions here
+  
+  (define test-set-union
+    (lambda (candidate)
+      (and (equal? s0_U_s0
+                   (sort < (candidate s0 s0)))
+
+           (equal? s0_U_s1
+                   (sort < (candidate s0 s1)))
+           (equal? s1_U_s0
+                   (sort < (candidate s1 s0)))
+
+           (equal? s1_U_s1
+                   (sort < (candidate s1 s1)))
+
+           (equal? s1_U_s2
+                   (sort < (candidate s1 s2)))
+           (equal? s1_U_s3
+                   (sort < (candidate s1 s3)))
+           ;;; add more tests here
+
+           (equal? s2_U_s1
+                   (sort < (candidate s2 s1)))
+           (equal? s3_U_s1
+                   (sort < (candidate s3 s1)))
+           ;;; add more tests here
+
+           ;;; keep adding
+           ;;; be thorough,
+           ;;; get a sense of all that you are testing
+           )))
+
+  (define test-set-intersection
+    (lambda (candidate)
+      (errorf 'test-set-intersection
+              "not implemented yet")))
+
+  (define test-set-difference
+    (lambda (candidate)
+      (errorf 'test-set-difference
+              "not implemented yet")))
+
+Extra hint: revisit the definition of set union, set intersection, and
+set difference in an inductive way.  Here is an example for set union.
+
+* The definition of set-union is as follows.
+  
+  For all sets A and B, A U B is the set such that
+  
+  * if x occurs in A, then it occurs in A U B;
+  
+  * if x occurs in B, then it occurs in A U B; and
+  
+  * if x occurs in A U B, then either it occurs in A, or it occurs in
+    B, or it occurs in both.
+
+  Or again:
+
+  * x occurs in A U B if and only if x occurs in A or x occurs in B.
+
+* Let us define how to compute the union of two sets represented as
+  proper lists without repetition.  We use the following recipe, which
+  follows the inductive structure of proper lists:
+  
+  * in English:
+  
+    * Base case:
+      the union of the empty set and of a set
+      gives that set.
+  
+    * Induction case:
+      given a non-empty set whose car is ``x`` and whose cdr is ``xs``,
+      and given a second set ``ys``,
+
+      * if ``x`` occurs in ``ys``,
+        the union of the non-empty set and ``ys``
+        is
+        the union of ``xs`` and ``ys``; and
+
+      * if ``x`` does not occur in ``ys``,
+        the union of the non-empty set and ``ys``
+        is a set whose car is ``x`` and 
+        whose cdr is the union of ``xs`` and of ``ys``.
+  
+  * algebraically, noting cons with the infix operator :: and the empty
+    list with nil:
+  
+    * Base case:
+      for all ys, set-union (nil, ys) = ys
+  
+    * Induction case:
+      for all set elements x, for all sets xs and ys,
+
+      * if x occurs in ys,
+        set-union (x :: xs, ys) = set-union (xs, ys), and
+
+      * if x does not occur in ys,
+        set-union (x :: xs, ys) = x :: set-union (xs, ys)
+
+  * in Scheme:
+
+     Well, it's your exercise, isn't it?
+
+     (Remember to use the unit-test procedure, ``test-set-union``.)
+
+
+.. index::
+   single: unit tests (information content in)
+
+.. _information-content-in-unit-tests:
+
+Information content in unit tests
+---------------------------------
+
+Today, Harald the Bold, from a Viking tribe of Eastern Jutland,
+decides to improve the unit-test procedures presented so far in this
+course.  He would like them to yield a more informative result than
+``#f``.  So he inserts a disjunction to test whether the candidate
+passes the test: if it does not, then he issues a message to that
+effect:
+
+.. code-block:: scheme
+
+  (define test-fac-2.0
+    (lambda (candidate)
+      (and (or (equal? (candidate 0)
+                       1)
+               (errorf 'test-fac-2.0
+                       "error for 0"))
+           (or (equal? (candidate 1)
+                       1)
+               (errorf 'test-fac-2.0
+                       "error for 1"))
+           (or (equal? (candidate 5)
+                       120)
+               (errorf 'test-fac-2.0
+                       "error for 5"))
+           (or (equal? (candidate 6)
+                       (* 1 2 3 4 5 6))
+               (errorf 'test-fac-2.0
+                       "error for 6"))
+           ;;; add more tests here
+           )))
+
+Harald then tests his unit test with a bogus factorial procedure::
+
+  > (test-fac-2.0 (lambda (x) x))
+  
+  Exception in test-fac-2.0: error for 0
+  Type (debug) to enter the debugger.
+  > 
+
+He smiles under his beard, because his unit test now says *where* the
+bogus factorial procedure failed, instead of just saying that it
+failed.  And then, because he is practical, Harald checks whether the
+new unit test is backwards compatible, which it is::
+
+  > (test-fac-2.0 fac)
+  #t
+  > 
+
+Harald `harumphs <http://en.wiktionary.org/wiki/harumph>`_
+a couple of times (it's a nasty weather out there in
+Eastern Jutland, most of the time), and then streamlines his unit test
+as follows:
+
+.. code-block:: scheme
+
+  (define try-candidate
+    (lambda (candidate input expected-output name)
+      (or (equal? (candidate input)
+                  expected-output)
+          (errorf name "error for ~s" input))))
+
+  (define test-fac-3.0
+    (lambda (candidate)
+      (and (try-candidate candidate 0 1 'test-fac-3.0)
+           (try-candidate candidate 1 1 'test-fac-3.0)
+           (try-candidate candidate 5 120 'test-fac-3.0)
+           (try-candidate candidate 6 (* 1 2 3 4 5 6) 'test-fac-3.0)
+           ;;;
+           )))
+
+He then tests his unit test::
+
+  > (test-fac-3.0 (lambda (x) x))
+  
+  Exception in test-fac-3.0: error for 0
+  Type (debug) to enter the debugger.
+  > (test-fac-3.0 fac)
+  #t
+  > 
+
+Harald considers Version 3.0 and thinks that it is not too bad.  Comes
+`Loki <http://en.wikipedia.org/wiki/Loki>`_ with his very own implementation of the factorial function:
+
+.. code-block:: scheme
+
+  (define fac-Loki
+    (lambda (n)
+      (case n
+        [(0)
+         1]
+        [(1)
+         1]
+        [(5)
+         120]
+        [(6)
+         (* 1 2 3 4 5 6)]
+        [else
+         -1])))
+
+.. index::
+   single: Dijkstra, Edsger W. (program testing)
+
+.. epigraph::
+
+   | Program testing [...] show[s] the presence of bugs,
+   | [not] their absence.
+
+   -- `Edsger W. Dijkstra <http://www.cs.utexas.edu/~EWD/transcriptions/EWD03xx/EWD340.html>`_
+
+And you know what?
+Loki's procedure passes Harald's unit test.
+
+
+.. index:: lists (improper)
+
+Improper lists
+--------------
+
+An improper list is constructed with ``cons`` in a way that does
+not terminate with the empty list::
+
+  > (list? (cons 1 (cons 2 (cons 3 4))))
+  #f
+  >
+
+Graphically:
+
+.. ditaa::
+
+  +-----------+     +-----------+     +-----------+
+  |     |     |     |     |     |     |     |     |
+  |     |     +---> |     |     +---> |     |     +---> 4
+  |     |     |     |     |     |     |     |     |
+  +--+--------+     +--+--------+     +--+--------+
+     |                 |                 |
+     |                 |                 |
+     v                 v                 v
+
+     1                 2                 3
+
+The trailing value is printed after a dot::
+
+  > (cons 1 (cons 2 (cons 3 4)))
+  (1 2 3 . 4)
+  >
+
+.. index:: pair (dotted)
+
+A pair whose cdr is not the empty list is called a *dotted pair*.
+
+Like proper lists, improper lists can be heterogeneous, nested, and shared.
+
+
+.. _quoting-compound-values:
+
+Core special form: quoting compound values
+------------------------------------------
+
+.. bnf:: pure Scheme
+   :noindex:
+   :namespace: pure-scheme
+
+   <quotation-compound> ::= (<quotation> . <quotation>)
+
+.. index:: lists (quoted)
+
+Lists, whether proper or improper, can be quoted::
+
+  > '(1 2 3)
+  (1 2 3)
+  > '(1 . (2 . (3 . ())))
+  (1 2 3)
+  > '(1 . 2)
+  (1 . 2)
+  >
+
+
+Ground equalities
+-----------------
+
+Scheme offers type-specific procedures for testing the equality of
+ground values::
+
+  > (= 10 10)
+  #t
+  > (= 3/6 10/20)
+  #t
+  > (= 3.1 3.1)
+  #t
+  > (boolean=? #t #t)
+  #t
+  > (char=? #\a #\b)
+  #f
+  > (string=? "hello" "world")
+  #f
+  >
+
+
+.. _structural-equality-between-Scheme-values:
+
+Structural equality
+-------------------
+
+The predicate ``equal?`` tests the equality of compound values by
+recursively traversing them::
+
+  > (equal? (list 1 1/2 3.1 #t #\a "hello")
+            (list 1 1/2 3.1 #t #\a "hello"))
+  #t
+  > (equal? (list 1 (list 2 (list 3 (list 4 '() 4) 3) 2) 1)
+            '(1 (2 (3 (4 () 4) 3) 2) 1))
+  #t
+  >
+
+.. index:: lists (the convention for printing)
+
+This predicate lets us visualize the convention for printing lists::
+
+  > (equal? '(1 . (2 . (3 . (4 . ()))))
+            '(1 2 3 4))
+  #t
+  > (equal? '((1 2 3) . (4 5 6))
+            '((1 2 3) 4 5 6))
+  #t
+  >
+
+
+.. _identity-between-Scheme-values:
+
+Identity
+--------
+
+The predicate ``eq?`` tests the identity of values by checking
+whether they are the result of the same evaluation::
+
+  > (eq? 10 10)
+  #t
+  > (eq? (list 10) (list 10))
+  #f
+  > (eq? '(10) '(10))
+  #f
+  > (let ([x (list 10)])
+      (eq? x x))
+  #t
+  >
+
+.. index::
+   single: Orwell, George (structural equality vs. identity)
+
+.. epigraph::
+
+   | In the Animal Farm,
+   | all animals are equal,
+   | but some animals are more equal than others.
+
+   -- `George Orwell <http://en.wikipedia.org/wiki/Animal_Farm>`_
+
+With ``eq?``, we can test whether structures and substructures are
+shared.
+
+In the scenario below, ``xs`` and ``ys`` are defined as two
+representations of the list containing three integers.  These
+representations were constructed independently, and therefore they are
+structurally equal, but they are not identical::
+
+  > (define xs (list 1 2 3))
+  > (define ys (list 1 2 3))
+  > (equal? xs ys)
+  #t
+  > (eq? xs ys)
+  #f
+  >
+
+Let us now pair these representations and test the components of these
+pairs.  In the scenario below, ``p`` denotes the pair of the list
+denoted by ``xs`` and of the list denoted by ``ys``, and ``q`` denotes
+the pair of the list denoted by ``xs`` and of the list denoted by
+``xs``.  The point of this scenario is to illustrate that the car and
+the cdr of the pair denoted by ``q`` are shared::
+
+  > (define p (cons xs ys))
+  > (define q (cons xs xs))
+  > (equal? (car p) (cdr p))
+  #t
+  > (equal? (car q) (cdr q))
+  #t
+  > (eq? (car p) (cdr p))
+  #f
+  > (eq? (car q) (cdr q))
+  #t
+  >
+
+Suggestion: make a drawing, and visualize that the size of the value
+of ``p`` is 7 pairs (3 pairs for the value of ``xs``, 3 pairs for the
+value of ``ys``, and 1 pair to form the value of ``p``) whereas the
+size of the value of ``q`` is 4 pairs (3 pairs for the shared car and
+cdr of ``q``, and 1 pair to form the value of ``q``).
+
+
+Scheme values
+-------------
+
+Scheme values are specified inductively by the following BNF
+(now including symbols and the empty list):
+
+.. bnf:: Scheme values
+   :noindex:
+   :namespace: Scheme-values
+
+   <value> ::= <number>
+             | <boolean>
+             | <character>
+             | <string>
+             | <symbol>
+             | <procedure>
+             | ()
+             | (<value> . <value>)
+
+
+Exercise 7
+----------
+
+Extend the unit test for structural equality, ``test-equal?``, to
+symbols and the empty list.
+
+
+.. _equality-and-identity-between-Scheme-values:
+
+Equality and identity between Scheme values
+-------------------------------------------
+
+The ``equal?`` predicate is defined by recursively descending its two
+arguments.  The structural aspect of equality is implemented in the
+inductive case, i.e., for compound values.  For ground values, the
+base cases delegate the equality test to type-specific predicates.
+Let us revisit again the definition from
+:ref:`section-equality-re3visited`, this time checking for symbols
+and the empty list as well:
+
+.. code-block:: scheme
+
+  (define equal?_re5visited
+    (lambda (v1 v2)
+      (letrec ([visit
+                (lambda (v1 v2)
+                  (cond
+                    [(number? v1)
+                     (and (number? v2)
+                          (= v1 v2))]
+                    [(boolean? v1)
+                     (and (boolean? v2)
+                          (boolean=? v1 v2))]
+                    [(char? v1)
+                     (and (char? v2)
+                          (char=? v1 v2))]
+                    [(string? v1)
+                     (and (string? v2)
+                          (string=? v1 v2))]
+                    [(symbol? v1)
+                     (and (symbol? v2)
+                          (symbol=? v1 v2))]
+                    [(null? v1)
+                     (null? v2)]
+                    [(pair? v1)
+                     (and (pair? v2)
+                          (visit (car v1) (car v2))
+                          (visit (cdr v1) (cdr v2)))]
+                    [else
+                     #f]))])
+        (visit v1 v2))))
+
+This definition passes the (extended) unit test::
+
+  > (test-equal? equal?_re5visited)
+  #t
+  > 
+
+We can radically simplify (and speed up) the equality predicate by
+making it first test the *identity* of its arguments.  If they are
+identical, they are also structurally equal, and so there is no need
+to recursively traverse them.  The simplified definition is still
+structurally recursive:
+
+.. code-block:: scheme
+
+  (define equal?_re6visited
+    (lambda (v1 v2)
+      (letrec ([visit
+                (lambda (v1 v2)
+                  (cond
+                    [(eq? v1 v2)
+                     #t]
+                    [(string? v1)
+                     (and (string? v2)
+                          (string=? v1 v2))]
+                    [(pair? v1)
+                     (and (pair? v2)
+                          (visit (car v1) (car v2))
+                          (visit (cdr v1) (cdr v2)))]
+                    [else
+                     #f]))])
+        (visit v1 v2))))
+
+This definition passes the (extended) unit test::
+
+  > (test-equal? equal?_re6visited)
+  #t
+  > 
+
+On a practical note, most Scheme lists are longer (as in: cdr) than
+they are deep (as in: car).  It is therefore a better idea to recurse
+first on the car of pairs, and then on their cdr, rather than the
+converse.
+
+Still on a practical note, most Scheme lists are proper, and
+often they are quite short.  It is therefore a good idea to test the
+cdrs of two pairs: if they both point to the empty list (or more
+generally if they are identical), then we can iterate (with a tail
+call) on their car:
+
+.. code-block:: scheme
+
+  (define equal?_re7visited
+    (lambda (v1 v2)
+      (letrec ([visit
+                (lambda (v1 v2)
+                  (cond
+                    [(eq? v1 v2)
+                     #t]
+                    [(string? v1)
+                     (and (string? v2)
+                          (string=? v1 v2))]
+                    [(pair? v1)
+                     (and (pair? v2)
+                          (let ([d1 (cdr v1)]
+                                [d2 (cdr v2)])
+                            (if (eq? d1 d2)
+                                (visit (car v1) (car v2))
+                                (and (visit (car v1) (car v2))
+                                     (visit d1 d2)))))]
+                    [else
+                     #f]))])
+        (visit v1 v2))))
+
+This definition passes the (extended) unit test::
+
+  > (test-equal? equal?_re7visited)
+  #t
+  > 
+
+.. index:: continuation
+
+And finally there is the issue of finding a difference deep in a
+Scheme value.  It would be nice to stop the computation there and
+then.  To this end, we can make ``visit`` tail-recursive and equip it
+with a *continuation*, i.e., a procedure that needs to be explicitly
+applied (tail recursively) for the computation to continue.  If it is
+not applied, the computation stops:
+
+.. code-block:: scheme
+
+  (define equal?_re8visited
+    (lambda (v1 v2)
+      (letrec ([visit
+                (lambda (v1 v2 continue)
+                  (cond
+                    [(eq? v1 v2)
+                     (continue)]
+                    [(string? v1)
+                     (and (string? v2)
+                          (string=? v1 v2)
+                          (continue))]
+                    [(pair? v1)
+                     (and (pair? v2)
+                          (visit (car v1)
+                                 (car v2)
+                                 (lambda ()
+                                   (visit (cdr v1)
+                                          (cdr v2)
+                                          continue))))]
+                    [else
+                     #f]))])
+        (visit v1 v2 (lambda ()
+                       #t)))))
+
+This definition passes the (extended) unit test::
+
+  > (test-equal? equal?_re8visited)
+  #t
+  > 
+
+.. epigraph::
+
+   | The fox knows many things,
+   | but the hedgehog knows one great thing.
+
+   -- `Archilocus`__
+
+.. __: http://en.wikipedia.org/wiki/Archilochus
+
+Continuations won't be part of the exam, but they deserve some
+thoughts.  (Nowadays, they are used to implement callbacks in
+JavaScript when programming the web.)
+
+To wrap up, here is a Petite Chez Scheme session where traced versions
+of ``equal?_re5visited``, ``equal?_re6visited``,
+``equal?_re7visited?``, and ``equal?_re8visited`` are used on
+the same input.  Observe how ``equal?_re5visited`` recursively
+traverses its input until it spots that ``4`` is not equal to ``5``.
+Observe how ``equal?_re6visited`` does not traverse the shared
+parts of the input.  Observe how ``equal?_re7visited?``
+iteratively descends in the car of singleton lists.  And observe how
+``equal?_re8visited`` proceeds iteratively and stops as soon as
+it spots that ``4`` is not equal to ``5``::
+
+  > (define v0
+      '(1 2 3))
+  > (define v1
+      (list (list (list (list v0) 4)) 10))
+  > (define v2
+      (list (list (list (list v0) 5)) 10))
+  > (equal?_re5visited v1 v2)
+  |(visit (((((1 2 3)) 4)) 10) (((((1 2 3)) 5)) 10))
+  | (visit ((((1 2 3)) 4)) ((((1 2 3)) 5)))
+  | |(visit (((1 2 3)) 4) (((1 2 3)) 5))
+  | | (visit ((1 2 3)) ((1 2 3)))
+  | | |(visit (1 2 3) (1 2 3))
+  | | | (visit 1 1)
+  | | | #t
+  | | |(visit (2 3) (2 3))
+  | | | (visit 2 2)
+  | | | #t
+  | | |(visit (3) (3))
+  | | | (visit 3 3)
+  | | | #t
+  | | |(visit () ())
+  | | |#t
+  | | (visit () ())
+  | | #t
+  | |(visit (4) (5))
+  | | (visit 4 5)
+  | | #f
+  | |#f
+  | #f
+  |#f
+  #f
+  > (equal?_re6visited v1 v2)
+  |(visit (((((1 2 3)) 4)) 10) (((((1 2 3)) 5)) 10))
+  | (visit ((((1 2 3)) 4)) ((((1 2 3)) 5)))
+  | |(visit (((1 2 3)) 4) (((1 2 3)) 5))
+  | | (visit ((1 2 3)) ((1 2 3)))
+  | | |(visit (1 2 3) (1 2 3))
+  | | |#t
+  | | (visit () ())
+  | | #t
+  | |(visit (4) (5))
+  | | (visit 4 5)
+  | | #f
+  | |#f
+  | #f
+  |#f
+  #f
+  > (equal?_re7visited v1 v2)
+  |(visit (((((1 2 3)) 4)) 10) (((((1 2 3)) 5)) 10))
+  | (visit ((((1 2 3)) 4)) ((((1 2 3)) 5)))
+  | (visit (((1 2 3)) 4) (((1 2 3)) 5))
+  | |(visit ((1 2 3)) ((1 2 3)))
+  | |(visit (1 2 3) (1 2 3))
+  | |#t
+  | (visit (4) (5))
+  | (visit 4 5)
+  | #f
+  |#f
+  #f
+  > (equal?_re8visited v1 v2)
+  |(visit (((((1 2 3)) 4)) 10) (((((1 2 3)) 5)) 10) #<procedure>)
+  |(visit ((((1 2 3)) 4)) ((((1 2 3)) 5)) #<procedure>)
+  |(visit (((1 2 3)) 4) (((1 2 3)) 5) #<procedure>)
+  |(visit ((1 2 3)) ((1 2 3)) #<procedure>)
+  |(visit (1 2 3) (1 2 3) #<procedure>)
+  |(visit () () #<procedure>)
+  |(visit (4) (5) #<procedure>)
+  |(visit 4 5 #<procedure>)
+  |#f
+  #f
+  >
+
+
+Exercise 8
+----------
+
+Implement a procedure ``equal?_re9visited`` that integrates the two
+points of ``equal?_re7visited`` and ``equal?_re8visited``.
+
+
+Checkpoint
+----------
+
+We have introduced lists and defensive programming.  `The next lecture
+note <week-3-environments.html>`_ studies a programming-language
+artifact: environments.
+
+
+Resources
+---------
+
+* The Scheme code for
+  `the equality procedures
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3-equality-procedures.scm>`_
+  (latest version: 25 Aug 2015).
+
+* The Scheme code for `the rest of this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3-lists-and-defensive-programming.scm>`_
+  (latest version: 25 Aug 2015).
+
+
+Version
+-------
+
+Mentioned that lists can be heterogeneous, nested, and shared, and
+further illustrated the concatenation of two proper lists
+[10 Oct 2015]
+
+Fixed a broken URL
+[01 Sep 2015]
+
+Duplicated the section about Resources at the beginning of this file
+[27 Aug 2015]
+
+Fine-tuned the algebraic specifications of append_proper-list and set-union
+[27 Aug 2015]
+
+Created
+[25 Aug 2015]

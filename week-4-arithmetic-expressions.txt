@@ -1,0 +1,1697 @@
+.. -*- mode: rst -*-
+
+Note for Week 4 about arithmetic expressions
+============================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+* :ref:`exercise-Magritte`:
+  a Magritte virtual machine
+
+* :ref:`exercise-subtraction-and-division`:
+  expansion with subtraction and division
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-4-arithmetic-expressions.scm>`_
+  (latest version: 01 Sep 2015).
+
+
+.. _language-processors-for-arithmetic-expressions:
+
+Goal
+----
+
+The goal of this lecture note is to implement
+
+* a BNF for arithmetic expressions,
+
+* a syntax checker, an interpreter, an unparser, and a parser for this
+  BNF,
+
+* a BNF for byte-code programs, and then
+
+* a virtual machine to execute byte-code programs, a compiler from
+  arithmetic expressions to byte-code programs, a byte-code verifier,
+  and a virtual machine to execute verified byte-code programs.
+
+We will then test their correctness on a sample of arithmetic
+expressions.  Diagrammatically:
+
+.. ditaa::
+
+                                            interpret
+                             +-------------------------------------+
+                             |                                     |
+  +--------+   parse    +--------+             +------+            v
+  |concrete| ---------> |abstract|   compile   | byte |   run
+  | syntax |            | syntax | ----------> | code | -------> number
+  |     {d}| <--------- |     {d}|             |   {d}|
+  +--------+   unparse  +--------+             +------+
+
+The abstract syntax of the arithmetic expressions is defined
+inductively with a BNF.
+The concrete syntax is that of (a tiny subset of) Scheme.
+The interpreter, the unparser, and the compiler are structurally
+recursive over their input, which is an abstract-syntax tree.
+The interpreter yields a number or an error.
+The unparser yields a concrete-syntax tree or an abstract-syntax error.
+The parser is structurally recursive over its input, which is a Scheme
+value; it yields an abstract-syntax tree or a concrete-syntax error.
+The compiler yields a compiled expression in the form of a byte-code
+program or an abstract-syntax error.
+The virtual machines and the byte-code verifier are structurally
+tail-recursive over their input, which is a proper list of byte-code
+instructions.
+The virtual machines thread a stack of intermediate results, and
+yield a number or a run-time error.
+The verifier yields a Boolean.
+
+The interpreter, the compiler, and the virtual machine are correct
+relative to each other if compiling and running an arithmetic
+expression yields the same result (i.e., a number or an error) as
+interpreting this arithmetic expression.  This correctness is tested
+with several syntactically correct expressions by comparing the result
+of their interpretation and of first compiling them into a byte-code
+program and then executing this program with the virtual machine.
+
+(Note: this correctness can be formally proved by structural induction
+over arithmetic expressions.)
+
+
+.. index:: expressions (arithmetic)
+
+.. _bnf-of-arithmetic-expressions:
+
+BNF of arithmetic expressions
+-----------------------------
+
+An arithmetic expression is either a literal (any Scheme number),
+the addition of two arithmetic expressions, or the multiplication of
+two arithmetic expressions.  Its abstract syntax is defined
+inductively with a BNF.
+
+
+.. bnf:: arithmetic expressions
+   :noindex:
+   :namespace: arithmetic-expressions
+
+   <arithmetic-expression> ::= (literal <literal>)
+                             | (plus <arithmetic-expression> <arithmetic-expression>)
+                             | (times <arithmetic-expression> <arithmetic-expression>)
+
+   <literal> ::= ...any Scheme number...
+
+
+Implementation of the BNF
+-------------------------
+
+The BNF is implemented with constructors, predicates, and accessors.
+
+* Here are the constructors:
+  
+  .. code-block:: scheme
+  
+    (define make-literal
+      (lambda (n)
+        (list 'literal n)))
+  
+    (define make-plus
+      (lambda (e1 e2)
+        (list 'plus e1 e2)))
+  
+    (define make-times
+      (lambda (e1 e2)
+        (list 'times e1 e2)))
+  
+* Here are the predicates, using the same auxiliary procedure
+  ``proper-list-of-given-length?`` as above:
+  
+  .. code-block:: scheme
+  
+    (define is-literal?
+      (lambda (v)
+        (and (pair? v)
+             (equal? (car v) 'literal)
+             (proper-list-of-given-length? (cdr v) 1))))
+  
+    (define is-plus?
+      (lambda (v)
+        (and (pair? v)
+             (equal? (car v) 'plus)
+             (proper-list-of-given-length? (cdr v) 2))))
+  
+    (define is-times?
+      (lambda (v)
+        (and (pair? v)
+             (equal? (car v) 'times)
+             (proper-list-of-given-length? (cdr v) 2))))
+  
+* And here are the accessors:
+  
+  .. code-block:: scheme
+  
+    (define literal-1
+      (lambda (v)
+        (list-ref v 1)))
+  
+    (define plus-1
+      (lambda (v)
+        (list-ref v 1)))
+  
+    (define plus-2
+      (lambda (v)
+        (list-ref v 2)))
+  
+    (define times-1
+      (lambda (v)
+        (list-ref v 1)))
+  
+    (define times-2
+      (lambda (v)
+        (list-ref v 2)))
+
+
+Sample of well-formed arithmetic expressions
+--------------------------------------------
+
+.. code-block:: scheme
+
+  (define ae0
+    (make-literal 42))
+
+  (define ae1
+    (make-plus (make-literal 1)
+               (make-literal 10)))
+  
+  (define ae2
+    (make-plus ae1
+               (make-plus (make-literal 100)
+                          (make-literal 1000))))
+  
+  (define ae3
+    (make-times
+      (make-times
+        (make-times
+          (make-literal 1)
+          (make-literal 2))
+        (make-literal 3))
+      (make-times
+        (make-literal 4)
+        (make-literal 5))))
+
+* ``ae0`` is meant to be evaluated to ``42``.
+
+* ``ae1`` is meant to be evaluated to ``11``.
+
+* ``ae2`` is meant to be evaluated to ``1111``.
+
+* ``ae3`` is meant to be evaluated to the factorial of 5, i.e., ``120``.
+
+
+Array of (positive) unit tests
+------------------------------
+
+* for the syntax checker:
+
+  .. code-block:: scheme
+
+    (define test-well-formed-arithmetic-expressions
+      (lambda (check)
+        (and (check ae0)
+             (check ae1)
+             (check ae2)
+             (check ae3)
+             ;;; add more tests here
+             )))
+
+  Given a procedure implementing a syntax checker, this testing
+  procedure successively applies it to each of the four well-formed
+  arithmetic expressions to verify that they syntax-check.
+
+* for the interpreter:
+
+  .. code-block:: scheme
+
+    (define test-interpret-arithmetic-expressions
+      (lambda (interpret)
+        (and (= (interpret ae0) 42)
+             (= (interpret ae1) 11)
+             (= (interpret ae2) 1111)
+             (= (interpret ae3) 120)
+             ;;; add more tests here
+             )))
+
+  Given a procedure implementing an interpreter, this testing
+  procedure successively applies it to each of the four well-formed
+  arithmetic expressions to verify that it yields the expected
+  result.
+
+* for the byte-code generated by the compiler:
+
+  .. code-block:: scheme
+
+    (define test-compile-arithmetic-expression
+      (lambda (compile check)
+        (and (check (compile ae0))
+             (check (compile ae1))
+             (check (compile ae2))
+             (check (compile ae3))
+             ;;; add more tests here
+             )))
+
+  Given a procedure implementing a compiler and a procedure
+  implementing a syntax checker, this testing procedure successively
+  applies the compiler to each of the four well-formed arithmetic
+  expressions to verify that the resulting byte-code programs
+  syntax-check.
+
+* for the byte-code compiler and the virtual machine:
+
+  .. code-block:: scheme
+
+    (define test-compile-and-run-arithmetic-expressions
+      (lambda (compile run)
+        (and (= (run (compile ae0)) 42)
+             (= (run (compile ae1)) 11)
+             (= (run (compile ae2)) 1111)
+             (= (run (compile ae3)) 120)
+             ;;; add more tests here
+             )))
+
+  Given a procedure implementing a compiler and a procedure
+  implementing a virtual machine, this testing procedure
+  successively applies the compiler to each of the four well-formed
+  arithmetic expressions and runs the virtual machine on the resulting
+  byte-code programs to verify that the virtual machine
+  yields the expected result.
+
+
+.. index::
+   single: unit tests (negative)
+
+Negative unit tests
+-------------------
+
+A syntax checker should not only accept well-formed expressions --
+otherwise ``(lambda (v) #t)`` would do fine and be very quick, thank
+you very much -- it should also reject ill-formed expressions.  So
+far, the goal of all our unit tests has been to verify that the syntax
+checkers accept well-formed expressions.  But we also need to devise
+unit tests to verify that the syntax checkers reject ill-formed
+expressions.  In other words, we do not only need *positive unit
+tests* to verify something: we also need *negative unit tests* to
+verify its converse.
+
+
+Sample of ill-formed arithmetic expressions
+-------------------------------------------
+
+.. code-block:: scheme
+
+  (define ea0
+    42)
+
+  (define ea1
+    '(literal))
+
+  (define ea2
+    '(literal . whatever))
+
+  (define ea3
+    '(literal 10 . whatever))
+
+  (define ea4
+    '(literal 10 20))
+
+  (define ea5
+    '(plus))
+
+  (define ea6
+    '(plus . whatever))
+
+  (define ea7
+    '(plus (literal 10) . whatever))
+
+  (define ea8
+    '(plus (literal 10) (literal 20) . whatever))
+
+  (define ea9
+    '(plus (literal 10) (literal 20) (literal 30)))
+
+
+Negative unit test
+------------------
+
+.. code-block:: scheme
+
+  (define test-ill-formed-arithmetic-expressions
+    (lambda (check)
+      (not (or (check ea0)
+               (check ea1)
+               (check ea2)
+               (check ea3)
+               (check ea4)
+               (check ea5)
+               (check ea6)
+               (check ea7)
+               (check ea8)
+               (check ea9)
+               ;;; add more tests here
+               ))))
+
+Given a procedure implementing a syntax checker, this testing
+procedure successively applies it to each of the ill-formed
+arithmetic expressions to verify that they fail to syntax-check.
+
+
+.. index::
+   single: syntax checker (for arithmetic expressions)
+
+Syntax checker for arithmetic expressions
+-----------------------------------------
+
+Here is an implementation of the syntax checker as a Scheme
+procedure.  Given a value, it decides whether this value conforms to
+the BNF of arithmetic expressions.  This procedure attempts to traverse
+its input recursively as per the inductive definition of arithmetic
+expressions (i.e., the BNF).  If it can, the input is syntactically
+correct and the result is ``#t``.  If it cannot, the input is not
+syntactically correct and the result is ``#f``:
+
+.. code-block:: scheme
+
+  (define check-arithmetic-expression
+    (lambda (e)
+      (cond
+        [(is-literal? e)
+         (number? (literal-1 e))]
+        [(is-plus? e)
+         (and (check-arithmetic-expression (plus-1 e))
+              (check-arithmetic-expression (plus-2 e)))]
+        [(is-times? e)
+         (and (check-arithmetic-expression (times-1 e))
+              (check-arithmetic-expression (times-2 e)))]
+        [else
+         #f])))
+
+Let us positively test this syntax checker::
+
+  > (test-well-formed-arithmetic-expressions check-arithmetic-expression)
+  #t
+  > 
+
+Success.  Let us negatively test it as well::
+
+  > (test-ill-formed-arithmetic-expressions check-arithmetic-expression)
+  #t
+  >
+
+Success as well.
+
+
+.. index::
+   single: interpreter (for arithmetic expressions)
+
+Interpreter for arithmetic expressions
+--------------------------------------
+
+Here is an implementation of the interpreter as a Scheme procedure.
+Given a syntactically correct arithmetic expression, this procedure
+yields a number.  Given a syntactically incorrect arithmetic
+expression, it raises an error.  Like the syntax checker, the
+interpreter performs a recursive descent over its input:
+
+.. code-block:: scheme
+
+  (define interpret-arithmetic-expression
+    (lambda (e)
+      (cond
+        [(is-literal? e)
+         (literal-1 e)]
+        [(is-plus? e)
+         (+ (interpret-arithmetic-expression (plus-1 e))
+            (interpret-arithmetic-expression (plus-2 e)))]
+        [(is-times? e)
+         (* (interpret-arithmetic-expression (times-1 e))
+            (interpret-arithmetic-expression (times-2 e)))]
+        [else
+         (errorf 'interpret-arithmetic-expression
+                 "unrecognized expression: ~s"
+                 e)])))
+
+Let us test this interpreter::
+
+  > (test-interpret-arithmetic-expressions interpret-arithmetic-expression)
+  #t
+  >
+
+Success.
+
+
+.. index::
+   single: unparser (for arithmetic expressions)
+
+Unparser
+--------
+
+While we are at it, here is an unparser from the abstract syntax of
+arithmetic expressions (i.e., the syntax specified by the BNF) to
+the concrete syntax of Scheme:
+
+.. bnf:: concrete syntax for arithmetic expressions
+   :noindex:
+   :namespace: concrete_syntax_for_arithmetic_expressions
+
+   <expression> ::= <number>
+                  | (+ <expression> <expression>)
+                  | (* <expression> <expression>)
+
+Like the syntax checker and the interpreter, the unparser performs a
+recursive descent over its input:
+
+.. code-block:: scheme
+
+  (define unparse-arithmetic-expression
+    (lambda (e)
+      (cond
+        [(is-literal? e)
+         (literal-1 e)]
+        [(is-plus? e)
+         (list '+
+               (unparse-arithmetic-expression (plus-1 e))
+               (unparse-arithmetic-expression (plus-2 e)))]
+        [(is-times? e)
+         (list '*
+               (unparse-arithmetic-expression (times-1 e))
+               (unparse-arithmetic-expression (times-2 e)))]
+        [else
+         (errorf 'unparse-arithmetic-expression
+                 "unrecognized abstract syntax: ~s"
+                 e)])))
+
+Here is the unparser in action::
+
+  > (unparse-arithmetic-expression ae1)
+  (+ 1 10)
+  > (+ 1 10)
+  11
+  > (interpret-arithmetic-expression ae1)
+  11
+  >
+
+
+.. index::
+   single: parser (for arithmetic expressions)
+
+Parser
+------
+
+For symmetry, here is a parser from the concrete syntax of Scheme to
+the abstract syntax of arithmetic expressions.  Given a value, it
+decides whether this value conforms to the BNF just above.  This
+procedure attempts to traverse its input recursively.  If it can,
+the input is syntactically correct and the result is an
+abstract-syntax tree.  If it cannot, the input is not syntactically
+correct and an error is raised:
+
+.. code-block:: scheme
+
+  (define parse-arithmetic-expression
+    (lambda (v)
+      (cond
+        [(number? v)
+         (make-literal v)]
+        [(proper-list-of-given-length? v 3)
+         (case (list-ref v 0)
+           [(+)
+            (make-plus (parse-arithmetic-expression (list-ref v 1))
+                       (parse-arithmetic-expression (list-ref v 2)))]
+           [(*)
+            (make-times (parse-arithmetic-expression (list-ref v 1))
+                        (parse-arithmetic-expression (list-ref v 2)))]
+           [else
+            (errorf 'parse-arithmetic-expression
+                    "unrecognized operator: ~s"
+                    v)])]
+        [else
+         (errorf 'parse-arithmetic-expression
+                 "unrecognized concrete syntax: ~s"
+                 v)])))
+
+
+Parsing and interpreting
+------------------------
+
+Let us parse the concrete syntax of an arithmetic expression, and
+interpret the resulting abstract-syntax tree::
+
+  > (interpret-arithmetic-expression
+      (parse-arithmetic-expression
+        '(+ 123 4321)))
+  4444
+  > (+ 123 4321)
+  4444
+  > 
+
+
+Inverseness of parsing and unparsing
+------------------------------------
+
+Let us illustrate that for well-formed expressions, the parser and
+the unparser are inverses of each other::
+
+  > (equal? ae3
+            (parse-arithmetic-expression
+              (unparse-arithmetic-expression
+                ae3)))
+  #t
+  > (let ([ae '(+ 1 2)])
+      (equal? ae
+              (unparse-arithmetic-expression
+                (parse-arithmetic-expression
+                  ae))))
+  #t
+  >
+
+
+.. index:: byte code (instructions)
+
+Byte-code instructions
+----------------------
+
+Let us turn to the virtual machine.  It is stack-based and features
+the following three byte-code instructions:
+
+.. bnf:: byte code for arithmetic expressions
+   :noindex:
+   :namespace: byte-code-for-arithmetic-expressions
+
+   <byte-code-instruction> ::= (PUSH <literal>)
+                             | (ADD)
+                             | (MUL)
+
+Here are the constructors:
+
+.. code-block:: scheme
+
+  (define make-PUSH
+    (lambda (n)
+      (list 'PUSH n)))
+
+  (define make-ADD
+    (lambda ()
+      (list 'ADD)))
+
+  (define make-MUL
+    (lambda ()
+      (list 'MUL)))
+
+Here are the predicates:
+
+.. code-block:: scheme
+
+  (define is-PUSH?
+    (lambda (v)
+      (and (pair? v)
+           (equal? (car v) 'PUSH)
+           (proper-list-of-given-length? (cdr v) 1))))
+
+  (define is-ADD?
+    (lambda (v)
+      (and (pair? v)
+           (equal? (car v) 'ADD)
+           (proper-list-of-given-length? (cdr v) 0))))
+
+  (define is-MUL?
+    (lambda (v)
+      (and (pair? v)
+           (equal? (car v) 'MUL)
+           (proper-list-of-given-length? (cdr v) 0))))
+
+Here are the accessors:
+
+.. code-block:: scheme
+
+  (define PUSH-1
+    (lambda (v)
+      (list-ref v 1)))
+
+And here is an implementation of the syntax checker for byte-code
+instructions as a Scheme procedure:
+
+.. code-block:: scheme
+
+  (define check-byte-code-instruction
+    (lambda (v)
+      (cond
+        [(is-PUSH? v)
+         (number? (PUSH-1 v))]
+        [(is-ADD? v)
+         #t]
+        [(is-MUL? v)
+         #t]
+        [else
+         #f])))
+
+
+.. index:: byte code (programs)
+
+Byte-code programs
+------------------
+
+A byte-code program is a proper list of byte-code instructions:
+
+.. bnf:: byte code for arithmetic expressions
+   :noindex:
+   :namespace: byte-code-for-arithmetic-expressions
+
+   <byte-code-instructions> ::= ()
+                              | (<byte-code-instruction> . <byte-code-instructions>)
+
+        <byte-code-program> ::= (byte-code-program <byte-code-instructions>)
+
+
+Here is the implementation of this BNF (constructors, predicates,
+and accessors):
+
+.. code-block:: scheme
+
+  (define make-byte-code-program
+    (lambda (is)
+      (list 'byte-code-program is)))
+  
+  (define is-byte-code-program?
+    (lambda (v)
+      (and (pair? v)
+           (equal? (car v) 'byte-code-program)
+           (proper-list-of-given-length? (cdr v) 1))))
+  
+  (define byte-code-program-1
+    (lambda (v)
+      (list-ref v 1)))
+  
+
+Sample of well-formed byte-code programs
+----------------------------------------
+
+.. code-block:: scheme
+
+  (define p0
+    (make-byte-code-program '((PUSH 42))))
+  
+  (define p1
+    (make-byte-code-program '((PUSH 20) (PUSH 22) (ADD))))
+  
+  (define q0
+    (make-byte-code-program '((PUSH 1) (PUSH 2))))
+  
+  (define q1
+    (make-byte-code-program '((PUSH 1) (ADD))))
+  
+* ``p0`` and ``p1`` are meant to behave well and yield ``42``.
+
+* ``q0`` and ``q1`` are meant to not behave well and provoke a run-time error.
+
+
+Array of positive unit tests
+----------------------------
+
+* for the syntax checker:
+
+  .. code-block:: scheme
+  
+    (define test-well-formed-byte-code-programs
+      (lambda (check)
+        (and (check p0)
+             (check p1)
+             (check q0)
+             (check q1)
+             ;;; add more tests here
+             )))
+
+  Given a procedure implementing a syntax checker, this testing
+  procedure successively applies it to each of the well-formed
+  byte-code programs to verify that they syntax-check.
+
+* for the virtual machine:
+
+  .. code-block:: scheme
+  
+    (define test-run-byte-code-programs
+      (lambda (run)
+        (and (= (run p0) 42)
+             (= (run p1) 42)
+             ;;; add more tests here
+             )))
+
+  Given a procedure implementing a virtual machine, this testing
+  procedure successively runs the virtual machine on each of the two
+  well-formed arithmetic expressions to verify that the virtual
+  machine yields the expected result.
+
+
+Sample of ill-formed byte-code programs
+---------------------------------------
+
+.. code-block:: scheme
+
+  (define z0
+    '())
+  
+  (define z1
+    (make-byte-code-program '((PUSH 42) . whatever)))
+  
+  (define z2
+    (make-byte-code-program '((ADD 42))))
+  
+  (define z3
+    (make-byte-code-program '((PUSH "42"))))
+
+
+Negative unit test
+------------------
+
+.. code-block:: scheme
+
+  (define test-ill-formed-byte-code-programs
+    (lambda (check)
+      (not (or (check z0)
+               (check z1)
+               (check z2)
+               (check z3)
+               ;;; add more tests here
+               ))))
+
+Given a procedure implementing a syntax checker, this testing
+procedure successively applies it to each of the ill-formed
+byte-code programs to verify that they fail to syntax-check.
+
+
+Syntax checker for byte-code programs
+-------------------------------------
+
+Here is an implementation of the syntax checker for byte-code programs
+as a Scheme procedure.  Given a value, it decides whether this value
+conforms to the BNF of byte-code programs.  This procedure attempts to
+traverse its input recursively as per the inductive definition of
+byte-code programs, i.e., a proper list of byte-code instructions.  If
+it can, the input is syntactically correct and the result is ``#t``.
+If it cannot, the input is not syntactically correct and the result is
+``#f``:
+
+.. code-block:: scheme
+
+  (define check-byte-code-program
+    (lambda (v)
+      (if (is-byte-code-program? v)
+          (letrec ([loop (lambda (v)
+                           (cond
+                             [(null? v)
+                              #t]
+                             [(pair? v)
+                              (and (check-byte-code-instruction (car v))
+                                   (loop (cdr v)))]
+                             [else
+                              #f]))])
+            (loop (byte-code-program-1 v)))
+          #f)))
+
+Let us test this syntax checker::
+
+  > (test-well-formed-byte-code-programs check-byte-code-program)
+  #t
+  > (test-ill-formed-byte-code-programs check-byte-code-program)
+  #t
+  > 
+
+Success.
+
+
+.. index:: virtual machine (for arithmetic expressions)
+
+Virtual machine
+---------------
+
+Here is an implementation of the virtual machine.  Given a byte-code
+program, it executes it by traversing its list of byte-code
+instructions, threading a stack of intermediate results computed so
+far.  The stack is implemented as a proper list of numbers.
+Initially the stack is empty.  Eventually it must contain only one
+number, the result.  The virtual machine is mainly implemented as a
+fetch-decode-execute loop.  The ``PUSH`` instruction is implemented
+by cons'ing a number on top of the representation of the current
+stack.  The ``ADD`` and the ``MUL`` instructions are implemented by
+popping two numbers from the current stack, performing the operation
+(addition or multiplication), and pushing the result on the
+resulting stack.  For an operation to take place, the stack must
+contain at least two numbers; otherwise the stack is underflowing.
+
+.. code-block:: scheme
+
+  (define at-least-two?
+    (lambda (vs)
+      (and (pair? vs)
+           (pair? (cdr vs)))))
+
+  (define run-byte-code-program
+    (lambda (p)
+      (if (is-byte-code-program? p)
+          (letrec ([loop (lambda (is vs)
+                           (if (null? is)
+                               vs
+                               (let ([i (car is)]
+                                     [is (cdr is)])
+                                 (cond
+                                   [(is-PUSH? i)
+                                    (loop is
+                                          (cons (PUSH-1 i) vs))]
+                                   [(is-ADD? i)
+                                    (if (at-least-two? vs)
+                                        (let* ([operand_2 (car vs)]
+                                               [vs (cdr vs)]
+                                               [operand_1 (car vs)]
+                                               [vs (cdr vs)])
+                                          (loop is
+                                                (cons (+ operand_1 operand_2)
+                                                      vs)))
+                                        (errorf 'run-byte-code-program
+                                                "stack underflow: ~s"
+                                                vs))]
+                                   [(is-MUL? i)
+                                    (if (at-least-two? vs)
+                                        (let* ([operand_2 (car vs)]
+                                               [vs (cdr vs)]
+                                               [operand_1 (car vs)]
+                                               [vs (cdr vs)])
+                                          (loop is
+                                                (cons (* operand_1 operand_2)
+                                                      vs)))
+                                        (errorf 'run-byte-code-program
+                                                "stack underflow: ~s"
+                                                vs))]
+                                   [else
+                                    (errorf 'run-byte-code-program
+                                            "unrecognized byte code: ~s"
+                                            i)]))))])
+            (let ([vs (loop (byte-code-program-1 p) '())])
+              (if (proper-list-of-given-length? vs 1)
+                  (car vs)
+                  (errorf 'run-byte-code-program
+                          "unexpected resulting stack: ~s"
+                          vs))))
+          (errorf 'run-byte-code-program
+                  "not a byte-code program: ~s"
+                  p))))
+
+Let us test this virtual machine positively::
+
+  > (test-run-byte-code-programs run-byte-code-program)
+  #t
+  > 
+
+Success: the virtual machine runs successfully on the well-formed
+byte-code programs that behave well.  Let us also test it negatively::
+
+  > (run-byte-code-program q0)
+  
+  Exception in run-byte-code-program: unexpected resulting stack: (2 1)
+  Type (debug) to enter the debugger.
+  > (run-byte-code-program q1)
+  
+  Exception in run-byte-code-program: stack underflow: (1)
+  Type (debug) to enter the debugger.
+  > 
+
+Success: the virtual machine fails to run on the well-formed byte-code
+programs that were meant to provoke a run-time error.
+
+
+.. index:: compiler (for arithmetic expressions)
+
+.. _compiler-for-arithmetic-expressions:
+
+Compiler for arithmetic expressions
+-----------------------------------
+
+Here is an implementation of the compiler.  Given an arithmetic
+expression, it compiles it into a byte-code program by traversing it
+recursively from left to right, creating intermediate lists of
+byte-code instructions, and concatenating them.
+
+.. code-block:: scheme
+
+  (define compile-arithmetic-expression
+    (lambda (e)
+      (letrec ([visit (lambda (e)
+                        (cond
+                          [(is-literal? e)
+                           (list (make-PUSH (literal-1 e)))]
+                          [(is-plus? e)
+                           (append (visit (plus-1 e))
+                                   (visit (plus-2 e))
+                                   (list (make-ADD)))]
+                          [(is-times? e)
+                           (append (visit (times-1 e))
+                                   (visit (times-2 e))
+                                   (list (make-MUL)))]
+                          [else
+                           (errorf 'compile-arithmetic-expression
+                                   "unrecognized expression: ~s"
+                                   e)]))])
+        (make-byte-code-program (visit e)))))
+
+Let us test the compiler positively::
+
+  > (test-compile-arithmetic-expressions
+      compile-arithmetic-expression
+      check-byte-code-program)
+  #t
+  > 
+
+Success.
+
+Let us test the compiler and the virtual machine positively::
+
+  > (test-compile-and-run-arithmetic-expressions
+      compile-arithmetic-expression
+      run-byte-code-program)
+ #t
+  >
+
+Success.
+
+
+.. index:: byte code (verification)
+
+Byte-code verification
+----------------------
+
+The virtual machine incessantly tests whether there is enough data in
+the stack, so here is a *byte-code verifier* that detects whether
+running a program will underflow the stack and also whether it will
+yield an unexpected resulting stack.
+
+First, here is the unit test for well-behaved byte-code programs
+that do not underflow and that yield a one-element stack:
+
+.. code-block:: scheme
+
+  (define verify-well-behaved-byte-code-programs
+    (lambda (verify)
+      (and (verify p0)
+           (verify p1)
+           ;;; add more tests here
+           )))
+
+Given a procedure implementing a byte-code verifier, this testing
+procedure successively applies it to each of the well-behaved
+byte-code programs to check that their verification succeeds.
+
+Then, here is its pendant, i.e., the negative unit test for ill-behaved
+byte-code programs that may underflow or that may not yield a
+one-element stack:
+
+.. code-block:: scheme
+  
+  (define verify-ill-behaved-byte-code-programs
+    (lambda (verify)
+      (not (or (verify q0)
+               (verify q1)
+               ;;; add more tests here
+               ))))
+
+Given a procedure implementing a byte-code verifier, this testing
+procedure successively applies it to each of the ill-behaved
+byte-code programs to check that their verification fails.
+
+.. index:: analysis (data-flow)
+.. index:: interpretation (abstract)
+.. index:: interpretation (concrete)
+
+And here is the byte-code verifier: a procedure that abstractly runs
+a byte-code program not with a stack, but with *a natural number
+representing the height of the stack*.
+
+* Concretely, the stack is initially empty, so abstractly, the
+  height is initially 0.
+
+* Concretely, executing a ``PUSH`` instruction pushes a number on
+  the stack.  So abstractly, executing a ``PUSH`` instruction
+  increments the height by 1.
+
+* Concretely, to execute an ``ADD`` or a ``MUL`` instruction, the
+  stack should contain at least two numbers.  So abstractly, the
+  verifier checks that the height is at least 2.
+
+* Concretely, under the assumption that the stack contains at least
+  two numbers, to execute an ``ADD`` or a ``MUL`` instruction, two
+  numbers are popped from the stack and one number is pushed.  So
+  abstractly, under the assumption that the height is at least 2,
+  the verifier decrements the height by 1.
+
+* Concretely, the stack should only contain one number at the end of
+  a run, and so abstractly, the height should be 1 at the end of the
+  verification.
+
+.. code-block:: scheme
+
+  (define verify-byte-code-program
+    (lambda (p)
+      (if (is-byte-code-program? p)
+          (letrec ([loop (lambda (is n)
+                           (if (null? is)
+                               n
+                               (let ([i (car is)]
+                                     [is (cdr is)])
+                                 (cond
+                                   [(is-PUSH? i)
+                                    (loop is (1+ n))]
+                                   [(is-ADD? i)
+                                    (and (>= n 2)
+                                         (loop is (1- n)))]
+                                   [(is-MUL? i)
+                                    (and (>= n 2)
+                                         (loop is (1- n)))]
+                                   [else
+                                    (errorf 'verify-byte-code-program
+                                            "unrecognized byte code: ~s"
+                                            i)]))))])
+            (let ([result (loop (byte-code-program-1 p) 0)])
+              (and result
+                   (= result 1))))
+          (errorf 'verify-byte-code-program
+                  "not a byte-code program: ~s"
+                  p))))
+
+Let us test this byte-code verifier::
+
+  > (verify-well-behaved-byte-code-programs verify-byte-code-program)
+  #t
+  > 
+
+Success.  Let us test it negatively as well::
+
+  > (verify-ill-behaved-byte-code-programs verify-byte-code-program)
+  #t
+  > 
+
+Success.
+
+While we are at it, here is a unit test about the byte-code programs
+emitted by the compiler:
+
+.. code-block:: scheme
+
+  (define test-compiled-arithmetic-expressions
+    (lambda (compile verify)
+      (and (verify (compile ae0))
+           (verify (compile ae1))
+           (verify (compile ae2))
+           (verify (compile ae3))
+           ;;; add more tests here
+           )))
+
+Let us test whether the output of the compiler is well-behaved::
+
+  > (test-compiled-arithmetic-expressions
+      compile-arithmetic-expression
+      verify-byte-code-program)
+  #t
+  > 
+
+Success.
+
+
+.. index:: virtual machine (over verified byte code)
+
+Virtual machine over verified byte-code programs
+------------------------------------------------
+
+We can now simplify the virtual machine into one which assumes that
+byte-code programs have been verified.  This simplified virtual
+machine does not test anything that has been verified, and therefore
+runs more efficiently (fewer tests at run time):
+
+.. code-block:: scheme
+
+  (define run-verified-byte-code-program
+    (lambda (p)
+      (letrec ([loop (lambda (is vs)
+                       (if (null? is)
+                           vs
+                           (let ([i (car is)]
+                                 [is (cdr is)])
+                             (cond
+                               [(is-PUSH? i)
+                                (loop is
+                                      (cons (PUSH-1 i) vs))]
+                               [(is-ADD? i)
+                                (let* ([operand_2 (car vs)]
+                                       [vs (cdr vs)]
+                                       [operand_1 (car vs)]
+                                       [vs (cdr vs)])
+                                  (loop is
+                                        (cons (+ operand_1 operand_2)
+                                              vs)))]
+                               [else
+                                (let* ([operand_2 (car vs)]
+                                       [vs (cdr vs)]
+                                       [operand_1 (car vs)]
+                                       [vs (cdr vs)])
+                                  (loop is
+                                        (cons (* operand_1 operand_2)
+                                              vs)))]))))])
+        (car (loop (byte-code-program-1 p) '())))))
+
+Let us test this virtual machine::
+
+  > (test-compile-and-run-arithmetic-expressions
+      compile-arithmetic-expression
+      run-verified-byte-code-program)
+  #t
+  > 
+
+Success.
+
+Diagrammatically:
+
+.. ditaa::
+
+            +-------------------+
+            |                   |
+            | byte-code program |--+
+            |                {d}|  |
+            +-------------------+  |
+                     |             |
+                     |             |
+            verifier |             |
+                     |             |
+                     |             |
+                     v             |
+            +-------------------+  |
+            |     verified      |  |
+            | byte-code program |  | virtual machine
+            |                {d}|  | for
+            +-------------------+  | unverified byte code
+                     |             |
+                     |             |
+             virtual |             |
+             machine |             |
+                 for |             |
+  verified byte code |             |
+                     |             |
+                     v             |
+                                   |
+                   number <--------+
+
+.. index:: list (make-)
+
+Let us visualize that running verified byte code is more
+efficient than running unverified byte code, using Petite Chez
+Scheme's predefined procedure ``make-list`` that maps a number n and a
+value v and that yields a list of length n containing n occurrences
+of v:
+
+.. code-block:: scheme
+
+  (define p100000
+    (make-byte-code-program
+     (append
+        (make-list 100000 '(PUSH 1))
+        (make-list 99999 '(ADD)))))
+
+The following scenario illustrates ``make-list``, the size of the
+large byte-code program denoted by ``p100000``, its verification, and
+two timed runs of the two virtual machines::
+
+  > (make-list 2 33)
+  (33 33)
+  > (length (byte-code-program-1 p100000))
+  199999
+  > (verify-byte-code-program p100000)
+  #t
+  > (time (run-byte-code-program p100000))
+  (time (run-byte-code-program p100000))
+      5 collections
+      337 ms elapsed cpu time, including 12 ms collecting
+      355 ms elapsed real time, including 12 ms collecting
+      22400520 bytes allocated, including 20420504 bytes reclaimed
+  100000
+  > (time (run-verified-byte-code-program p100000))
+  (time (run-verified-byte-code-program p100000))
+      5 collections
+      295 ms elapsed cpu time, including 14 ms collecting
+      346 ms elapsed real time, including 15 ms collecting
+      22400512 bytes allocated, including 21538440 bytes reclaimed
+  100000
+  > 
+
+.. index::
+   single: analysis (control-flow)
+
+.. index::
+   single: Shivers, Olin
+
+.. epigraph::
+
+   | Control-flow analysis is feasible and useful for [programming] languages.
+
+   -- `Olin Shivers`__'s thesis
+
+.. __: http://www.ccs.neu.edu/home/shivers/
+
+Running the unverified byte-code program takes more time (337 ms
+instead of 295 ms) than running the verified byte-code program.
+
+.. index::
+   single: interpreter (abstract)
+
+
+Executing programs that failed the verification
+-----------------------------------------------
+
+For completeness, and also because of `Murphy's law
+<http://en.wikipedia.org/wiki/Murphy%27s_law>`_, let us see the
+effect of running ``run-verified-byte-code-program`` over two
+programs that failed the verification.
+
+* The first program provokes a stack underflow::
+
+    > (verify-byte-code-program q1)
+    #f
+    > (run-byte-code-program q1)
+    
+    Exception in run-byte-code-program: stack underflow: (1)
+    Type (debug) to enter the debugger.
+    > 
+
+  Here is what happens if we run the virtual machine on this program
+  without checking for underflow::
+
+    > (run-verified-byte-code-program q1)
+    
+    Exception in car: () is not a pair
+    Type (debug) to enter the debugger.
+    > 
+
+  .. epigraph::
+  
+     | The world is a harsh place, Hobbes.
+  
+     -- `Calvin <http://en.wikipedia.org/wiki/Calvin_and_Hobbes>`_
+
+  We get an incomprehensible run-time error.
+
+* The second program yields a resulting stack that is too big::
+
+    > (verify-byte-code-program q0)
+    #f
+    > (run-byte-code-program q0)
+    
+    Exception in run-byte-code-program: unexpected resulting stack: (2 1)
+    Type (debug) to enter the debugger.
+    > 
+
+  Here is what happens if we run the virtual machine on this program
+  without checking the final result::
+
+    > (run-verified-byte-code-program q0)
+    2
+    > 
+
+  .. epigraph::
+    
+     | Don't worry about it.
+     | We'll find out when it goes bad.
+    
+     -- `Lt. Doolittle <http://www.benzedrine.cx/darkstar-screenplay.html>`_
+
+  Even worse, we get no error and an unreliable result.
+
+
+Interpreting vs. compiling and running
+--------------------------------------
+
+Finally, let us now put ourselves in position to interactively
+compare whether interpreting an arithmetic expression yields the
+same result as compiling it and running this compiled program:
+
+.. code-block:: scheme
+
+  (define compile-and-run-arithmetic-expression
+    (lambda (e)
+      (run-byte-code-program
+         (compile-arithmetic-expression
+           e))))
+
+  (define test-commutation-for-arithmetic-expressions
+    (lambda (e)
+      (let ([result-1 (interpret-arithmetic-expression e)]
+            [result-2 (compile-and-run-arithmetic-expression e)])
+        (list result-1 result-2 (equal? result-1 result-2)))))
+
+We can now play with our sample of well-formed arithmetic
+expressions, and test the relative correctness of the interpreter,
+the compiler, and the virtual machine::
+
+  > (test-commutation-for-arithmetic-expressions ae0)
+  (42 42 #t)
+  > (test-commutation-for-arithmetic-expressions ae1)
+  (11 11 #t)
+  > (test-commutation-for-arithmetic-expressions ae2)
+  (1111 1111 #t)
+  >
+
+.. index:: diagram
+
+Diagrammatically:
+
+.. ditaa::
+
+  +-------------------+
+  | source expression |--+
+  |                {d}|  |
+  +-------------------+  |
+           |             |
+           |             |
+  compiler |             |
+           |             |
+           |             |
+           v             |
+  +-------------------+  |
+  | byte-code program |  | interpreter
+  |                {d}|  |
+  +-------------------+  |
+           |             |
+           |             |
+   virtual |             |
+   machine |             |
+           |             |
+           v             |
+                         |
+         number <--------+
+  
+This diagram concludes our study of language processors for arithmetic
+expressions.
+
+
+Summary
+-------
+
+In the course of this study of language processors for arithmetic
+expressions, we have defined the arithmetic expressions with a BNF; we
+have implemented this BNF with constructors, predicates, and
+accessors; and we have implemented the parser, the unparser, the
+syntax checker (for arithmetic expressions), the interpreter, and the
+compiler with structurally recursive procedures, and the syntax
+checker (for byte-code programs), the byte-code verifier, and the two
+virtual machines with structurally tail-recursive procedures.
+
+
+Reminder
+--------
+
+* The entire Scheme code above is available `here
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-4-arithmetic-expressions.scm>`_
+  (latest version: 01 Sep 2015).
+
+
+Exercise 1
+----------
+
+Write more arithmetic expressions (both well formed and ill formed)
+and expand the unit tests with them.
+
+
+Exercise 2
+----------
+
+Trace ``interpret-arithmetic-expression`` and apply this traced
+version to ``ae1``, ``ae2``, and ``ae3``, to visualize the recursive
+descent of the interpreter.
+
+
+Exercise 3
+----------
+
+1. Apply ``compile-arithmetic-expression`` to ``ae1``, ``ae2``, and
+   ``ae3``, to visualize its output.  Would you characterize this
+   output as prefix, infix, or postfix notation?
+
+2. Trace ``compile-arithmetic-expression`` and apply this traced
+   version to ``ae1``, ``ae2``, and ``ae3``, to visualize the recursive
+   descent of the compiler.
+
+
+Exercise 4
+----------
+
+Trace the fetch-decode-execute loop in the definition of
+``run-byte-code-program`` and apply this traced version
+to the result of compiling ``ae1``, ``ae2``, and ``ae3``, to visualize
+the evolution of the stack at run time.
+
+
+Exercise 5
+----------
+
+1. Modify ``interpret-arithmetic-expression`` so that it recursively
+   traverses its input *from left to right*.  Can you think of an
+   arithmetic expression for which that can make a difference?
+
+2. Modify ``interpret-arithmetic-expression`` so that it recursively
+   traverses its input *from right to left*.  Can you think of an
+   arithmetic expression for which that can make a difference?
+
+3. Modify ``compile-arithmetic-expression`` so that it compiles its
+   input *from right to left*.  Compare the result of running the
+   output of the original compiler and of your modified compiler.  Is
+   the virtual machine sensitive as to whether an expression was
+   compiled from left to right or from right to left?
+
+
+Exercise 6
+----------
+
+Merge ``check-byte-code-program`` and ``verify-byte-code-program``
+into one procedure that checks whether a byte-code program is
+both syntactically correct and well-behaved.
+
+
+.. index:: virtual machine (Magritte)
+.. index:: Magritte (virtual machine)
+
+.. _exercise-Magritte:
+
+Exercise 7
+----------
+
+Modify ``run-byte-code-program`` so that it does not yield a *number*,
+but instead it yields the *syntactic representation of a number*, and
+name it ``run-byte-code-program_Magritte``.  Whereas the original
+``run-byte-code-program`` operates on numbers, the modified
+``run-byte-code-program_Magritte`` operates on syntactic
+representations of numbers.  So:
+
+* instead of pushing the result of ``(PUSH-1 i)`` on the stack, push
+  the result of ``(make-literal (PUSH-1 i))``;
+
+* instead of pushing the result of ``(+ operand_1 operand_2)`` on the
+  stack, push the result of ``(make-plus operand_1 operand_2)``; and
+
+* instead of pushing the result of ``(* operand_1 operand_2)``, push
+  the result of ``(make-times operand_1 operand_2)``.
+
+Now run your Magritte virtual machine on the result of compiling an
+arithmetic expression, using the following test procedure:
+
+.. code-block:: scheme
+
+  (define test-Magritte
+    (lambda (e)
+      (list "This is not an arithmetic expression."
+            e
+            (run-byte-code-program_Magritte
+              (compile-arithmetic-expression
+                e)))))
+
+What do you observe?
+
+
+.. index:: compiler (left inverse of a)
+.. index:: decompiler
+.. index:: compiler (de-)
+
+Exercise 8
+----------
+
+.. epigraph::
+
+   | Duh!
+
+   -- `The Dude <http://en.wikipedia.org/wiki/The_Big_Lebowski>`_
+
+Implement a decompiler, i.e., a procedure that is a left inverse of
+``compile-arithmetic-expression`` for source expressions that are
+syntactically correct.  Diagrammatically:
+
+.. ditaa::
+
+  +--------+   compile   +------+
+  |abstract| ----------> | byte |
+  | syntax |             | code |
+  |     {d}| <---------- |   {d}|
+  +--------+  decompile  +------+
+
+
+.. index:: interpreter (Magritte)
+.. index:: Magritte (interpreter)
+
+.. _exercise-Magritte-interpreter:
+
+Exercise 9
+----------
+
+Going along the lines of :ref:`exercise-Magritte`,
+what would be a Magritte interpreter?
+
+.. index:: diagram (commuting)
+
+Here is a guideline.  For an interpreter, a compiler, and a virtual
+machine to fit together, the following diagram should commute:
+
+.. ditaa::
+
+  +-------------------+
+  | source expression |--+
+  |                {d}|  |
+  +-------------------+  |
+           |             |
+           |             |
+  compiler |             |
+           |             |
+           |             |
+           v             |
+  +-------------------+  |
+  | byte-code program |  | interpreter
+  |                {d}|  |
+  +-------------------+  |
+           |             |
+           |             |
+   virtual |             |
+   machine |             |
+           |             |
+           v             |
+                         |
+         number <--------+
+
+In words: compiling a source expression and then running the resulting
+compiled program with the virtual machine should give the same result
+as interpreting the expression.
+
+The guideline of designing and implementing your Magritte interpreter
+should be that compiling a source expression and then running the
+resulting compiled program with the Magritte virtual machine should
+give the same result as interpreting the expression with the Magritte
+interpreter.  In other words, the following diagram should commute:
+
+.. ditaa::
+
+  +-------------------+
+  | source expression |--+
+  |                {d}|  |
+  +-------------------+  |
+           |             |
+           |             |
+  compiler |             |
+           |             |
+           |             |
+           v             |
+  +-------------------+  |
+  | byte-code program |  | Magritte
+  |                {d}|  | interpreter
+  +-------------------+  |
+           |             |
+  Magritte |             |
+   virtual |             |
+   machine |             |
+           |             |
+           v             |
+                         |
+     representation      |
+          of a      <----+
+         number
+
+Here are two procedures to test your Magritte interpreter (assuming it
+is named ``interpret-arithmetic-expression_Magritte``):
+
+.. code-block:: scheme
+
+  (define compile-and-run-arithmetic-expression_Magritte
+    (lambda (e)
+      (run-byte-code-program_Magritte
+         (compile-arithmetic-expression
+           e))))
+
+  (define test-commutation-for-arithmetic-expressions_Magritte
+    (lambda (e)
+      (let ([result-1 (interpret-arithmetic-expression_Magritte e)]
+            [result-2 (compile-and-run-arithmetic-expression_Magritte e)])
+        (list result-1 result-2 (equal? result-1 result-2)))))
+
+
+.. _exercise-subtraction-and-division:
+
+Exercise 10
+-----------
+
+Expand the source language with subtraction and division, and adapt
+the interpreter, compiler, and virtual machine to this expanded
+language.  Dividing a number by zero should raise an error.  Is your
+expanded virtual machine sensitive as to whether an arithmetic
+expression was compiled from left to right or from right to left?
+
+
+Checkpoint
+----------
+
+We have used Scheme to study a variety of programming-language
+artifacts relative to arithmetic expressions: a BNF, a syntax checker,
+an unparser and a parser, an interpreter, a byte-code compiler, a
+decompiler, a stack-based virtual machine, and a byte-code verifier.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-4-arithmetic-expressions.scm>`_
+  (latest version: 01 Sep 2015).
+
+
+Version
+-------
+
+Fixed a typo in the application of a unit-test procedure,
+thanks to Rejwan Shamsul Kabir's eagle eye
+[28 Oct 2015]
+
+Fixed the definition of ``is-PUSH?``,
+thanks to Arch Wilhes's eagle eye
+[09 Oct 2015]
+
+Created
+[01 Sep 2015]

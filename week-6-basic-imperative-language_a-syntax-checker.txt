@@ -1,0 +1,2325 @@
+.. -*- mode: rst -*-
+
+.. index:: syntax checker (for a basic imperative language)
+
+Note for Week 6 about a basic imperative language: a syntax checker
+===================================================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+--------------------
+
+None.
+
+
+Resources
+---------
+
+* The Scheme code for `this entire syntax checker
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-basic-imperative-language_a-syntax-checker.scm>`_
+  (latest version: 15 Sep 2015)
+
+
+Goal
+----
+
+.. epigraph::
+
+  | You can only transcend a game
+  | when you understand its rules.
+
+  -- `Claude Débussy <http://en.wikipedia.org/wiki/Claude_Debussy>`_
+
+The goal of this lecture note is to illustrate how to go about
+implementing a syntax checker for a basic imperative language.
+
+
+.. _bnf-of-the-basic-imperative-language:
+
+BNF of the basic imperative language
+------------------------------------
+
+Like Scheme's, the syntax of the basic imperative language is fully
+parenthesized:
+
+.. bnf:: parenthesized basic imperative language
+   :noindex:
+   :namespace: pbil
+
+      <literal> ::= <boolean>
+                  | <integer>
+
+    <unary-operator> ::= not
+
+    <binary-operator> ::= + | - | * | / | < | <= | = | > | >= | and | or
+
+    <reference> ::= (location <natural-number>)
+
+   <expression> ::= (constant <literal>)
+                  | (dereference <reference>)
+                  | (unary-operation <unary-operator> <expression>)
+                  | (binary-operation <binary-operator> <expression> <expression>)
+
+      <command> ::= (skip)
+                  | (sequence <command> <command>)
+                  | (assign <reference> <expression>)
+                  | (conditional <expression> <command> <command>)
+                  | (while <expression> <command>)
+                  | (switch <expression> {[<literal> <command>]}* [otherwise <command>])
+
+      <program> ::= (top <command>)
+
+
+Starting point: the skeleton
+----------------------------
+
+We start by defining vacuous versions of the predicates we need to
+implement.  There is one such stub procedure per non-terminal in the
+grammar above:
+
+.. code-block:: scheme
+
+  (define check-literal
+    (lambda (v)
+      (errorf 'check-literal "not implemented yet")))
+  
+  (define check-unary-operator
+    (lambda (v)
+      (errorf 'check-unary-operator "not implemented yet")))
+  
+  (define check-binary-operator
+    (lambda (v)
+      (errorf 'check-binary-operator "not implemented yet")))
+  
+  (define check-reference
+    (lambda (v)
+      (errorf 'check-reference "not implemented yet")))
+  
+  (define check-expression
+    (lambda (v)
+      (errorf 'check-expression "not implemented yet")))
+  
+  (define check-command
+    (lambda (v)
+      (errorf 'check-command "not implemented yet")))
+  
+  (define check-program
+    (lambda (v)
+      (errorf 'check-program "not implemented yet")))
+
+Our task is to define these compound predicates so that they properly
+check whether their argument is a literal, a unary operator, etc.
+
+
+Tracing and untracing facilities
+--------------------------------
+
+For visualization purpose, here are two procedures to trace and then
+to untrace all the predicates for the non-terminals, i.e., all the
+compound predicates:
+
+.. code-block:: scheme
+
+  (define trace-all-compound-predicates
+    (lambda ()
+      (trace check-literal
+             check-unary-operator
+             check-binary-operator
+             check-reference
+             check-expression
+             check-command
+             check-program)))
+  
+  (define untrace-all-compound-predicates
+    (lambda ()
+      (untrace check-literal
+               check-unary-operator
+               check-binary-operator
+               check-reference
+               check-expression
+               check-command
+               check-program)))
+
+
+Implementing the BNF: the ground constructors
+---------------------------------------------
+
+Each syntactic node is a proper list starting with a tag and followed
+by sub-nodes.  So here are the ground constructors:
+
+.. code-block:: scheme
+
+  ;;; <reference>
+  
+  (define make-location
+    (lambda (natural-number)
+      (list 'location natural-number)))
+  
+  ;;; <expression>
+  
+  (define make-constant
+    (lambda (literal)
+      (list 'constant literal)))
+  
+  (define make-dereference
+    (lambda (reference)
+      (list 'dereference reference)))
+  
+  (define make-unary-operation
+    (lambda (unary-operator expression)
+      (list 'unary-operation unary-operator expression)))
+  
+  (define make-binary-operation
+    (lambda (binary-operator expression_1 expression_2)
+      (list 'binary-operation binary-operator expression_1 expression_2)))
+  
+  ;;; <command>
+  
+  (define make-skip
+    (lambda ()
+      (list 'skip)))
+
+  (define make-sequence
+    (lambda (command_1 command_2)
+      (list 'sequence command_1 command_2)))
+  
+  (define make-assign
+    (lambda (reference expression)
+      (list 'assign reference expression)))
+  
+  (define make-conditional
+    (lambda (expression command_1 command_2)
+      (list 'conditional expression command_1 command_2)))
+  
+  (define make-while
+    (lambda (expression command)
+      (list 'while expression command)))
+  
+  (define make-switch
+    (lambda (expression switch-clauses command)
+      (append (list 'switch expression)
+              switch-clauses
+              (list (list 'otherwise command)))))
+
+  ;;; <program>
+  
+  (define make-top
+    (lambda (command)
+      (list 'top command)))
+
+Rationale: if we use these guys instead of a gaggle of calls to
+``cons`` and ``list``, or even calls to ``append``, chances are we
+will get more meaningful error messages.
+
+
+Samples of well-formed things
+-----------------------------
+
+For future reference, let us write lists of well-formed things:
+literals, references, etc.  We start with short lists, and we will
+flesh them out as we implement the compound predicates.  For literals,
+we just pick one Boolean and one integer.  For references, we pick the
+first location in the store.  For expressions, we pick a constant.
+For commands, we pick the command that does nothing, ``skip``.  And
+for programs, we pick one with the command that does nothing.  So here
+is our first shot at the lists:
+
+.. code-block:: scheme
+
+  (define sample-of-well-formed-literals
+    (list ;;; Booleans:
+          #f 
+          ;;; Integers:
+          0
+          ;;; add more here
+          ))
+
+  (define sample-of-well-formed-references
+    (list ;;;
+          (make-location 0)
+          ;;; add more here
+          ))
+
+  (define sample-of-well-formed-expressions
+    (list ;;;
+          (make-constant #t)
+          ;;; add more here
+          ))
+
+  (define sample-of-well-formed-commands
+    (list ;;;
+          (make-skip)
+          ;;; add more here
+          ))
+
+  (define sample-of-well-formed-programs
+    (list ;;;
+          (make-top (make-skip))
+          ;;; add more here
+          ))
+
+A methodological recommendation: construct well-formed things with
+their constructors rather than quoting already constructed things,
+as one could be tempted to do:
+
+.. code-block:: scheme
+
+  (define tempting-sample-of-well-formed-programs
+    (list ;;;
+          '(top (skip))
+          ;;; add more here
+          ))
+
+.. index:: Satori
+
+Granted, quoting already constructed things is quicker to write, but
+the road is short from feature to bug, and if you use quote, you run a
+greater risk to end up with an ill-formed thing.  Confusion will then
+ensue, since your well-formedness test will fail for things not
+because your syntax checker contains a bug, but because you are
+testing it against an ill-formed thing, and so your syntax checker
+*should* fail -- in fact, that it does is good news.  Solving this
+epistemological quandary has induced many a computer scientist to
+attain `Satori`__ by abruptly realizing that "*the bug is not where I
+am looking for it, it is elsewhere*", or more precisely: "*the bug is
+not in my program, it is in its input test*".
+
+.. __: http://en.wikipedia.org/wiki/Satori
+
+So do resist the temptation to write, e.g.:
+
+.. code-block:: scheme
+
+  (define tempting-sample-of-well-formed-commands
+    (list ;;;
+          (make-skip)
+          '(conditional #t (skip))
+          ;;; add more here
+          ))
+
+Use ``make-conditional`` instead, and specify an alternative command.
+(And oh, while you are at it, use  ``make-constant`` for the test.)
+
+
+Implementing the BNF: the ground predicates
+-------------------------------------------
+
+The ground predicates simply need to check whether their argument is a
+suitably tagged proper list with the appropriate number of elements:
+
+.. code-block:: scheme
+
+  ;;; predicates:
+  
+  (define proper-list-of-given-length?
+    (lambda (v n)
+      (or (and (null? v)
+               (= n 0))
+          (and (pair? v)
+               (> n 0)
+               (proper-list-of-given-length? (cdr v)
+                                             (- n 1))))))
+  
+  (define list-at-least-as-long-as?
+    (lambda (v n)
+      (letrec ([visit (lambda (v i)
+                        (or (= i 0)
+                             (and (pair? v)
+                                  (visit (cdr v)
+                                         (- i 1)))))])
+        (if (>= n 0)
+            (visit v n)
+            #f))))
+
+  ;;; <reference>
+  
+  (define is-location?
+    (lambda (v)
+      (and (proper-list-of-given-length? v 2)
+           (equal? (car v) 'location))))
+  
+  ;;; <expression>
+  
+  (define is-constant?
+    (lambda (v)
+      (and (proper-list-of-given-length? v 2)
+           (equal? (car v) 'constant))))
+  
+  (define is-dereference?
+    (lambda (v)
+      (and (proper-list-of-given-length? v 2)
+           (equal? (car v) 'dereference))))
+  
+  (define is-unary-operation?
+    (lambda (v)
+      (and (proper-list-of-given-length? v 3)
+           (equal? (car v) 'unary-operation))))
+  
+  (define is-binary-operation?
+    (lambda (v)
+      (and (proper-list-of-given-length? v 4)
+           (equal? (car v) 'binary-operation))))
+  
+  ;;; <command>
+  
+  (define is-skip?
+    (lambda (v)
+      (and (proper-list-of-given-length? v 1)
+           (equal? (car v) 'skip))))
+  
+  (define is-sequence?
+    (lambda (v)
+      (and (proper-list-of-given-length? v 3)
+           (equal? (car v) 'sequence))))
+  
+  (define is-assign?
+    (lambda (v)
+      (and (proper-list-of-given-length? v 3)
+           (equal? (car v) 'assign))))
+  
+  (define is-conditional?
+    (lambda (v)
+      (and (proper-list-of-given-length? v 4)
+           (equal? (car v) 'conditional))))
+  
+  (define is-while?
+    (lambda (v)
+      (and (proper-list-of-given-length? v 3)
+           (equal? (car v) 'while))))
+  
+  (define is-switch?
+    (lambda (v)
+      (and (list-at-least-as-long-as? v 3)
+           (equal? (car v) 'switch))))
+
+  ;;; <program>
+  
+  (define is-top?
+    (lambda (v)
+      (and (proper-list-of-given-length? v 2)
+           (equal? (car v) 'top))))
+
+The ground predicates care nothing about the sub-nodes of their
+arguments: it is the job of the compound predicates to do so, and it
+is our goal to implement these compound predicates, i.e., the syntax
+checker.  To this end, we also need the *ground accessors* to access
+sub-nodes.
+
+
+Implementing the BNF: the ground accessors
+------------------------------------------
+
+Each of the ground accessors assumes it is given a syntactic node that
+satisfies the corresponding ground predicate.  It then yields the
+corresponding sub-node:
+
+.. code-block:: scheme
+
+  ;;; <reference>
+  
+  (define location-1
+    (lambda (v)
+      (list-ref v 1)))
+  
+  ;;; <expression>
+  
+  (define literal-1
+    (lambda (v)
+      (list-ref v 1)))
+  
+  (define constant-1
+    (lambda (v)
+      (list-ref v 1)))
+  
+  (define dereference-1
+    (lambda (v)
+      (list-ref v 1)))
+  
+  (define unary-operation-1
+    (lambda (v)
+      (list-ref v 1)))
+  
+  (define unary-operation-2
+    (lambda (v)
+      (list-ref v 2)))
+  
+  (define binary-operation-1
+    (lambda (v)
+      (list-ref v 1)))
+  
+  (define binary-operation-2
+    (lambda (v)
+      (list-ref v 2)))
+  
+  (define binary-operation-3
+    (lambda (v)
+      (list-ref v 3)))
+  
+  ;;; <command>
+  
+  (define sequence-1
+    (lambda (v)
+      (list-ref v 1)))
+  
+  (define sequence-2
+    (lambda (v)
+      (list-ref v 2)))
+  
+  (define assign-1
+    (lambda (v)
+      (list-ref v 1)))
+  
+  (define assign-2
+    (lambda (v)
+      (list-ref v 2)))
+  
+  (define conditional-1
+    (lambda (v)
+      (list-ref v 1)))
+  
+  (define conditional-2
+    (lambda (v)
+      (list-ref v 2)))
+  
+  (define conditional-3
+    (lambda (v)
+      (list-ref v 3)))
+  
+  (define while-1
+    (lambda (v)
+      (list-ref v 1)))
+  
+  (define while-2
+    (lambda (v)
+      (list-ref v 2)))
+  
+  (define switch-1
+    (lambda (v)
+      (list-ref v 1)))
+
+  (define switch-rest
+    (lambda (v)
+      (list-tail v 2)))
+
+  ;;; <program>
+  
+  (define top-1
+    (lambda (v)
+      (list-ref v 1)))
+
+Rationale: if we use these guys instead of a gaggle of calls to
+``car`` and ``cdr``, or even calls to ``list-ref``, chances are we
+will get more meaningful error messages.
+
+
+Tracing and untracing facilities, continued
+-------------------------------------------
+
+Again, for visualization purpose, here are two procedures to trace and
+then to untrace all the ground predicates:
+
+.. code-block:: scheme
+
+  (define trace-all-ground-predicates
+    (lambda ()
+      (trace is-location?
+             is-constant?
+             is-dereference?
+             is-unary-operation?
+             is-binary-operation?
+             is-skip?
+             is-sequence?
+             is-assign?
+             is-conditional?
+             is-while?
+             is-switch?
+             is-top?)))
+  
+  (define untrace-all-ground-predicates
+    (lambda ()
+      (untrace is-location?
+               is-constant?
+               is-dereference?
+               is-unary-operation?
+               is-binary-operation?
+               is-skip?
+               is-sequence?
+               is-assign?
+               is-conditional?
+               is-while?
+               is-switch?
+               is-top?)))
+
+
+Testing well-formedness
+-----------------------
+
+We first define a generic testing procedure to test a list of
+well-formed things.  Then we instantiate the generic testing procedure
+for each specific thing we want to test.
+
+
+.. _a-generic-testing-procedure-to-test-well-formed-things:
+
+A generic testing procedure to test well-formed things
+------------------------------------------------------
+
+Let us write a generic procedure that, given
+
+* the name of the things we want to test (i.e., literal, reference,
+  expression, command, and program),
+
+* a predicate for these things, and
+
+* a proper list containing a representative sample of well-formed things,
+
+traverses the list and successively applies the predicate to each
+element in the list for as long as the predicate yields ``#t``.  If
+the predicate yields ``#f``, an error is raised and reports the name
+of the things that are being tested and which particular thing
+defeated the predicate:
+
+.. code-block:: scheme
+
+  (define test-well-formed-things
+    (lambda (name is-thing? things)
+      (letrec ([visit (lambda (things)
+                        (cond
+                          [(null? things)
+                           #t]
+                          [(pair? things)
+                           (if (is-thing? (car things))
+                               (visit (cdr things))
+                               (errorf 'test-well-formed-things
+                                       "incorrect result for ~s ~s"
+                                       name
+                                       (car things)))]
+                          [else
+                           (errorf 'test-well-formed-things
+                                   "not a proper list: ~s"
+                                   things)]))])
+        (visit things))))
+
+This series of tests succeeds if the predicate accepts each of the
+elements in the sample list.  It fails if the predicates balks at one
+element in the list, since all elements are supposed to be well
+formed.
+
+
+Testing well-formed literals
+----------------------------
+
+We define ``test-well-formed-literals`` by instantiating
+``test-well-formed-things`` with the predicate ``check-literal`` (which
+so far is incompletely defined) and the sample list of well-formed
+literals, as cursorily defined above:
+
+.. code-block:: scheme
+
+  (define test-well-formed-literals
+    (lambda ()
+      (test-well-formed-things 'literal
+                               check-literal
+                               sample-of-well-formed-literals)))
+
+
+Testing well-formed references
+------------------------------
+
+We define ``test-well-formed-references`` by instantiating
+``test-well-formed-things`` with the predicate ``check-reference`` (which
+so far is incompletely defined) and the sample list of well-formed
+references, as cursorily defined above:
+
+.. code-block:: scheme
+
+  (define test-well-formed-references
+    (lambda ()
+      (test-well-formed-things 'reference
+                               check-reference
+                               sample-of-well-formed-references)))
+
+
+Testing well-formed expressions
+-------------------------------
+
+We define ``test-well-formed-expressions`` by instantiating
+``test-well-formed-things`` with the predicate ``check-expression`` (which
+so far is incompletely defined) and the sample list of well-formed
+expressions, as cursorily defined above:
+
+.. code-block:: scheme
+
+  (define test-well-formed-expressions
+    (lambda ()
+      (test-well-formed-things 'expression
+                               check-expression
+                               sample-of-well-formed-expressions)))
+
+
+Testing well-formed commands
+----------------------------
+
+We define ``test-well-formed-commands`` by instantiating
+``test-well-formed-things`` with the predicate ``check-command`` (which
+so far is incompletely defined) and the sample list of well-formed
+commands, as cursorily defined above:
+
+.. code-block:: scheme
+
+  (define test-well-formed-commands
+    (lambda ()
+      (test-well-formed-things 'command
+                               check-command
+                               sample-of-well-formed-commands)))
+
+
+Testing well-formed programs
+----------------------------
+
+We define ``test-well-formed-programs`` by instantiating
+``test-well-formed-things`` with the predicate ``check-program`` (which
+so far is incompletely defined) and the sample list of well-formed
+programs, as cursorily defined above:
+
+.. code-block:: scheme
+
+  (define test-well-formed-programs
+    (lambda ()
+      (test-well-formed-things 'program
+                               check-program
+                               sample-of-well-formed-programs)))
+
+
+Testing all well-formed things at once
+--------------------------------------
+
+Thus equipped, we can group all the tests above:
+
+.. code-block:: scheme
+
+  (define test-all-well-formed-things
+    (lambda ()
+      (and (test-well-formed-literals)
+           (test-well-formed-references)
+           (test-well-formed-expressions)
+           (test-well-formed-commands)
+           (test-well-formed-programs))))
+
+
+Silent or verbose?
+------------------
+
+The following global flag determines whether the syntax checker should
+remain silent or issue error messages:
+
+.. code-block:: scheme
+
+  (define check-silently
+    #t)
+
+
+The compound predicates
+-----------------------
+
+Let us proceed by considering each of the non-terminals of the grammar
+of the basic imperative language.
+
+
+A predicate for literals
+------------------------
+
+The relevant part of the grammar reads as follows:
+
+.. bnf:: parenthesized basic imperative language
+   :namespace: pbil
+   :noindex:
+
+      <literal> ::= <boolean>
+                  | <integer>
+
+
+A literal is either a Boolean or it is an integer.
+We program its associated predicate as such:
+
+.. code-block:: scheme
+
+  (define check-literal
+    (lambda (v)
+      (cond
+        [(boolean? v)
+         #t]
+        [(integer? v)
+         #t]
+        [else
+         (begin
+           (or check-silently
+               (printf "check-literal -- ill-formed input: ~s~n" v))
+           #f)])))
+
+Let us run the test::
+
+  > (test-well-formed-literals)
+  #t
+  > 
+
+Success.
+
+
+A more substantial sample of well-formed literals
+-------------------------------------------------
+
+We can add a few more well-formed literals to the list:
+
+.. code-block:: scheme
+
+  (define sample-of-well-formed-literals
+    (append (list ;;; Booleans:
+                  #t
+                  ;;; Integers:
+                  1
+                  -1
+                  2
+                  -2
+                  ;;; add more here
+                  )
+            sample-of-well-formed-literals))
+
+Let us run the test again::
+
+  > (test-well-formed-literals)
+  #t
+  > 
+
+Success again.
+
+
+A predicate for references
+--------------------------
+
+The relevant part of the grammar reads as follows:
+
+.. bnf:: parenthesized basic imperative language
+   :namespace: pbil
+   :noindex:
+
+    <reference> ::= (location <natural-number>)
+
+A well-formed reference should therefore be a well-formed location,
+and in addition the (first and only) operand should be a natural
+number to index the store:
+
+.. code-block:: scheme
+
+  (define check-reference
+    (lambda (v)
+      (or (and (is-location? v)
+               (integer? (location-1 v))
+               (>= (location-1 v) 0))
+          (begin
+            (or check-silently
+                (printf "check-reference -- ill-formed input: ~s~n" v))
+            #f))))
+
+Let us run the test::
+
+  > (test-well-formed-references)
+  #t
+  > 
+
+Success.
+
+
+A more substantial sample of well-formed references
+---------------------------------------------------
+
+We can write a few more well-formed references to the list (assuming a
+store that is big enough):
+
+.. code-block:: scheme
+
+  (define sample-of-well-formed-references
+    (append (list ;;;
+                  (make-location 10)
+                  (make-location 100)
+                  (make-location 1000)
+                  ;;; add more here
+                  )
+             sample-of-well-formed-references))
+
+Let us run the test again::
+
+  > (test-well-formed-references)
+  #t
+  > 
+
+Success again.
+
+
+First cut at the predicate for expressions
+------------------------------------------
+
+The relevant part of the grammar reads as follows:
+
+.. bnf:: parenthesized basic imperative language
+   :namespace: pbil
+   :noindex:
+
+   <expression> ::= (constant <literal>)
+                  | (dereference <reference>)
+                  | (unary-operation <unary-operator> <expression>)
+                  | (binary-operation <binary-operator> <expression> <expression>)
+
+A well-formed expression should therefore be either of 4 ground
+constructions, and each of them should be well-formed.  The skeleton
+of ``check-expression`` therefore reads as follows:
+
+.. code-block:: scheme
+
+  (define check-expression
+    (lambda (v)
+      (cond
+        [(is-constant? v)
+         (errorf 'check-expression "not implemented yet: ~s" v)]
+        [(is-dereference? v)
+         (errorf 'check-expression "not implemented yet: ~s" v)]
+        [(is-unary-operation? v)
+         (errorf 'check-expression "not implemented yet: ~s" v)]
+        [(is-binary-operation? v)
+         (errorf 'check-expression "not implemented yet: ~s" v)]
+        [else
+         (begin
+           (or check-silently
+               (printf "check-expression -- ill-formed input: ~s~n" v))
+           #f)])))
+
+
+The case of constants
+---------------------
+
+A constant refers to a literal, for which we already have a predicate.
+There are two kinds of literals: Booleans and integers.  So a good
+sample of constants is one of each kind.  So let us add an integer to
+the previous version of ``sample-of-well-formed-expressions``:
+
+.. code-block:: scheme
+
+  (define sample-of-well-formed-expressions
+    (cons (make-constant 42)
+          sample-of-well-formed-expressions))
+
+As for the clause for constants, in the definition of
+``check-expression``, it should simply check whether the first sub-node
+is a literal:
+
+.. code-block:: scheme
+
+  (define check-expression
+    (lambda (v)
+      (cond
+        [(is-constant? v)                 ;;; <---***---
+         (check-literal (constant-1 v))]  ;;; <---***---
+        [(is-dereference? v)
+         (errorf 'check-expression "not implemented yet: ~s" v)]
+        [(is-unary-operation? v)
+         (errorf 'check-expression "not implemented yet: ~s" v)]
+        [(is-binary-operation? v)
+         (errorf 'check-expression "not implemented yet: ~s" v)]
+        [else
+         (begin
+           (or check-silently
+               (printf "check-expression -- ill-formed input: ~s~n" v))
+           #f)])))
+
+Let us run the test::
+
+  > (test-well-formed-expressions)
+  #t
+  > 
+
+Success.
+
+Let us extend the sample of well-formed expressions with a handful of
+random constants:
+
+.. code-block:: scheme
+
+  (define make-random-constant
+    (lambda ()
+      (make-constant (list-ref sample-of-well-formed-literals
+                               (random (length sample-of-well-formed-literals))))))
+
+  (define sample-of-well-formed-expressions
+    (cons (make-random-constant)
+          (cons (make-random-constant)
+                (cons (make-random-constant)
+                      sample-of-well-formed-expressions))))
+
+where applying ``random`` to a strictly positive natural number n
+yields a random natural number between 0 and n-1.
+
+Let us run the test again::
+
+    > (test-well-formed-expressions)
+    #t
+    > 
+
+Success again.
+
+
+The case of dereferences
+------------------------
+
+A dereference refers to a well-formed location, for which we already
+have a predicate.  So let us add such a dereference to the sample,
+building on the previous version of
+``sample-of-well-formed-expressions``:
+
+.. code-block:: scheme
+
+  (define sample-of-well-formed-expressions
+    (cons (make-dereference (make-location 0))
+          sample-of-well-formed-expressions))
+
+As for the clause for dereferences, in the definition of
+``check-expression``, it should simply check whether the sub-node is a
+reference:
+
+.. code-block:: scheme
+
+  (define check-expression
+    (lambda (v)
+      (cond
+        [(is-constant? v)
+         (check-literal (constant-1 v))]
+        [(is-dereference? v)                   ;;; <---***---
+         (check-reference (dereference-1 v))]  ;;; <---***---
+        [(is-unary-operation? v)
+         (errorf 'check-expression "not implemented yet: ~s" v)]
+        [(is-binary-operation? v)
+         (errorf 'check-expression "not implemented yet: ~s" v)]
+        [else
+         (begin
+           (or check-silently
+               (printf "check-expression -- ill-formed input: ~s~n" v))
+           #f)])))
+
+Let us run the test::
+
+    > (test-well-formed-expressions)
+    #t
+    > 
+
+Success.
+
+Let us extend the sample of well-formed expressions with a handful of
+random dereferences:
+
+.. code-block:: scheme
+
+  (define make-random-dereference
+    (lambda ()
+      (make-dereference (list-ref sample-of-well-formed-references
+                                  (random (length sample-of-well-formed-references))))))
+
+  (define sample-of-well-formed-expressions
+    (cons (make-random-dereference)
+          (cons (make-random-dereference)
+                (cons (make-random-dereference)
+                      sample-of-well-formed-expressions))))
+
+Let us run the test again::
+
+  > (test-well-formed-expressions)
+  #t
+  > 
+
+Success again.
+
+
+The case of unary operations
+----------------------------
+
+A unary operation involves a *unary operator* and a single operand:
+
+* For uniformity [with the treatment, below, of binary operations],
+  here is the list of unary operators and the predicate verifying
+  whether its argument is a unary operator:
+  
+  .. code-block:: scheme
+  
+    (define unary-operators
+      '(not))
+    
+    (define check-unary-operator
+      (lambda (v)
+        (or (member v unary-operators)
+            (begin
+              (or check-silently
+                  (printf "check-unary-operator -- ill-formed input: ~s~n" v))
+              #f))))
+
+* The single operand should be a well-formed expression.
+
+So let us add such a unary operations to the sample,
+building on the previous version of ``sample-of-well-formed-expressions``:
+
+.. code-block:: scheme
+
+  (define sample-of-well-formed-expressions
+    (cons (make-unary-operation 'not
+                                (make-constant #t))
+          sample-of-well-formed-expressions))
+
+As for the clause for unary operations, in the definition of
+``check-expression``, it should simply check whether the first sub-node
+is a unary operator and the second a well-formed expression:
+
+.. code-block:: scheme
+
+  (define check-expression
+    (lambda (v)
+      (cond
+        [(is-constant? v)
+         (check-literal (constant-1 v))]
+        [(is-dereference? v)
+         (check-reference (dereference-1 v))]
+        [(is-unary-operation? v)                            ;;; <---***---
+         (and (check-unary-operator (unary-operation-1 v))  ;;; <---***---
+              (check-expression (unary-operation-2 v)))]    ;;; <---***---
+        [(is-binary-operation? v)
+         (errorf 'check-expression "not implemented yet: ~s" v)]
+        [else
+         (begin
+           (or check-silently
+               (printf "check-expression -- ill-formed input: ~s~n" v))
+           #f)])))
+
+Let us run the test::
+
+  > (test-well-formed-expressions)
+  #t
+  > 
+
+Success.
+
+Let us extend the sample of well-formed expressions with a handful of
+random unary operations:
+
+.. code-block:: scheme
+
+  (define make-random-unary-operation
+    (lambda ()
+      (let ([number-of-unary-operators (length unary-operators)]
+            [number-of-well-formed-expressions (length sample-of-well-formed-expressions)])
+        (make-unary-operation (list-ref unary-operators
+                                        (random number-of-unary-operators))
+                              (list-ref sample-of-well-formed-expressions
+                                        (random number-of-well-formed-expressions))))))
+
+  (define sample-of-well-formed-expressions
+    (cons (make-random-unary-operation)
+          sample-of-well-formed-expressions))
+
+  (define sample-of-well-formed-expressions
+    (cons (make-random-unary-operation)
+          sample-of-well-formed-expressions))
+
+  (define sample-of-well-formed-expressions
+    (cons (make-random-unary-operation)
+          sample-of-well-formed-expressions))
+
+  ;;; ad libitum
+
+Let us run the test again::
+
+  > (test-well-formed-expressions)
+  #t
+  > 
+
+Success again.
+
+
+The case of binary operations
+-----------------------------
+
+A binary operation involves a *binary operator* and two operands:
+
+* Here is the list of binary operators and the predicate verifying
+  whether its argument is a binary operator:
+  
+  .. code-block:: scheme
+  
+    (define binary-operators
+      '(+ - * / < <= = > >= and or))
+    
+    (define check-binary-operator
+      (lambda (v)
+        (or (member v binary-operators)
+            (begin
+              (or check-silently
+                  (printf "check-binary-operator -- ill-formed input: ~s~n" v))
+              #f))))
+
+* The two operands should be well-formed expressions.
+
+So let us add two such binary operations to the sample, again building
+on the previous version of ``sample-of-well-formed-expressions``:
+
+.. code-block:: scheme
+
+  (define sample-of-well-formed-expressions
+    (cons (make-binary-operation '+
+                                 (make-constant 10)
+                                 (make-constant 100))
+          (cons (make-binary-operation 'and
+                                       (make-constant #t)
+                                       (make-constant #f))
+                sample-of-well-formed-expressions)))
+
+As for the clause for binary operations, in the definition of
+``check-expression``, it should simply check whether the first sub-node
+is a binary operator and the second and third are well-formed
+expressions:
+
+.. code-block:: scheme
+
+  (define check-expression
+    (lambda (v)
+      (cond
+        [(is-constant? v)
+         (check-literal (constant-1 v))]
+        [(is-dereference? v)
+         (check-reference (dereference-1 v))]
+        [(is-unary-operation? v)
+         (and (check-unary-operator (unary-operation-1 v))
+              (check-expression (unary-operation-2 v)))]
+        [(is-binary-operation? v)                             ;;; <---***---
+         (and (check-binary-operator (binary-operation-1 v))  ;;; <---***---
+              (check-expression (binary-operation-2 v))       ;;; <---***---
+              (check-expression (binary-operation-3 v)))]     ;;; <---***---
+        [else
+         (begin
+           (or check-silently
+               (printf "check-expression -- ill-formed input: ~s~n" v))
+           #f)])))
+
+Let us run the test::
+
+  > (test-well-formed-expressions)
+  #t
+  > 
+
+Success.
+
+Let us add one last handful of binary operations to the sample, again
+building on the previous version of
+``sample-of-well-formed-expressions``:
+
+.. code-block:: scheme
+
+    (define make-random-binary-operation
+      (lambda ()
+        (let ([number-of-binary-operators (length binary-operators)]
+              [number-of-well-formed-expressions (length sample-of-well-formed-expressions)])
+          (make-binary-operation (list-ref binary-operators
+                                           (random number-of-binary-operators))
+                                 (list-ref sample-of-well-formed-expressions
+                                           (random number-of-well-formed-expressions))
+                                 (list-ref sample-of-well-formed-expressions
+                                           (random number-of-well-formed-expressions))))))
+
+  (define sample-of-well-formed-expressions
+    (cons (make-random-binary-operation)
+          sample-of-well-formed-expressions))
+
+  (define sample-of-well-formed-expressions
+    (cons (make-random-binary-operation)
+          sample-of-well-formed-expressions))
+
+  (define sample-of-well-formed-expressions
+    (cons (make-random-binary-operation)
+          sample-of-well-formed-expressions))
+
+  ;;; ad libitum
+
+Let us run the test again::
+
+  > (test-well-formed-expressions)
+  #t
+  > 
+
+Success again, and we are done with expressions.
+
+
+First cut at the predicate for commands
+---------------------------------------
+
+The relevant part of the grammar reads as follows:
+
+.. bnf:: parenthesized basic imperative language
+   :namespace: pbil
+   :noindex:
+
+      <command> ::= (skip)
+                  | (sequence <command> <command>)
+                  | (assign <reference> <expression>)
+                  | (conditional <expression> <command> <command>)
+                  | (while <expression> <command>)
+                  | (switch <expression> {[<literal> <command>]}* [otherwise <command>])
+
+A well-formed command should therefore be either of 6 ground
+constructions, and each of them should be well-formed.  The skeleton
+of ``check-command`` therefore reads as follows:
+
+.. code-block:: scheme
+
+  (define check-command
+    (lambda (v)
+      (cond
+        [(is-skip? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-sequence? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-assign? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-conditional? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-while? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-switch? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [else
+         (begin
+           (or check-silently
+               (printf "check-command -- ill-formed input: ~s~n" v))
+           #f)])))
+
+
+The case of the skip command
+----------------------------
+
+The skip command is already in the sample of well-formed commands.
+
+As for the clause for skip, in the definition of ``check-command``, it
+should simply yield ``#t`` since this command has no sub-nodes:
+
+.. code-block:: scheme
+
+  (define check-command
+    (lambda (v)
+      (cond
+        [(is-skip? v)  ;;; <---***---
+         #t]           ;;; <---***---
+        [(is-sequence? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-assign? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-conditional? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-while? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-switch? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [else
+         (begin
+           (or check-silently
+               (printf "check-command -- ill-formed input: ~s~n" v))
+           #f)])))
+
+Let us run the test::
+
+  > (test-well-formed-commands)
+  #t
+  > 
+
+Success.
+
+
+The case of sequences
+---------------------
+
+A sequence groups two commands.  So let us add such a grouping to the
+sample, building on the previous version of
+``sample-of-well-formed-commands``:
+
+.. code-block:: scheme
+
+  (define sample-of-well-formed-commands
+    (cons (make-sequence (make-skip)
+                         (make-skip))
+          sample-of-well-formed-commands))
+
+As for the clause for the sequence command, in the definition of
+``check-command``, it should simply check whether the first and the
+second sub-nodes are well-formed commands:
+
+.. code-block:: scheme
+
+  (define check-command
+    (lambda (v)
+      (cond
+        [(is-skip? v)
+         #t]         
+        [(is-sequence? v)                       ;;; <---***---
+         (and (check-command (sequence-1 v))    ;;; <---***---
+              (check-command (sequence-2 v)))]  ;;; <---***---
+        [(is-assign? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-conditional? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-while? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-switch? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [else
+         (begin
+           (or check-silently
+               (printf "check-command -- ill-formed input: ~s~n" v))
+           #f)])))
+
+Let us run the test::
+
+  > (test-well-formed-commands)
+  #t
+  > 
+
+Success.
+
+Let us add a handful of sequence commands to the sample, again
+building on the previous version of
+``sample-of-well-formed-commands``:
+
+.. code-block:: scheme
+
+  (define make-random-sequence
+    (lambda ()
+      (make-sequence (list-ref sample-of-well-formed-commands
+                               (random (length sample-of-well-formed-commands)))
+                     (list-ref sample-of-well-formed-commands
+                               (random (length sample-of-well-formed-commands))))))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-sequence)
+          sample-of-well-formed-commands))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-sequence)
+          sample-of-well-formed-commands))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-sequence)
+          sample-of-well-formed-commands))
+
+  ;;; ad libitum
+
+Let us run the test again::
+
+  > (test-well-formed-commands)
+  #t
+  > 
+
+Success again.
+
+
+The case of assignments
+-----------------------
+
+An assignment involves a reference and an expression.  So let us add
+such an assignment to the sample, building on the previous version of
+``sample-of-well-formed-commands``:
+
+.. code-block:: scheme
+
+  (define sample-of-well-formed-commands
+    (cons (make-assign (make-location 0)
+                       (make-constant #t))
+          sample-of-well-formed-commands))
+
+As for the clause for assignments, in the definition of
+``check-command``, it should simply check whether the first sub-node is
+a well-formed reference and the second sub-node is a well-formed expression:
+
+.. code-block:: scheme
+
+  (define check-command
+    (lambda (v)
+      (cond
+        [(is-skip? v)
+         #t]         
+        [(is-sequence? v)                   
+         (and (check-command (sequence-1 v))  
+              (check-command (sequence-2 v)))]
+        [(is-assign? v)                          ;;; <---***---
+         (and (check-reference (assign-1 v))     ;;; <---***---
+              (check-expression (assign-2 v)))]  ;;; <---***---
+        [(is-conditional? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-while? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-switch? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [else
+         (begin
+           (or check-silently
+               (printf "check-command -- ill-formed input: ~s~n" v))
+           #f)])))
+
+Let us run the test::
+
+  > (test-well-formed-commands)
+  #t
+  > 
+
+Success.
+
+Let us add a handful of assignments to the sample, again building on
+the previous version of ``sample-of-well-formed-commands``:
+
+.. code-block:: scheme
+
+  (define make-random-assignment
+    (lambda ()
+      (make-assign (list-ref sample-of-well-formed-references
+                             (random (length sample-of-well-formed-references)))
+                   (list-ref sample-of-well-formed-expressions
+                             (random (length sample-of-well-formed-expressions))))))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-assignment)
+          sample-of-well-formed-commands))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-assignment)
+          sample-of-well-formed-commands))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-assignment)
+          sample-of-well-formed-commands))
+
+  ;;; ad libitum
+
+Let us run the test again::
+
+  > (test-well-formed-commands)
+  #t
+  > 
+
+Success again.
+
+
+The case of conditional commands
+--------------------------------
+
+A conditional command involves an expression and two commands.  So let
+us add such a command to the sample, building on the previous version
+of ``sample-of-well-formed-commands``:
+
+.. code-block:: scheme
+
+  (define sample-of-well-formed-commands
+    (cons (make-conditional (make-constant #t)
+                            (make-skip)
+                            (make-skip))
+          sample-of-well-formed-commands))
+
+As for the clause for conditional commands, in the definition of
+``check-command``, it should simply check whether the first sub-node is
+a well-formed expression and the second and third sub-nodes are
+well-formed commands:
+
+.. code-block:: scheme
+
+  (define check-command
+    (lambda (v)
+      (cond
+        [(is-skip? v)
+         #t]         
+        [(is-sequence? v)                   
+         (and (check-command (sequence-1 v))  
+              (check-command (sequence-2 v)))]
+        [(is-assign? v)                      
+         (and (check-reference (assign-1 v))   
+              (check-expression (assign-2 v)))]
+        [(is-conditional? v)                        ;;; <---***---
+         (and (check-expression (conditional-1 v))  ;;; <---***---
+              (check-command (conditional-2 v))     ;;; <---***---
+              (check-command (conditional-3 v)))]   ;;; <---***---
+        [(is-while? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [(is-switch? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [else
+         (begin
+           (or check-silently
+               (printf "check-command -- ill-formed input: ~s~n" v))
+           #f)])))
+
+Let us run the test::
+
+  > (test-well-formed-commands)
+  #t
+  > 
+
+Success.
+
+Let us add a handful of conditional commands to the sample, again
+building on the previous version of
+``sample-of-well-formed-commands``:
+
+.. code-block:: scheme
+
+  (define make-random-conditional-command
+    (lambda ()
+      (let ([number-of-well-formed-commands (length sample-of-well-formed-commands)])
+        (make-conditional (list-ref sample-of-well-formed-expressions
+                                    (random (length sample-of-well-formed-expressions)))
+                          (list-ref sample-of-well-formed-commands
+                                    (random number-of-well-formed-commands))
+                          (list-ref sample-of-well-formed-commands
+                                    (random number-of-well-formed-commands))))))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-conditional-command)
+          sample-of-well-formed-commands))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-conditional-command)
+          sample-of-well-formed-commands))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-conditional-command)
+          sample-of-well-formed-commands))
+
+  ;;; ad libitum
+
+Let us run the test again::
+
+  > (test-well-formed-commands)
+  #t
+  > 
+
+Success again.
+
+
+The case of while commands
+--------------------------
+
+A while command involves an expression and a command.  So let us add
+such an command to the sample, building on the previous version of
+``sample-of-well-formed-commands``:
+
+.. code-block:: scheme
+
+  (define sample-of-well-formed-commands
+    (cons (make-while (make-constant #f)
+                      (make-skip))
+          sample-of-well-formed-commands))
+
+As for the clause for conditional commands, in the definition of
+``check-command``, it should simply check whether the first sub-node is
+a well-formed expression and the second sub-node is a well-formed
+command:
+
+.. code-block:: scheme
+
+  (define check-command
+    (lambda (v)
+      (cond
+        [(is-skip? v)
+         #t]         
+        [(is-sequence? v)                   
+         (and (check-command (sequence-1 v))  
+              (check-command (sequence-2 v)))]
+        [(is-assign? v)                      
+         (and (check-reference (assign-1 v))   
+              (check-expression (assign-2 v)))]
+        [(is-conditional? v)                    
+         (and (check-expression (conditional-1 v))
+              (check-command (conditional-2 v))   
+              (check-command (conditional-3 v)))] 
+        [(is-while? v)                        ;;; <---***---
+         (and (check-expression (while-1 v))  ;;; <---***---
+              (check-command (while-2 v)))]   ;;; <---***---
+        [(is-switch? v)
+         (errorf 'check-command "not implemented yet: ~s" v)]
+        [else
+         (begin
+           (or check-silently
+               (printf "check-command -- ill-formed input: ~s~n" v))
+           #f)])))
+
+Let us run the test::
+
+  > (test-well-formed-commands)
+  #t
+  > 
+
+Success.
+
+Let us add a handful of while commands to the sample, again building
+on the previous version of ``sample-of-well-formed-commands``:
+
+.. code-block:: scheme
+
+  (define make-random-while-command
+    (lambda ()
+      (make-while (list-ref sample-of-well-formed-expressions
+                            (random (length sample-of-well-formed-expressions)))
+                  (list-ref sample-of-well-formed-commands
+                            (random (length sample-of-well-formed-commands))))))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-while-command)
+          sample-of-well-formed-commands))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-while-command)
+          sample-of-well-formed-commands))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-while-command)
+          sample-of-well-formed-commands))
+
+  ;;; ad libitum
+
+Let us run the test again::
+
+  > (test-well-formed-commands)
+  #t
+  > 
+
+Success again.
+
+
+The case of switch commands
+---------------------------
+
+A switch command involves an expression, a series of switch clauses
+(each of which involves a literal and a command) and a last clause
+(involving the tag ``otherwise`` and a command).  So let us add two
+such commands -- one with an empty list of clauses, and one with a
+non-empty list of clauses -- to the sample, building on the previous
+version of ``sample-of-well-formed-commands``:
+
+.. code-block:: scheme
+
+  (define sample-of-well-formed-commands
+    (cons (make-switch (make-constant #f)
+                       '()
+                       (make-skip))
+          (cons (make-switch (make-constant #f)
+                             (list (list #f (make-skip)))
+                             (make-skip))
+                sample-of-well-formed-commands)))
+
+As for the clause for switch commands, in the definition of
+``check-command``, it should default to a specialized predicate
+``check-switch-command`` with the first sub-node and the rest of the
+sub-nodes:
+
+.. code-block:: scheme
+
+  (define check-command
+    (lambda (v)
+      (cond
+        [(is-skip? v)
+         #t]         
+        [(is-sequence? v)                   
+         (and (check-command (sequence-1 v))  
+              (check-command (sequence-2 v)))]
+        [(is-assign? v)                      
+         (and (check-reference (assign-1 v))   
+              (check-expression (assign-2 v)))]
+        [(is-conditional? v)                    
+         (and (check-expression (conditional-1 v))
+              (check-command (conditional-2 v))   
+              (check-command (conditional-3 v)))] 
+        [(is-while? v)                    
+         (and (check-expression (while-1 v))
+              (check-command (while-2 v)))] 
+        [(is-switch? v)
+         (check-switch-command (switch-1 v)
+                               (switch-rest v))]
+        [else
+         (begin
+           (or check-silently
+               (printf "check-command -- ill-formed input: ~s~n" v))
+           #f)])))
+
+The specialized predicate ``check-switch-command`` should check whether
+the first sub-node is a well-formed expression, and then traverse the
+rest of the sub-nodes.  The rest of the sub-nodes should be a proper
+list whose last element should be a proper list of 2 elements: the tag
+``otherwise`` and a well-formed command.  The other elements of the
+list should be proper list of 2 elements: a well-formed literal and a
+well-formed command:
+
+.. code-block:: scheme
+
+  (define check-switch-command
+    (lambda (v vs)
+      (and (check-expression v)
+           (letrec ([visit (lambda (purported-clause rest)
+                             (cond
+                               [(null? rest)
+                                (and (proper-list-of-given-length? purported-clause 2)
+                                     (equal? (list-ref purported-clause 0) 'otherwise)
+                                     (check-command (list-ref purported-clause 1)))]
+                               [(pair? rest)
+                                (and (proper-list-of-given-length? purported-clause 2)
+                                     (check-literal (list-ref purported-clause 0))
+                                     (check-command (list-ref purported-clause 1))
+                                     (visit (car rest) (cdr rest)))]
+                               [else
+                                #f]))])
+             (visit (car vs) (cdr vs))))))
+
+Let us run the test::
+
+  > (test-well-formed-commands)
+  #t
+  > 
+
+Success.
+
+Let us add a handful of switch commands to the sample, again building
+on the previous version of ``sample-of-well-formed-commands``:
+
+.. code-block:: scheme
+
+  (define maximum-number-of-clauses-in-random-switch-command
+    10)
+
+  (define make-random-switch-command
+    (lambda ()
+      (make-switch (list-ref sample-of-well-formed-expressions
+                            (random (length sample-of-well-formed-expressions)))
+                   (map (lambda (whatever)
+                          (list (list-ref sample-of-well-formed-literals
+                                          (random (length sample-of-well-formed-literals)))
+                                (list-ref sample-of-well-formed-commands
+                                          (random (length sample-of-well-formed-commands)))))
+                        (iota (random maximum-number-of-clauses-in-random-switch-command)))
+                   (list-ref sample-of-well-formed-commands
+                             (random (length sample-of-well-formed-commands))))))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-switch-command)
+          sample-of-well-formed-commands))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-switch-command)
+          sample-of-well-formed-commands))
+
+  (define sample-of-well-formed-commands
+    (cons (make-random-switch-command)
+          sample-of-well-formed-commands))
+
+  ;;; ad libitum
+
+where ``map``, when applied to a procedure and to a list of values,
+applies the procedure to each of these values and yields the
+corresponding list of results, in the same order; and ``iota``, when
+applied to a natural number n, yields the list from 0 to n-1 (and the
+empty list if n is 0).
+
+Let us run the test again::
+
+  > (test-well-formed-commands)
+  #t
+  > 
+
+Success again, and we are done with commands.
+
+
+Exercise 1
+----------
+
+Modify ``check-switch-command`` so that it issues meaningful error
+messages for:
+
+* ill-formed else clauses,
+
+* ill-formed clauses, and
+
+* ill-formed lists of clauses.
+
+Devise ill-formed switch commands that give rise to your error
+messages, and test them.  Do you find your error messages informative?
+In other words, are they about the ill-formed switch command (the
+"what") or about its representation (the "how")?  Do you think an
+error message should be about how things are erroneously represented
+or about what they fail to represent?
+
+
+The predicate for programs
+--------------------------
+
+The relevant part of the grammar reads as follows:
+
+.. bnf:: parenthesized basic imperative language
+   :namespace: pbil
+   :noindex:
+
+      <program> ::= (top <command>)
+
+A program involves a command:
+
+.. code-block:: scheme
+
+  (define check-program
+    (lambda (v)
+      (if (is-top? v)
+          (check-command (top-1 v))
+          (begin
+            (or check-silently
+                (printf "check-program -- ill-formed input: ~s~n" v))
+            #f))))
+
+Let us run the test::
+
+  > (test-well-formed-programs)
+  #t
+  > 
+
+Success.
+
+Let us add a handful of program to the sample, again building on the
+previous version of ``sample-of-well-formed-programs``:
+
+.. code-block:: scheme
+
+  (define make-random-program
+    (lambda ()
+      (make-top (list-ref sample-of-well-formed-commands
+                          (random (length sample-of-well-formed-commands))))))
+
+  (define sample-of-well-formed-programs
+    (cons (make-random-program)
+          sample-of-well-formed-programs))
+
+  (define sample-of-well-formed-programs
+    (cons (make-random-program)
+          sample-of-well-formed-programs))
+
+  (define sample-of-well-formed-programs
+    (cons (make-random-program)
+          sample-of-well-formed-programs))
+
+  ;;; ad libitum
+
+Let us run the test again::
+
+  > (test-well-formed-programs)
+  #t
+  > 
+
+Success again, and we are done with programs.
+
+
+Reaping what we sowed
+---------------------
+
+To sum up, let us run all the well-formedness tests at once::
+
+  > (test-all-well-formed-things)
+  #t
+  > 
+
+Success.
+
+
+Testing ill-formedness
+----------------------
+
+We first define samples of ill-formed things.  We then define a
+generic testing procedure to test a list of ill-formed things.  Then
+we instantiate the generic testing procedure for each specific thing
+we want to test.
+
+
+Samples of ill-formed things
+----------------------------
+
+Let us write a representative sample of everything that could go
+wrong.  As literals, we can specify something else than a Boolean and
+an integer.  And instead of "suitably tagged proper list with the
+appropriate number of elements", we can provide non-lists, improper
+lists, pairs with unsuitable tags as car, and inappropriate numbers of
+elements (`muwhahaha <http://en.wikipedia.org/wiki/Evil_laugh>`_).
+And this time, we do not use the syntax constructors:
+
+.. code-block:: scheme
+
+  (define sample-of-ill-formed-literals
+    (list '()
+          "foo"
+          'bar
+          ;;; etc.
+          ))
+
+  (define sample-of-ill-formed-references
+    (list '()
+          'location
+          '(location)
+          '(location . whatever)
+          '(location -1)
+          '(location 0 . whatever)
+          '(location 0 whatever)
+          ;;; etc.
+          ))
+
+  (define sample-of-ill-formed-expressions
+    (list '()
+          ;;;
+          '(dereference)
+          '(dereference . whatever)
+          '(dereference 0)
+          '(dereference (make-location 0) whatever)
+          '(dereference (make-location 0) . whatever)
+          ;;; etc.
+          ;;;
+          '(constant)
+          '(constant . whatever)
+          '(constant "foo")
+          '(constant 42 whatever)
+          '(constant 42 . whatever)
+          ;;; etc.
+          ;;; 
+          '(unary-operation)
+          '(unary-operation . whatever)
+          '(unary-operation 'not)
+          '(unary-operation 'not . whatever)
+          '(unary-operation 'not (make-constant #f) . whatever)
+          '(unary-operation 'not (make-constant #f) whatever)
+          ;;; etc.
+          ;;;
+          '(binary-operation)
+          '(binary-operation . whatever)
+          '(binary-operation +)
+          '(binary-operation + . whatever)
+          '(binary-operation + (constant 10))
+          '(binary-operation + (constant 10) . whatever)
+          '(binary-operation + (constant 10) (constant 100) . whatever)
+          '(binary-operation + (constant 10) (constant 100) whatever)
+          ;;; etc.
+          ))
+
+  (define sample-of-ill-formed-commands
+    (list '()
+          ;;;
+          'skip
+          '(skip . whatever)
+          '(skip whatever)
+          ;;;
+          '(sequence)
+          '(sequence . whatever)
+          '(sequence (skip)
+                     . whatever)
+          '(sequence (skip)
+                     (assign 1 (constant 1001))
+                     . whatever)
+          '(sequence (skip)
+                     (assign 1 (constant 1001))
+                     whatever)
+          ;;; etc.
+          ;;;
+          '(assign)
+          '(assign . whatever)
+          '(assign 0)
+          '(assign 0 . whatever)
+          '(assign 0 (constant 1000) . whatever)
+          '(assign 0 (constant 1000) whatever)
+          ;;; etc.
+          ;;;
+          '(conditional)
+          '(conditional . whatever)
+          '(conditional (constant #t)
+                        . whatever)
+          '(conditional (constant #t)
+                        (skip))
+          '(conditional (constant #t)
+                        (skip)
+                        . whatever)
+          '(conditional (constant #t)
+                        (skip)
+                        (assign 1 (constant 1001))
+                        . whatever)
+          '(conditional (constant #t)
+                        (skip)
+                        (assign 1 (constant 1001))
+                        whatever)
+          ;;; etc.
+          ;;;
+          '(while)
+          '(while . whatever)
+          '(while (constant #f)
+                  . whatever)
+          '(while (constant #f)
+                  (skip)
+                  . whatever)
+          '(while (constant #f)
+                  (skip)
+                  whatever)
+          ;;; etc.
+          ;;;
+          '(switch)
+          '(switch . whatever)
+          '(switch (constant #f)
+             . whatever)
+          '(switch (constant #f)
+             whatever)
+          '(switch (constant #f)
+             [whatever otherwise])
+          '(switch (constant #f)
+             [otherwise (skip)]
+             . whatever)
+          '(switch (constant #f)
+              [otherwise (skip)]
+              whatever)
+          '(switch (constant #f)
+             whatever
+             [otherwise (skip)])
+          '(switch (constant #f)
+             [whatever]
+             [otherwise (skip)])
+          '(switch (constant #f)
+             [whatever-1 . whatever-2]
+             [otherwise (skip)])
+          '(switch (constant #f)
+             [whatever-1 whatever-2 . whatever-3]
+             [otherwise (skip)])
+          '(switch (constant #f)
+             [whatever-1 whatever-2 whatever-3]
+             [otherwise (skip)])
+          '(switch (constant #f)
+             [#t (constant 1000)]
+             [otherwise (skip)])
+          ;;; etc.
+          ))
+
+  (define sample-of-ill-formed-programs
+    (list '()
+          'top
+          '(top)
+          '(top . whatever)
+          '(top (skip) . whatever)
+          '(top (skip) whatever)
+          ;;; etc.
+          ))
+
+
+.. _a-generic-testing-procedure-to-test-ill-formed-things:
+
+A generic testing procedure to test ill-formed things
+-----------------------------------------------------
+
+Let us write a generic procedure that, given
+
+* the name of the things we want to test (i.e., literal, reference,
+  expression, command, and program),
+
+* a predicate for these things, and
+
+* a list containing a representative sample of ill-formed things,
+
+traverses the list and successively applies the predicate to each
+element in the list for as long as the predicate yields ``#f``.  If
+the predicate yields ``#t``, an error is raised and reports the name
+of the things that are being tested and which particular thing
+abused the predicate:
+
+.. code-block:: scheme
+
+  (define test-ill-formed-things
+    (lambda (name is-thing? things)
+      (letrec ([visit (lambda (things)
+                        (cond
+                          [(null? things)
+                           #t]
+                          [(pair? things)
+                           (if (is-thing? (car things))
+                               (errorf 'test-ill-formed-things
+                                       "incorrect result for ~s ~s"
+                                       name
+                                       (car things))
+                               (visit (cdr things)))]
+                          [else
+                           (errorf 'test-ill-formed-things
+                                   "not a proper list: ~s"
+                                   things)]))])
+        (visit things))))
+
+This series of tests succeeds if the predicate rejects each of the
+elements in the sample list.  It fails if the predicates accepts one
+element in the list, since all elements are supposed to be ill formed.
+
+
+Testing ill-formed literals
+---------------------------
+
+We define ``test-ill-formed-literals`` by instantiating
+``test-ill-formed-things`` with the predicate ``check-literal`` (which
+so far is incompletely defined) and the sample list of ill-formed
+literals:
+
+.. code-block:: scheme
+
+  (define test-ill-formed-literals
+    (lambda ()
+      (test-ill-formed-things 'literal
+                              check-literal
+                              sample-of-ill-formed-literals)))
+
+
+Testing ill-formed references
+-----------------------------
+
+We define ``test-ill-formed-references`` by instantiating
+``test-ill-formed-things`` with the predicate ``check-reference`` (which
+so far is incompletely defined) and the sample list of ill-formed
+references:
+
+.. code-block:: scheme
+
+  (define test-ill-formed-references
+    (lambda ()
+      (test-ill-formed-things 'reference
+                              check-reference
+                              sample-of-ill-formed-references)))
+
+
+Testing ill-formed expressions
+------------------------------
+
+We define ``test-ill-formed-expressions`` by instantiating
+``test-ill-formed-things`` with the predicate ``check-expression`` (which
+so far is incompletely defined) and the sample list of ill-formed
+expressions:
+
+.. code-block:: scheme
+
+  (define test-ill-formed-expressions
+    (lambda ()
+      (test-ill-formed-things 'expression
+                              check-expression
+                              sample-of-ill-formed-expressions)))
+
+
+Testing ill-formed commands
+---------------------------
+
+We define ``test-ill-formed-commands`` by instantiating
+``test-ill-formed-things`` with the predicate ``check-command`` (which
+so far is incompletely defined) and the sample list of ill-formed
+commands:
+
+.. code-block:: scheme
+
+  (define test-ill-formed-commands
+    (lambda ()
+      (test-ill-formed-things 'command
+                              check-command
+                              sample-of-ill-formed-commands)))
+
+
+Testing ill-formed programs
+---------------------------
+
+We define ``test-ill-formed-programs`` by instantiating
+``test-ill-formed-things`` with the predicate ``check-program`` (which
+so far is incompletely defined) and the sample list of ill-formed
+programs:
+
+.. code-block:: scheme
+
+  (define test-ill-formed-programs
+    (lambda ()
+      (test-ill-formed-things 'program
+                              check-program
+                              sample-of-ill-formed-programs)))
+
+
+Testing all ill-formed things at once
+-------------------------------------
+
+Thus equipped, we can group all the tests above:
+
+.. code-block:: scheme
+
+  (define test-all-ill-formed-things
+    (lambda ()
+      (and (test-ill-formed-literals)
+           (test-ill-formed-references)
+           (test-ill-formed-expressions)
+           (test-ill-formed-commands)
+           (test-ill-formed-programs))))
+
+
+Reaping what we sowed (continued)
+---------------------------------
+
+Let us run all the ill-formedness tests at once::
+
+  > (test-all-ill-formed-things)
+  #t
+  > 
+
+Success.
+
+
+Exercise 2:
+-----------
+
+Sigtryg the Square is really curious to see the error messages
+associated to the negative tests.  What should he do to see them being
+issued?
+
+Subsidiary question: do you find these error messages informative?
+
+
+Testing everything at once
+--------------------------
+
+We can also group all tests, for well and for ill:
+
+.. code-block:: scheme
+
+  (define test-all
+    (lambda ()
+      (and (test-all-well-formed-things)
+           (test-all-ill-formed-things))))
+
+
+
+Reaping what we sowed (ended)
+-----------------------------
+
+Let us run all the tests at once::
+
+  > (test-all)
+  #t
+  > 
+
+
+Resources
+---------
+
+* The Scheme code for `this entire syntax checker
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-basic-imperative-language_a-syntax-checker.scm>`_
+  (latest version: 15 Sep 2015)
+
+
+Version
+-------
+
+Created
+[15 Sep 2015]

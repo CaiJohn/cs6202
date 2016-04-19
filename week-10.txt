@@ -1,0 +1,1313 @@
+.. -*- mode: rst -*-
+
+Note for Week 10
+================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+None, but feel free to draw inspiration about them for your term project.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-10-self-interpreter.scm>`_
+  (latest version: 30 Oct 2015).
+
+
+Goal
+----
+
+.. index::
+   single: Reynolds, John C. (meta-circularity)
+
+.. index:: interpreter (meta-circular)
+
+The goal of this lecture note is to write a self-interpreter for a subset
+of Scheme where each feature in the defined language is implemented with
+the same feature in the defining language.  To use a term coined by `John
+Reynolds <https://en.wikipedia.org/wiki/John_C._Reynolds>`_, the goal is
+to write a *meta-circular* interpreter.  The lecture note is concluded
+with a question that is also due to John Reynolds: this meta-circular
+interpreter we have just written, does it specify a call-by-name or a
+call-by-value language?
+
+
+The subset of Scheme
+--------------------
+
+Let us aim for comfort, not for monastic minimalism.  The subset of
+Scheme features:
+
+* integers
+
+* booleans
+
+* strings
+
+* variables
+
+* quote-expressions
+
+* time-expressions to easily witness the evaluation of sub-expressions
+  and their computational cost
+
+* if-expressions
+
+* cond-expressions for comfort
+
+* unary let-expressions for comfort
+
+* unary letrec-expressions
+
+* lambda-abstractions of arity 0, 1, 2, 3, and 4
+
+* applications with 0, 1, 2, 3, and 4 operands
+
+The initial environment contains all the predefined bindings we may wish
+to inherit from Scheme (e.g., ``cons``, ``car``, and ``cdr`` as well as
+``errorf``) and all the paraphernalia used to implement the BNF of this
+subset of Scheme (e.g., ``is-quote?`` and ``quote_1``).
+
+
+.. bnf:: subset of Scheme
+   :noindex:
+   :namespace: subset-of-Scheme
+
+   <integer> ::= ...any Scheme integer...
+
+   <boolean> ::= ...any Scheme boolean...
+
+   <string> ::= ...any Scheme string...
+
+   <keyword> ::= quote | time | if | cond | else | let | letrec | lambda
+
+   <variable> ::= ...any Scheme symbol which is not a <keyword>...
+
+   <value> ::= ...any Scheme value...
+
+   <expression> ::= <integer>
+                  | <boolean>
+                  | <string>
+                  | <variable>
+                  | (quote <value>)
+                  | (time <expression>)
+                  | (if <expression> <expression> <expression>)
+                  | (cond {[<expression> <expression>]}* [else <expression>])
+                  | <lambda-abstraction>
+                  | <application>
+                  | (let ([<variable> <expression>]) <expression>)
+                  | (letrec ([<variable> <lambda-abstraction>]) <expression>)
+  
+   <lambda-abstraction> ::= (lambda () <expression>)
+                          | (lambda (<variable>) <expression>)
+                          | (lambda (<variable> <variable>) <expression>)
+                          | (lambda (<variable> <variable> <variable>) <expression>)
+                          | (lambda (<variable> <variable> <variable> <variable>) <expression>)
+  
+   <operator> ::= ...any <expression> that is not a <keyword>...
+
+   <operand> ::= <expression>
+
+   <application> ::= (<operator>)
+                   | (<operator> <operand>)
+                   | (<operator> <operand> <operand>)
+                   | (<operator> <operand> <operand> <operand>)
+                   | (<operator> <operand> <operand> <operand> <operand>)
+
+
+Unit tests
+----------
+
+* Given a candidate interpreter, the representation of a candidate
+  interpreter, a Scheme expression, and the expected result of evaluating
+  this Scheme expression, the following procedure tests whether applying
+  the candidate interpreter to the Scheme expression gives the expected
+  result:
+
+  .. code-block:: scheme
+  
+    (define Test-1
+      (lambda (candidate representation-of-candidate e v)
+        (or (equal? (candidate e)
+                    v)
+            (printf "Test-1 error: ~s / ~s~n" v e))))
+
+  This test procedure runs the first layer of a tower of interpreters:
+  the candidate interpreter processes the given expression.
+
+* Given a candidate interpreter, the representation of a candidate
+  interpreter, a Scheme expression, and the expected result of evaluating
+  this Scheme expression, the following procedure tests whether applying
+  the candidate interpreter to the application of the representation of
+  the candidate interpreter to the Scheme expression gives the expected
+  result:
+
+  .. code-block:: scheme
+  
+    (define Test-2
+      (lambda (candidate representation-of-candidate e v)
+        (or (equal? (candidate (list representation-of-candidate (list 'quote e)))
+                    v)
+            (printf "Test-2 error: ~s / ~s~n" v e))))
+
+  This test procedure runs the two first layers of a tower of interpreters:
+  the candidate interpreter processes the representation of the candidate
+  interpreter processing the given expression.
+
+* Given a candidate interpreter, the representation of a candidate
+  interpreter, a Scheme expression, and the expected result of evaluating
+  this Scheme expression, the following procedure tests whether applying
+  the candidate interpreter to the application of the representation of
+  the candidate interpreter to the application of the representation of
+  the candidate interpreter to the Scheme expression gives the expected
+  result:
+
+  .. code-block:: scheme
+  
+    (define Test-3
+      (lambda (candidate representation-of-candidate e v)
+        (or (equal? (candidate (list representation-of-candidate (list 'quote (list representation-of-candidate (list 'quote e)))))
+                    v)
+            (printf "Test-3 error: ~s / ~s~n" v e))))
+
+  This test procedure runs the three first layers of a tower of
+  interpreters: the candidate interpreter processes the representation of
+  the candidate interpreter processing the representation of the
+  candidate interpreter processing the given expression.
+
+
+Exercise 1
+----------
+
+* Define a test procedure ``Test-4`` that runs the four first layers of a
+  tower of interpreters.
+
+* Define a test procedure ``Test-5`` that runs the five first layers of a
+  tower of interpreters.
+
+
+Exercise 2
+----------
+
+Define a test procedure ``make-Test`` that given a non-negative integer
+n, returns a test procedure that runs the n first layers of a tower of
+interpreters:
+
+* applying ``make-Test`` to ``0`` should yield a procedure that is
+  equivalent to ``Test-0``;
+
+* applying ``make-Test`` to ``1`` should yield a procedure that is
+  equivalent to ``Test-1``;
+
+* applying ``make-Test`` to ``2`` should yield a procedure that is
+  equivalent to ``Test-2``;
+
+* etc.
+
+
+
+Putting the unit tests to work
+------------------------------
+
+Given a test procedure defined as above, a candidate interpreter, and the
+representation of a candidate interpreter, the following meta-test
+procedure applies the test procedure to a variety of source expressions.
+These source expressions include an integer, a boolean, a string, a
+quoted symbol, a time-expression, a few if-expressions and
+cond-expressions, the application of a few lambda-abstractions, and a few
+letrec-expressions:
+
+.. code-block:: scheme
+
+  (define meta-test-interpret
+    (lambda (test candidate representation-of-candidate)
+      (begin
+        (test candidate
+              representation-of-candidate
+              1
+              1)
+        (test candidate
+              representation-of-candidate
+              #t
+              #t)
+        (test candidate
+              representation-of-candidate
+              "foo"
+              "foo")
+        (test candidate
+              representation-of-candidate
+              ''symbol
+              'symbol)
+        (test candidate
+              representation-of-candidate
+              '(time "things take")
+              "things take")
+        (test candidate
+              representation-of-candidate
+              '(if #t 1 2)
+              1)
+        (test candidate
+              representation-of-candidate
+              '(if 3 1 2)
+              1)
+        (test candidate
+              representation-of-candidate
+              '(if #f 1 2)
+              2)
+        (test candidate
+              representation-of-candidate
+              '(cond [#f 1] [#f 2] [else 3])
+              3)
+        (test candidate
+              representation-of-candidate
+              '(cond [#f 1] [#t 2] [else 3])
+              2)
+        (test candidate
+              representation-of-candidate
+              '((lambda () 2))
+              2)
+        (test candidate
+              representation-of-candidate
+              '((lambda (x) 2) 3)
+              2)
+        (test candidate
+              representation-of-candidate
+              '((lambda (x) x) 3)
+              3)
+        (test candidate
+              representation-of-candidate
+              '((lambda (x y) x) 3 4)
+              3)
+        (test candidate
+              representation-of-candidate
+              '((lambda (x y) y) 3 4)
+              4)
+        (test candidate
+              representation-of-candidate
+              '(letrec ([foo (lambda (x) x)]) 1)
+              1)
+        (test candidate
+              representation-of-candidate
+              '(letrec ([foo (lambda (x) x)]) (foo 1))
+              1)
+        (test candidate
+              representation-of-candidate
+              '(letrec ([append (lambda (xs ys)
+                                  (cond
+                                   [(null? xs)
+                                    ys]
+                                   [(pair? xs)
+                                    (cons (car xs)
+                                          (append (cdr xs) ys))]
+                                   [else
+                                    (errorf 'append
+                                            "not a proper list: ~s"
+                                            xs)]))])
+                 (append '(1 2 3) '(4 5 6)))
+              '(1 2 3 4 5 6))
+        ;;; add more here
+        'done)))
+
+
+Food for thought:
+
+* Why are there no quotes when testing integers, Booleans, and strings?
+
+* Why the double quote and the single quote in the test for symbols?
+  Could any of them be removed?  All of them?
+
+* Why the single quote when testing parenthesized expressions?
+  Could it be removed?
+
+
+The following scenario illustrates the testing of the first five levels
+of the tower::
+
+  > (time (meta-test-interpret Test-1 interpret representation-of-interpret))
+  (time (eval (time_1 e) ...))
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time (meta-test-interpret Test-1 ...))
+      no collections
+      1 ms elapsed cpu time
+      1 ms elapsed real time
+      106960 bytes allocated
+  done
+  > (time (meta-test-interpret Test-2 interpret representation-of-interpret))
+  (time (eval (time_1 e) ...))
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      10736 bytes allocated
+  (time (meta-test-interpret Test-2 ...))
+      no collections
+      16 ms elapsed cpu time
+      15 ms elapsed real time
+      1356672 bytes allocated
+  done
+  > (time (meta-test-interpret Test-3 interpret representation-of-interpret))
+  (time (eval (time_1 e) ...))
+      no collections
+      3 ms elapsed cpu time
+      3 ms elapsed real time
+      457344 bytes allocated
+  (time (meta-test-interpret Test-3 ...))
+      6 collections
+      384 ms elapsed cpu time, including 3 ms collecting
+      386 ms elapsed real time, including 1 ms collecting
+      51475616 bytes allocated, including 50486048 bytes reclaimed
+  done
+  > (time (meta-test-interpret Test-4 interpret representation-of-interpret))
+  (time (eval (time_1 e) ...))
+      3 collections
+      153 ms elapsed cpu time, including 0 ms collecting
+      154 ms elapsed real time, including 0 ms collecting
+      20015904 bytes allocated, including 25241920 bytes reclaimed
+  (time (meta-test-interpret Test-4 ...))
+      266 collections
+      16429 ms elapsed cpu time, including 37 ms collecting
+      16461 ms elapsed real time, including 49 ms collecting
+      2242979104 bytes allocated, including 2238663984 bytes reclaimed
+  done
+  > (time (meta-test-interpret Test-5 interpret representation-of-interpret))
+  (time (eval (time_1 e) ...))
+      104 collections
+      6382 ms elapsed cpu time, including 24 ms collecting
+      6388 ms elapsed real time, including 22 ms collecting
+      876307104 bytes allocated, including 875267280 bytes reclaimed
+  (time (meta-test-interpret Test-5 ...))
+      11668 collections
+      718491 ms elapsed cpu time, including 1991 ms collecting
+      720443 ms elapsed real time, including 2034 ms collecting
+      98189231920 bytes allocated, including 98195803856 bytes reclaimed
+  done
+  > 
+
+The alert reader has already spotted the familiar exponential slowdown
+studied in :ref:`exercise-cost-of-interpretation` of Week 1.
+
+
+Implementation of the BNF
+-------------------------
+
+Implementing the BNF is routine, with the proviso that we do not need the
+constructors, since we directly write the representation of the Scheme
+programs as Scheme lists.
+
+
+Implementation of the environment
+---------------------------------
+
+Implementing the environment (as a procedure) is also routine:
+
+.. code-block:: scheme
+
+  (define make-env-empty
+    (lambda (name-of-the-interpreter)
+      (lambda (x)
+        (errorf name-of-the-interpreter
+                "unbound variable: ~s"
+                x))))
+  
+  (define env-lookup
+    (lambda (x env)
+      (env x)))
+  
+  (define env-extend-1
+    (lambda (x v env)
+      (lambda (y)
+        (if (eqv? y x)
+            v
+            (env y)))))
+
+
+Implementation of the initial environment
+-----------------------------------------
+
+Given (1) a list of all the variables used to implement the interpreter
+and (2) a list of all the corresponding values, *in the same order*,
+
+.. code-block:: scheme
+
+  (define predefined-variables
+    '(make-env-empty
+      env-lookup
+      env-extend-1
+      make-env-init
+      is-keyword?
+      is-integer?
+      is-boolean?
+      is-string?
+      is-variable?
+      is-quote?
+      quote_1
+      is-time?
+      time_1
+      is-if?
+      if_1
+      if_2
+      if_3
+      ...))
+  
+  (define predefined-values
+    (list make-env-empty
+          env-lookup
+          env-extend-1
+          make-env-init
+          is-keyword?
+          is-integer?
+          is-boolean?
+          is-string?
+          is-variable?
+          is-quote?
+          quote_1
+          is-time?
+          time_1
+          is-if?
+          if_1
+          if_2
+          if_3
+          ...))
+
+the following procedure manufactures the initial environment:
+
+.. code-block:: scheme
+
+  (define make-env-init
+    (lambda (name predefined-variables predefined-values)
+      (letrec ([visit (lambda (ns vs)
+                        (if (null? ns)
+                            (make-env-empty name)
+                            (env-extend-1 (car ns)
+                                          (car vs)
+                                          (visit (cdr ns)
+                                                 (cdr vs)))))])
+        (visit predefined-variables predefined-values))))
+
+
+Skeleton of the meta-circular interpreter
+-----------------------------------------
+
+The interpreter assumes that its input is syntactically correct,
+and is defined using a structurally recursive auxiliary procedure
+``eval`` that is given the expression to interpret in the initial
+environment:
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    [(is-integer? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-boolean? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-string? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-variable? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-quote? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-time? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-if? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-cond? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-lambda-0? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-lambda-1? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-lambda-2? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-lambda-3? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-lambda-4? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-application-0? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-application-1? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-application-2? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-application-3? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-application-4? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-let? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-letrec? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+
+Interpreting integers
+---------------------
+
+An integer in Scheme evaluates to itself.  Therefore given an integer,
+``eval`` returns it:
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    [(is-integer? e)
+                     e]
+                    ...
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+Examples::
+
+  > (interpret 0)
+  0
+  > (interpret -5)
+  -5
+  > (interpret 5)
+  5
+  > 
+
+
+Interpreting Booleans
+---------------------
+
+A Boolean in Scheme evaluates to itself.  Therefore given a Boolean,
+``eval`` returns it:
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    ...
+                    [(is-boolean? e)
+                     e]
+                    ...
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+Example::
+
+  > (interpret #t)
+  #t
+  > 
+
+
+Interpreting strings
+--------------------
+
+A string in Scheme evaluates to itself.  Therefore given a string,
+``eval`` returns it:
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    ...
+                    [(is-string? e)
+                     e]
+                    ...
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+Example::
+
+  > (interpret "a rose")
+  "a rose"
+  > 
+
+
+Interpreting variables
+----------------------
+
+A variable in Scheme evaluates to the value it denotes in the
+environment.  Therefore given a variable, ``eval`` looks it up in the
+current environment and returns the result:
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    ...
+                    [(is-variable? e)
+                     (env-lookup e env)]
+                    ...
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+Examples::
+
+  > (interpret 'is-variable?)
+  #<procedure>
+  > (interpret 'env-lookup)
+  #<procedure>
+  > (interpret 'errorf)
+  #<procedure errorf>
+  > 
+
+
+Interpreting quote-expressions
+------------------------------
+
+A quote-expression in Scheme evaluates to the value it quotes.  Therefore
+given a expression, ``eval`` returns this value:
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    ...
+                    [(is-quote? e)
+                     (quote_1 e)]
+                    ...
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+Examples::
+
+  > (interpret ''what?)
+  what?
+  > (interpret '''what?)
+  'what?
+  > (interpret ''''what?)
+  ''what?
+  > 
+
+.. epigraph::
+
+  | Han Solo: Don't quote me on that, but...
+  | Princess Leia: Say no more.
+  | Han Solo: No more?
+
+
+Interpreting time-expressions
+-----------------------------
+
+A time-expression in Scheme contains one sub-expression.  Evaluating a
+time-expression yields the result of evaluating this sub-expression and
+as a byproduct, it prints out how much resource (time and space) was
+spent evaluating this sub-expression.
+
+That is a job for a time-expression in the meta-language:
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    ...
+                    [(is-time? e)
+                     (time (eval (time_1 e) env))]
+                    ...
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+Example::
+
+  > (interpret '(time "something more to say"))
+  (time (eval (time_1 e) ...))
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  "something more to say"
+  > 
+
+.. epigraph::
+
+  | Vigfus: Ah!  Someone is showing us the way.
+  | Sigtryg: Then it's time to stop kicking around...
+  | Alfrothul: ...on a piece of ground...
+  | Hagar: ...in our home town.
+  | Brynja: And you guys have waited your whole life to say this, right?
+
+
+Interpreting if-expressions
+---------------------------
+
+An if-expression in Scheme contains three sub-expressions: a test, a
+consequent, and an alternative.
+To evaluate an if-expression, the test is first evaluated.
+If this evaluation yields ``#f``, the alternative is evaluated (and the
+consequent is not evaluated) and yields the result of the
+if-expression.
+Otherwise, the consequent is evaluated (and the
+alternative is not evaluated) and yields the result of the
+if-expression.
+
+That is a job for a if-expression in the meta-language:
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    ...
+                    [(is-if? e)
+                     (if (eval (if_1 e) env)
+                         (eval (if_2 e) env)
+                         (eval (if_3 e) env))]
+                    ...
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+Examples::
+
+  > (interpret '(if 'Atom 'Heart 'Mother))
+  Heart
+  > (interpret '(if #f 'Pink 'Floyd))
+  Floyd
+  > 
+
+.. epigraph::
+
+  | Harald: Nice quotes, don't you think?
+  | Loki: "Culture is like jam -- the less you have of it, the more you spread it."
+  | Michael Glad (popping by): Is this a self-referential quote by any chance?  I really love those.
+
+
+Interpreting cond-expressions
+-----------------------------
+
+A cond-expression is evaluated as if it were a series of nested
+if-expressions.  The test is evaluated in each successive cond clause:
+
+* if it evaluates to ``#f``, the next clause is considered (and the
+  consequent is not evaluated);
+
+* otherwise, the consequent is evaluated, and its result is the result of
+  the cond-expression.
+
+If all the successive tests have evaluated to ``#f``, the last
+alternative (i.e., the expression in the else clause) is evaluated, and
+its result is the result of the cond-expression.
+
+To interpret a cond-expression, we traverse it recursively:
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    ...
+                    [(is-cond? e)
+                     (letrec ([visit
+                               (lambda (c cs)
+                                 (cond
+                                   [(null? cs)
+                                    (eval (clause_2 c) env)]
+                                   [(eval (clause_1 c) env)
+                                    (eval (clause_2 c) env)]
+                                   [else
+                                    (visit (car cs) (cdr cs))]))])
+                       (visit (cond_1 e) (cond_rest e)))]
+                    ...
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+Examples::
+
+  > (interpret '(cond ['Atom 'Heart] [else 'Mother]))
+  Heart
+  > (interpret '(cond [#f 'Pink] [else 'Floyd]))
+  Floyd
+  > (interpret '(cond [#f 'Pink] [#f 'Floyd] [else 'nothing]))
+  nothing
+  > 
+
+
+Interpreting lambda-abstractions
+--------------------------------
+
+A lambda-abstraction consists of formal parameters and a body, which is
+an expression.  The formal parameters here consist of a proper list of
+zero to four distinct variables, for no other reason than that of
+convenience, to comfortably express not only the interpreter but also its
+unit tests.
+
+Lambda-abstractions evaluate to procedures that, when applied to actual
+parameters, extend the lexical environment by binding the formal
+parameters to the actual parameters, and evaluate the body of the
+lambda-abstraction:
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    ...
+                    [(is-lambda-0? e)
+                     (let ([lambda-body (lambda_2 e)])
+                       (lambda ()
+                         (eval lambda-body env)))]
+                    [(is-lambda-1? e)
+                     (let ([lambda-formals (lambda_1 e)])
+                       (let ([lambda-body (lambda_2 e)])
+                         (let ([x1 (list-ref lambda-formals 0)])
+                           (lambda (v1)
+                             (eval lambda-body (env-extend-1 x1 v1 env))))))]
+                    [(is-lambda-2? e)
+                     (let ([lambda-formals (lambda_1 e)])
+                       (let ([lambda-body (lambda_2 e)])
+                         (let ([x1 (list-ref lambda-formals 0)])
+                           (let ([x2 (list-ref lambda-formals 1)])
+                             (lambda (v1 v2)
+                               (eval lambda-body (env-extend-1 x2 v2 (env-extend-1 x1 v1 env))))))))]
+                    [(is-lambda-3? e)
+                     (errorf 'interpret "not implemented yet")]
+                    [(is-lambda-4? e)
+                     (errorf 'interpret "not implemented yet")]                    ...
+                    ...
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+
+Exercise 3
+----------
+
+Complete the clauses for lambda-abstractions of arity 3 and 4.
+
+
+Interpreting applications
+-------------------------
+
+An application consists of an operator (which is an expression, i.e.,
+not a keyword) and zero to four operands (which are expressions).
+
+Evaluating an application is achieved by applying the value of the
+operator to the value of the operands:
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    ...
+                    [(is-application-0? e)
+                     (let ([operator (application_0 e)])
+                       ((eval operator env)))]
+                    [(is-application-1? e)
+                     (let ([operator (application_0 e)])
+                       (let ([operand1 (application_1 e)])
+                         ((eval operator env)
+                          (eval operand1 env))))]
+                    [(is-application-2? e)
+                     (let ([operator (application_0 e)])
+                       (let ([operand1 (application_1 e)])
+                         (let ([operand2 (application_2 e)])
+                           ((eval operator env)
+                            (eval operand1 env)
+                            (eval operand2 env)))))]
+                    [(is-application-3? e)
+                     (errorf 'interpret "not implemented yet: 3-ary applications")]
+                    [(is-application-4? e)
+                     (errorf 'interpret "not implemented yet: 4-ary applications")]
+                    ...
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+Examples:
+
+* In the following interaction, a zero-ary lambda-abstraction, ``(lambda
+  () 2)``, is applied to zero arguments.  The expression ``2`` is then
+  evaluated::
+
+    > (interpret '((lambda () 2)))
+    2
+    > 
+
+* In the following interaction, a unary lambda-abstraction, ``(lambda (x)
+  2)`` is appplied to one argument, ``3``.  The expression ``2`` is then
+  evaluated in an environment where ``x`` denotes ``3``::
+
+    > (interpret '((lambda (x) 2) 3))
+    2
+    > 
+
+* In the following interaction, a unary lambda-abstraction, ``(lambda (x)
+  x)`` implementing the identity function is appplied to one argument,
+  ``3``.  The expression ``x`` is then evaluated in an environment where
+  ``x`` denotes ``3``::
+
+    > (interpret '((lambda (x) x) 3))
+    3
+    > 
+
+* In the following interaction, a binary lambda-abstraction, ``(lambda (x
+  y) x)`` is appplied to two argument, ``3`` and ``4``.  The expression
+  ``x`` is then evaluated in an environment where ``x`` denotes ``3`` and
+  ``y`` denotes ``4``::
+
+    > (interpret '((lambda (x y) x) 3 4))
+    3
+    > 
+
+* In the following interaction, a binary lambda-abstraction, ``(lambda (x
+  y) y)`` is appplied to two argument, ``3`` and ``4``.  The expression
+  ``y`` is then evaluated in an environment where ``x`` denotes ``3`` and
+  ``y`` denotes ``4``::
+
+    > (interpret '((lambda (x y) y) 3 4))
+    4
+    > 
+
+
+Exercise 4
+----------
+
+Complete the clauses for applications with 3 and 4 operands.
+
+
+Interpreting let-expressions
+----------------------------
+
+A let-expression consists of a header and a body, which is an
+expression.  The header here consists in one clause: a variable and a
+definiens, which is an expression.
+
+When a let-expression is evaluated, the let-definiens is evaluated, the
+let-variable is bound to the resulting value, and the resulting binding
+extends the current environment.  The let-body is then evaluated in this
+extended environment.  Its result is the result of evaluating the
+let-expression:
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    ...
+                    [(is-let? e)
+                     (let ([let-headers (let_1 e)])
+                       (let ([let-header (car let-headers)])
+                         (let ([let-var (clause_1 let-header)])
+                           (let ([let-exp (clause_2 let-header)])
+                             (let ([let-body (let_2 e)])
+                               (eval let-body
+                                     (env-extend-1 let-var
+                                                   (eval let-exp env)
+                                                   env)))))))]
+                    ...
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+Examples::
+
+  > (interpret '(let ([x 'Atom]) (if x 'Heart 'Mother)))
+  Heart
+  > (interpret '(let ([x #f]) (if x 'Pink 'Floyd)))
+  Floyd
+  > 
+
+
+Exercise 5
+----------
+
+Considering that a let-expression ``(let ([x e]) body)`` is syntactic
+sugar for ``((lambda (x) body) e)``, propose an alternative clause for
+let-expressions, based on the clauses for lambda-abstractions and for
+applications.  How does your alternative clause compare to the one above?
+
+
+Interpreting letrec-expressions
+-------------------------------
+
+A letrec-expression consists of a header and a body, which is an
+expression.  The header here consists in one clause: a variable and a
+definiens, which is a lambda-abstraction.
+
+When a letrec-expression is evaluated, the letrec-definiens is
+evaluated recursively, the letrec-variable is bound to the resulting
+value, and the resulting binding extends the current environment.  The
+letrec-body is then evaluated in this extended environment.  Its result
+is the result of evaluating the let-expression:
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    ...
+                    [(is-letrec? e)
+                     (let ([letrec-headers (letrec_1 e)])
+                       (let ([letrec-header (car letrec-headers)])
+                         (let ([letrec-var (clause_1 letrec-header)])
+                           (let ([letrec-lam (clause_2 letrec-header)])
+                             (let ([letrec-lam-formals (lambda_1 letrec-lam)])
+                               (let ([letrec-lam-body (lambda_2 letrec-lam)])
+                                 (let ([letrec-body (letrec_2 e)])
+                                   (cond
+                                     [(is-lambda-0? letrec-lam)
+                                      (letrec ([self (lambda ()
+                                                       (eval letrec-lam-body
+                                                             (env-extend-1 letrec-var self env)))])
+                                        (eval letrec-body (env-extend-1 letrec-var self env)))]
+                                     [(is-lambda-1? letrec-lam)
+                                      (let ([x1 (list-ref letrec-lam-formals 0)])
+                                        (letrec ([self (lambda (v1)
+                                                         (eval letrec-lam-body
+                                                               (env-extend-1 x1 v1 (env-extend-1 letrec-var self env))))])
+                                          (eval letrec-body (env-extend-1 letrec-var self env))))]
+                                     [(is-lambda-2? letrec-lam)
+                                      (let ([x1 (list-ref letrec-lam-formals 0)])
+                                        (let ([x2 (list-ref letrec-lam-formals 1)])
+                                          (letrec ([self (lambda (v1 v2)
+                                                           (eval letrec-lam-body
+                                                                 (env-extend-1 x2 v2 (env-extend-1 x1 v1 (env-extend-1 letrec-var self env)))))])
+                                            (eval letrec-body (env-extend-1 letrec-var self env)))))]
+                                     [(is-lambda-3? letrec-lam)
+                                      (errorf 'interpret "not implemented yet: 3-ary recursive lambda-abstractions")]
+                                     [(is-lambda-4? letrec-lam)
+                                      (errorf 'interpret "not implemented yet: 4-ary recursive lambda-abstractions")]
+                                     [else
+                                      (errorf 'interpret
+                                              "invalid lambda-abstraction in letrec: ~s"
+                                              letrec-lam)]))))))))]
+                    ...
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+Examples::
+
+  > (interpret '(letrec ([append (lambda (xs ys)
+                                   (cond
+                                    [(null? xs)
+                                     ys]
+                                    [(pair? xs)
+                                     (cons (car xs)
+                                           (append (cdr xs) ys))]
+                                    [else
+                                     (errorf 'append
+                                             "not a proper list: ~s"
+                                             xs)]))])
+                  (append '() '(4 5 6))))
+  (4 5 6)
+  > (interpret '(let ([ys '(4 5 6)])
+                  (letrec ([visit (lambda (xs)
+                                  (cond
+                                    [(null? xs)
+                                     ys]
+                                    [(pair? xs)
+                                     (cons (car xs)
+                                           (visit (cdr xs)))]
+                                    [else
+                                     (errorf 'append
+                                             "not a proper list: ~s"
+                                             xs)]))])
+                  (visit '(1 2 3)))))
+  (1 2 3 4 5 6)
+  > 
+
+
+Exercise 6
+----------
+
+Complete the clauses for recursive lambda-abstractions of arity 3 and 4.
+
+
+Interpreting letrec-expressions, revisited
+------------------------------------------
+
+.. index::
+   single: Reynolds, John C. (recursive environment)
+
+Defining each procedure recursively, as done just above, is quite
+voluminous.  John Reynolds suggested a simpler and shorter alternative:
+to extend *the environment* recursively instead.
+
+.. code-block:: scheme
+
+  (define interpret
+    (lambda (e)
+      (letrec ([eval
+                (lambda (e env)
+                  (cond
+                    ...
+                    [(is-letrec? e)
+                     (let ([letrec-headers (letrec_1 e)])
+                       (let ([letrec-header (car letrec-headers)])
+                         (let ([letrec-var (clause_1 letrec-header)])
+                           (let ([letrec-lam (clause_2 letrec-header)])
+                             (let ([letrec-body (letrec_2 e)])
+                               (letrec ([env-rec
+                                         (lambda (x)
+                                           (if (equal? x letrec-var)
+                                               (eval letrec-lam env-rec)
+                                               (env x)))])
+                                 (eval letrec-body env-rec)))))))]
+                    [else
+                     (errorf 'interpret
+                             "unrecognized input: ~s"
+                             e)]))])
+        (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+
+The meta-circular interpreter and its representation
+----------------------------------------------------
+
+Let us now define the *representation* of the meta-circular interpreter,
+using the very same code as in the definition of ``interpret`` just
+above, but quoted:
+
+.. code-block:: scheme
+
+  (define representation-of-interpret
+    '(lambda (e)
+       (letrec ([eval ...])
+         (eval e (make-env-init 'interpret predefined-variables predefined-values)))))
+
+
+Checkpoint
+----------
+
+We have written a meta-circular interpreter for a subset of Scheme, in
+relative comfort.  This interpreter passes the unit test for the first
+level of the tower::
+
+  > (time (meta-test-interpret Test-1 interpret representation-of-interpret))
+  (time (eval (time_1 e) ...))
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time (meta-test-interpret Test-1 ...))
+      no collections
+      1 ms elapsed cpu time
+      1 ms elapsed real time
+      106960 bytes allocated
+  done
+  > 
+
+However, the interpreter does not pass the unit test for the second level
+of the tower::
+
+  > (time (meta-test-interpret Test-2 interpret representation-of-interpret))
+  
+  Exception in interpret: unbound variable: predefined-variables
+  Type (debug) to enter the debugger.
+  > 
+
+
+Exercise 7
+----------
+
+Fix the error mentioned just above and verify whether the interpreter
+passes the unit test for the two first levels of the tower.
+
+
+Exercise 8
+----------
+
+Verify whether the interpreter passes the unit test for the three first
+levels of the tower.
+
+Exercise 9
+----------
+
+Verify whether the interpreter passes the unit test for the four first
+levels of the tower.
+
+
+A closing question
+------------------
+
+Do you think the meta-circular interpreter specifies a call-by-value or a
+call-by-name version of Scheme?
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-10-self-interpreter.scm>`_
+  (latest version: 30 Oct 2015).
+
+
+Version
+-------
+
+Created
+[30 Oct 2015]

@@ -1,0 +1,292 @@
+.. -*- mode: rst -*-
+
+Supplementary note for Week 2 about induction proofs
+====================================================
+
+
+Optional exercise (for the overachievers)
+-----------------------------------------
+
+.. epigraph::
+
+   | It's only work if you have to do it.
+
+   -- `Calvin <http://en.wikipedia.org/wiki/Calvin_and_Hobbes>`_
+
+* :ref:`exercise-addition-is-commutative`
+
+
+Associativity of addition
+-------------------------
+
+Let us revisit the addition function from the section on `adding two
+natural numbers <week-2.html#adding-two-natural-numbers>`_:
+
+  * Base case:
+    for all natural numbers n2, plus (0, n2) = n2
+
+  * Induction case:
+    for all natural numbers k and n2, plus (1 + k, n2) = 1 + plus (k, n2)
+
+Let us prove that ``plus`` is associative, i.e., for all natural
+numbers ``n1``, ``n2``, and ``n3``, the equality ``plus (plus (n1,
+n2), n3) = plus (n1, plus (n2, n3))`` holds.  To this end, and as in
+`Week 1
+<week-1-induction-proofs.html#the-canonical-example-of-mathematical-induction>`_,
+we define a property and index it by a natural number ``n``::
+
+  for all n, A(n) is
+    for all n2 and n3,
+      plus (plus (n, n2), n3) = plus (n, plus (n2, n3))
+
+Let us prove that ``A(n)`` holds for any natural number ``n``, by
+induction on ``n``.
+
+* **Base** **case:**
+
+  We need to show that ``A(0)`` holds, i.e., that the following
+  statement holds::
+
+    for all n2 and n3,
+      plus (plus (0, n2), n3)
+      =
+      plus (0, plus (n2, n3))
+
+  For any given ``n2`` and ``n3``,
+  let us start from the left-hand side and reason our way towards
+  obtaining the right-hand side::
+
+    plus (plus (0, n2), n3)
+    = {base case of addition for n2, from left to right}
+    plus (n2, n3)
+    = {base case of addition for plus (n2, n3), from right to left}
+    plus (0, plus (n2, n3))
+
+  which coincides with the right-hand side.
+
+  So the equality holds for any given ``n2`` and ``n3``,
+  i.e. ``A(0)`` holds.
+  The base case is thus proved.
+
+* **Induction** **case:**
+
+  Assuming that ``A(k)`` holds for some natural number ``k``,
+  we need to show that ``A(1 + k)`` holds as well.
+
+  The induction hypothesis reads::
+
+    for all n2 and n3,
+      plus (plus (k, n2), n3) = plus (k, plus (n2, n3))
+
+  We need to show that the following statement holds:: 
+
+    for all n2 and n3,
+      plus (plus (1 + k, n2), n3) = plus (1 + k, plus (n2, n3))
+
+  For any given ``n2`` and ``n3``,
+  let us start from the left-hand side and reason our way towards
+  obtaining the right-hand side::
+
+    plus (plus (1 + k, n2), n3)
+    = {induction case of addition for k and n2, from left to right}
+    plus (1 + plus (k, n2), n3)
+    = {induction case of addition for plus (k, n2) and n3, from left to right}
+    1 + plus (plus (k, n2), n3)
+    = {by induction hypothesis}
+    1 + plus (k, plus (n2, n3))
+    = {induction case of addition for k and plus (n2, n3), from right to left}
+    plus (1 + k, plus (n2, n3))
+
+  which coincides with the right-hand side.
+
+  Since the left-hand side and the right-hand side are equal,
+  the equality holds for any given ``n2`` and ``n3``,
+  i.e., ``A(1 + k)`` holds.
+  The induction case is thus proved.
+
+So we have shown that ``A(0)`` holds, and that for any natural number
+``k`` such that ``A(k)`` holds, ``A(1+k)`` holds as well.  Therefore,
+the property ``A(n)`` holds for all natural numbers ``n``, and
+the addition function is associative.
+
+
+.. _exercise-zero-is-right-neutral-for-addition:
+
+Exercise 1
+----------
+
+Prove that 0 is neutral on the right of an addition.
+(In other words, prove that for all natural numbers ``n``, the equality
+``plus (n, 0) = n`` holds.
+(Hint: reason by induction over ``n``, as we did just above to prove
+that the addition function is associative.))
+
+
+.. _exercise-about-the-successor-of-an-addition:
+
+Exercise 2
+----------
+
+Prove that for all natural numbers ``n1`` and ``n2``, the equality
+``plus (n1, 1 + n2) = 1 + plus (n1, n2)`` holds.
+(Hint: reason by induction over ``n1``.)
+
+
+.. _exercise-addition-is-commutative:
+
+Exercise 3
+----------
+
+In this optional exercise, you are asked to
+prove that the addition function is commutative.
+(In other words, you should prove that for all natural numbers ``n1`` and ``n2``,
+the equality ``plus (n1, n2) = plus (n2, n1)`` holds.
+(Hint: in the base case of your induction proof, use the result of
+:ref:`exercise-zero-is-right-neutral-for-addition`, and in the
+induction case, use the result of
+:ref:`exercise-about-the-successor-of-an-addition`.
+(Meta-hint: the hint suggests you reason by induction.
+(Meta-meta-hint: read the meta-hint.))))
+
+
+.. _exercise-multiplication-is-associative:
+
+Exercise 4
+----------
+
+Show whether the multiplication function over natural numbers is associative:
+if it is associative, present a formal proof;
+if it is not associative, exhibit a counter-example.
+
+
+Program equivalence
+-------------------
+
+To conclude this lecture note, let us show that ``plus`` (defined in
+the section on :ref:`adding-two-natural-numbers`) and ``plus_alt``
+(defined in the section on :ref:`adding-two-natural-numbers-tail-recursively`)
+implement the same function:
+
+.. code-block:: scheme
+
+  (define plus
+    (lambda (n1 n2)
+      (if (zero? n1)
+          ; the base case:
+          n2
+          ; the induction case:
+          (1+ (plus (1- n1) n2)))))
+
+  (define plus_alt
+    (lambda (n1 n2)
+      (if (zero? n1)
+          ; the base case:
+          n2
+          ; the induction case:
+          (plus_alt (1- n1) (1+ n2)))))
+
+To this end, we shall reason algebraically over Scheme expressions,
+writing ``e1 =~= e2`` whenever the two Scheme expressions ``e1`` and
+``e2`` evaluate to the same result.  So let us show that given the
+same input, ``plus_alt`` and ``plus`` yield the same output.
+
+More formally, let us show that for all natural numbers ``n1`` and
+``n2``, ``(plus_alt n1 n2) =~= (plus n1 n2)``.  To this end, let us
+define a property and index it by a natural number ``n``::
+
+  for all n, S(n) is
+    for all n2,
+      (plus_alt n n2) =~= (plus n n2)
+
+Let us prove that ``S(n)`` holds for any natural number ``n``, by
+induction on ``n``.
+
+* **Base** **case:**
+
+  We need to show that ``S(0)`` holds, i.e., that the following
+  statement holds::
+
+    for all n2,
+      (plus_alt 0 n2) =~= (plus 0 n2)
+
+  For any given ``n2``,
+  let us start from the left-hand side and reason our way towards
+  obtaining the right-hand side::
+
+    (plus_alt 0 n2)
+    =~= {base case of plus_alt, from left to right}
+    n2
+
+  Likewise, let us start from the right-hand side and reason our way
+  towards obtaining the left-hand side::
+
+    (plus 0 n2)
+    =~= {base case of plus, from left to right}
+    n2
+
+  We obtain the same expression ``n2`` and so ``(plus_alt 0 n2)`` and
+  ``(plus 0 n2)`` evaluate to the same result.  Therefore ``S(0)``
+  holds.
+  The base case is thus proved.
+
+* **Induction** **case:**
+
+  Assuming that ``S(k)`` holds for some natural number ``k``,
+  we need to show that ``S(1 + k)`` holds as well.
+
+  The induction hypothesis reads::
+
+    for all n2,
+      (plus_alt k n2) =~= (plus k n2)
+
+  We need to show that the following statement holds:: 
+
+    for all n2,
+      (plus_alt (1+ k) n2) =~= (plus (1+ k) n2)
+
+  For any given ``n2``,
+  let us start from the left-hand side and reason our way towards
+  obtaining the right-hand side::
+
+    (plus_alt (1+ k) n2)
+    =~= {induction case of plus_alt, from left to right}
+    (plus_alt k (1+ n2))
+    =~= {by induction hypothesis for (1+ n2), from left to right}
+    (plus k (1+ n2))
+    =~= {commutativity of plus, by Exercise 6}
+    (plus (1+ n2) k)
+    =~= {induction case of plus, from left to right}
+    (1+ (plus n2 k))
+    =~= {commutativity of plus, by Exercise 6}
+    (1+ (plus k n2))
+
+  Likewise, let us start from the right-hand side and reason our way
+  towards obtaining the left-hand side::
+
+    (plus (1+ k) n2)
+    =~= {induction case of plus, from left to right}
+    (1+ (plus k n2))
+
+  We obtain the same expression ``(1+ (plus k n2))``, and so ``(plus_alt
+  (1+ k) n2)`` and ``(plus (1+ k) n2)`` evaluate to the same
+  expression and therefore to the same result.
+  Therefore ``S(1 + k)`` holds.
+  The induction case is thus proved.
+
+So we have shown that ``S(0)`` holds, and that for any natural number
+``k`` such that ``S(k)`` holds, ``S(1+k)`` holds as well.  Therefore,
+the property ``S(n)`` holds for all natural numbers ``n``, and so
+``plus`` and ``plus_alt`` implement the same function.
+
+
+Version
+-------
+
+Adopted the same notation for plus as in the lecture note of `Week 2
+<week-2.html>`_, after a remark by Ta Quang Trung
+[11 Sep 2015]
+
+Created
+[19 Aug 2015]
+
+

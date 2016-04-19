@@ -1,0 +1,282 @@
+.. -*- mode: rst -*-
+
+Note for Week 12
+================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+None.
+
+
+Resources
+---------
+
+* The Scheme code for `arithmetic expressions
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-12-arithmetic-expressions.scm>`_
+  (latest version: 13 Nov 2015).
+
+* The Scheme code for `boolean expressions
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-12-boolean-expressions.scm>`_
+  (latest version: 13 Nov 2015).
+
+
+Goal
+----
+
+The goal of this lecture note is to program small-step semantics for
+arithmetic expressions and for Boolean expressions.
+
+
+Arithmetic expressions
+----------------------
+
+The source language is the usual one, sort of:
+
+.. bnf:: arithmetic expressions again
+   :noindex:
+   :namespace: arithmetic-expressions-again
+
+   <arithmetic-expression> ::= (literal <literal>)
+                             | (minus <arithmetic-expression> <arithmetic-expression>)
+                             | (divide <arithmetic-expression> <arithmetic-expression>)
+
+   <literal> ::= ...any Scheme integer...
+
+The language of normal forms is the usual one:
+
+.. bnf:: arithmetic expressions in normal form
+   :noindex:
+   :namespace: arithmetic-expressions-in-normal-form
+
+   <literal> ::= ...any Scheme integer...
+
+   <arithmetic-expression-in-normal-form> ::= (literal_nf <literal>)
+
+In the accompanying Scheme file, the ``reduce`` procedure maps a term
+either to a normal form, or to a new term, or to an error message:
+
+.. bnf:: arithmetic expressions result of reduction
+   :noindex:
+   :namespace: arithmetic-expressions-result-of-reduction
+
+   <string> ::= ...any Scheme string...
+
+   <result-of-reduction> ::= (value <arithmetic-expression-in-normal-form>)
+                           | (term <arithmetic-expression>)
+                           | (stuck <string>)
+
+* If ``reduce``, given a term ``t1``, returns ``(value t1_nf)``, then
+  ``t1`` was already in normal form, i.e., it was a literal.
+
+* If ``reduce``, given a term ``t1``, returns ``(term t2)``, then ``t2``
+  is a version of ``t1`` where the *leftmost-innermost* operation
+  (subtraction or division) has been carried out.
+
+* If ``reduce``, given a term ``t1``, returns ``(stuck "division by 0:
+  i")``, then the leftmost-innermost operation in ``t1`` was a division
+  of ``i`` by 0.
+
+In the accompanying Scheme file, the ``evaluate`` procedure applies
+``reduce`` repeatedly to normalize any given term.  It yields a
+normal form or an error message:
+
+.. bnf:: arithmetic expressions result of evaluation
+   :noindex:
+   :namespace: arithmetic-expressions-result-of-evaluation
+
+   <string> ::= ...any Scheme string...
+
+   <result-of-evaluation> ::= (nf <arithmetic-expression-in-normal-form>)
+                            | (wrong <string>)
+
+The following scenario illustrates the reduction-based evaluation of ``(-
+(- 1000 499) (- 800 400))``::
+
+  > (trace evaluate)
+  (evaluate)
+  > (evaluate (parse-arithmetic-expression '(- (- 1000 499) (- 800 400))))
+  |(evaluate (minus (minus (literal 1000) (literal 499)) (minus (literal 800) (literal 400))))
+  |(evaluate (minus (literal 501) (minus (literal 800) (literal 400))))
+  |(evaluate (minus (literal 501) (literal 400)))
+  |(evaluate (literal 101))
+  |(nf (literal_nf 101))
+  (nf (literal_nf 101))
+  > 
+
+Observe the successive reductions:
+
+* ``(- 1000 499)`` is contracted to ``501``;
+
+* ``(- 800 400)`` is contracted to ``400``; and
+
+* ``(- 501 400)`` is contracted to ``101``,
+
+which is the final result.
+
+The following scenario illustrates the reduction-based evaluation of ``(-
+(/ (- 15 5) 0) (/ 100 0))``::
+
+  > (evaluate (parse-arithmetic-expression '(- (/ (- 15 5) 0) (/ 100 0))))
+  |(evaluate (minus (divide (minus (literal 15) (literal 5)) (literal 0)) (divide (literal 100) (literal 0))))
+  |(evaluate (minus (divide (literal 10) (literal 0)) (divide (literal 100) (literal 0))))
+  |(wrong "division by 0: (literal_nf 10)")
+  (wrong "division by 0: (literal_nf 10)")
+  > 
+
+Observe the successive reductions:
+
+* ``(- 15 5)`` is contracted to ``10``; and
+
+* ``(/ 10 0)`` is stuck,
+
+which leads to the final result.
+
+
+Food for thought
+----------------
+
+* The injection tag ``nf`` notwithstanding, does this reduction-based
+  evaluator give the same result as the interpreter (namely the procedure
+  ``interpret-arithmetic-expression``), in `the earlier lecture note
+  about arithmetic expressions <week-4-arithmetic-expressions.html>`_?
+  That interpreter worked in big steps (and in one pass) over its input.
+  The present evaluator works in many small steps.
+
+
+Exercise 1
+----------
+
+Modify the accompanying Scheme file so that the reduction strategy is
+*rightmost innermost* rather than leftmost innermost.
+
+
+Boolean expressions
+-------------------
+
+The source language is the usual one:
+
+.. bnf:: boolean expressions again
+   :noindex:
+   :namespace: boolean-expressions-again
+
+   <name> ::= ...any Scheme symbol...
+
+   <boolean-expression> ::= (var <name>)
+                          | (neg <boolean-expression>)
+                          | (conj <boolean-expression> <boolean-expression>)
+                          | (disj <boolean-expression> <boolean-expression>)
+
+The language of negational normal forms is the usual one:
+
+.. bnf:: boolean expressions in normal form
+   :noindex:
+   :namespace: boolean-expressions-in-normal-form
+
+   <name> ::= ...any Scheme symbol...
+
+   <literal> ::= (posvar <name>) | (negvar <name>)
+
+   <boolean-expression-in-normal-form> ::= (lit_nnf <literal>)
+                                         | (conj_nnf <boolean-expression-in-normal-form> <boolean-expression-in-normal-form>)
+                                         | (disj_nnf <boolean-expression-in-normal-form> <boolean-expression-in-normal-form>)
+
+In the accompanying Scheme file, the ``reduce`` procedure maps a term
+either to a normal form, or to a new term, or to an error message:
+
+.. bnf:: boolean expressions result of reduction
+   :noindex:
+   :namespace: boolean-expressions-result-of-reduction
+
+   <string> ::= ...any Scheme string...
+
+   <result-of-reduction> ::= (value <arithmetic-expression-in-normal-form>)
+                           | (term <boolean-expression>)
+                           | (stuck <string>)
+
+* If ``reduce``, given a term ``t1``, returns ``(value t1_nf)``, then
+  ``t1`` was already in negational normal form.
+
+* If ``reduce``, given a term ``t1``, returns ``(term t2)``, then ``t2``
+  is a version of ``t1`` where the *leftmost-outermost* operation
+  (De Morgan law or double-negation elimination) has been carried out.
+
+* If ``reduce``, given a term ``t1``, returns ``(stuck "some error
+  message")``, then the leftmost-outermost operation in ``t1`` somehow
+  could not be carried out.
+
+In the accompanying Scheme file, the ``evaluate`` procedure applies
+``reduce`` repeatedly to normalize any given term.  It yields a
+negational normal form or an error message:
+
+.. bnf:: boolean expressions result of evaluation
+   :noindex:
+   :namespace: boolean-expressions-result-of-evaluation
+
+   <string> ::= ...any Scheme string...
+
+   <result-of-evaluation> ::= (nnf <boolean-expression-in-normal-form>)
+                            | (wrong <string>)
+
+
+Food for thought
+----------------
+
+* The injection tag ``nnf`` notwithstanding, does this reduction-based
+  normalizer give the same result as your normalizer from
+  :ref:`exercise-negational-normal-forms` (namely the procedure
+  ``normalize-boolean-expression``), in `the earlier lecture note about
+  Boolean expressions <week-4-boolean-expressions.html>`_?  That
+  normalizer worked in big steps (and in one pass) over its input.  The
+  present normalizer works in many small steps.
+
+
+Exercise 2
+----------
+
+Modify the accompanying Scheme file so that the reduction strategy is
+*rightmost outermost* rather than leftmost outermost.
+
+
+Executive summary
+-----------------
+
+We have programmed small-step semantics for two simple languages, one
+with a leftmost-innermost reduction strategy (arithmetic expressions) and
+the other with a leftmost-outermost reduction strategy (Boolean
+expressions).  The resulting ``reduce`` procedures implement one-step
+reduction functions.  These procedures can be iterated to implement
+normalization functions.
+
+.. epigraph::
+
+   | It's a work in progress.
+
+   -- `Mike Wazowski <https://en.wikipedia.org/wiki/Monsters%2C_Inc.>`_
+
+
+Resources
+---------
+
+* The Scheme code for `arithmetic expressions
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-12-arithmetic-expressions.scm>`_
+  (latest version: 13 Nov 2015).
+
+* The Scheme code for `boolean expressions
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-12-boolean-expressions.scm>`_
+  (latest version: 13 Nov 2015).
+
+
+Version
+-------
+
+Created
+[13 Nov 2015]

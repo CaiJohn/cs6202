@@ -1,0 +1,463 @@
+.. -*- mode: rst -*-
+
+Note for Week 5 about sequencing
+================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+None.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-5-sequencing.scm>`_
+  (latest version: 08 Sep 2015).
+
+
+Goal
+----
+
+The goal of this lecture note is to introduce the Scheme special form
+``begin``, to use the predefined C-like ``printf`` procedure to
+implement a tracing facility, and to use ``begin`` and ``printf`` to
+make our unit tests more resilient.
+
+
+Core special form: begin
+------------------------
+
+For linguistic comfort, Scheme offers the special form
+
+.. code-block:: scheme
+
+  (begin e1 e2 ... eN-1 eN)
+
+to stand for
+
+.. code-block:: scheme
+
+  (let* ([_ e1]
+         [_ e2]
+         ..
+         [_ eN-1])
+    eN)
+
+where ``_`` is a "fresh" variable, i.e., one that does not
+occur in ``e1``, ``e2``, ..., ``eN-1``, and ``eN``.
+
+In other words,
+
+* first, ``e1`` is evaluated and its result is not used,
+
+* then, ``e2`` is evaluated and its result is not used,
+
+* ...
+
+* then ``eN-1`` is evaluated and its result is not used,
+
+* and finally ``eN`` is evaluated and its result is the result of the
+  begin-expression.
+
+Example (using the predefined C-like ``printf`` procedure, whose
+convention for formatting strings is the same one as for ``errorf``:
+the directive ``~s`` is for any Scheme value and the directive ``~n``
+is for a newline):
+
+.. code-block:: scheme
+
+  (define chatty-factorial
+    (lambda (n)
+      (begin
+        (printf "(chatty-factorial ~s)~n" n)
+        (if (= n 0)
+            1
+            (* n (chatty-factorial (1- n)))))))
+
+The following scenario illustrates ``chatty-factorial`` in action::
+
+  > (chatty-factorial 5)
+  (chatty-factorial 5)
+  (chatty-factorial 4)
+  (chatty-factorial 3)
+  (chatty-factorial 2)
+  (chatty-factorial 1)
+  (chatty-factorial 0)
+  120
+  > 
+
+Each time it is called, ``chatty-factorial`` issues a formatted
+printout about its actual parameter.
+
+
+.. _more-about-tracing:
+
+More about tracing
+------------------
+
+Between ``begin`` and ``printf``, we are now in position to write our
+own tracing facility: a procedure to trace other procedures.
+
+1. The following procedure encapsulates any given *unary* procedure into
+   a tracing procedure:
+
+   .. code-block:: scheme
+
+     (define trace1
+       (lambda (tag p)
+         (lambda (x)
+           (begin
+             (printf "(~s ~s) ->~n" tag x)
+             (let ([result (p x)])
+               (begin
+                 (printf "(~s ~s) <- ~s~n" tag x result)
+                 result))))))
+
+   Given a symbol and a unary procedure, ``trace1`` yields a procedure
+   that, when applied,
+
+   * prints information about its actual parameter,
+
+   * applies the given procedure to the given actual parameter,
+
+   * prints the result, and
+
+   * returns this result.
+
+   The following scenario illustrates ``trace1``.  It uses the
+   following auxiliary procedure:
+
+   .. code-block:: scheme
+
+     (define apply-a-unary-procedure-to-1-2-3
+       (lambda (p)
+         (let* ([r1 (p 1)]
+                [r2 (p 2)]
+                [r3 (p 3)])
+           (list r1 r2 r3))))
+
+   Applying ``apply-a-unary-procedure-to-1-2-3`` to ``1+`` lists the results
+   of successively applying ``1+`` to ``1``, ``2``, and ``3``::
+
+     > (apply-a-unary-procedure-to-1-2-3 1+)
+     (2 3 4)
+     > 
+
+   Applying ``apply-a-unary-procedure-to-1-2-3`` to a traced version of
+   ``1+`` informs us about the successive applications of ``1+`` to
+   ``1``, ``2``, and ``3``, and lists their result::
+
+     > (apply-a-unary-procedure-to-1-2-3 (trace1 'increment 1+))
+     (increment 1) ->
+     (increment 1) <- 2
+     (increment 2) ->
+     (increment 2) <- 3
+     (increment 3) ->
+     (increment 3) <- 4
+     (2 3 4)
+     > 
+
+   Let us illustrate ``trace1`` again, this time with a procedure that
+   compose another procedure with itself, a given number of times:
+
+   .. code-block:: scheme
+
+     (define compose
+       (lambda (f g)
+         (lambda (x)
+           (f (g x)))))
+
+     (define self-compose
+       (lambda (p n_init)
+         (letrec ([visit (lambda (n)
+                           (if (= n 0)
+                               (lambda (x)
+                                 x)
+                               (compose p (visit (1- n)))))])
+           (if (and (integer? n_init)
+                    (>= n_init 0))
+               (visit n_init)
+               (errorf 'self-compose
+                       "not a positive integer: ~s"
+                       n_init)))))
+
+   For example, we can self-compose ``cdr``, and ``1+`` and apply the
+   result::
+
+     > ((self-compose cdr 0) '(0 1 2 3 4 5 6 7 8 9))
+     (0 1 2 3 4 5 6 7 8 9)
+     > ((self-compose cdr 1) '(0 1 2 3 4 5 6 7 8 9))
+     (1 2 3 4 5 6 7 8 9)
+     > ((self-compose cdr 2) '(0 1 2 3 4 5 6 7 8 9))
+     (2 3 4 5 6 7 8 9)
+     > ((self-compose cdr 6) '(0 1 2 3 4 5 6 7 8 9))
+     (6 7 8 9)
+     > ((self-compose 1+ 0) 10)
+     10
+     > ((self-compose 1+ 1) 10)
+     11
+     > ((self-compose 1+ 2) 10)
+     12
+     > ((self-compose 1+ 5) 10)
+     15
+     > 
+
+   We can self-compose traced versions of ``cdr``, and ``1+``.
+   Applying the result informs us about the successive applications of
+   ``cdr``, and ``1+``::
+
+     > ((self-compose (trace1 'cdr cdr) 0) '(0 1 2 3 4 5 6 7 8 9))
+     (0 1 2 3 4 5 6 7 8 9)
+     > ((self-compose (trace1 'cdr cdr) 1) '(0 1 2 3 4 5 6 7 8 9))
+     (cdr (0 1 2 3 4 5 6 7 8 9)) ->
+     (cdr (0 1 2 3 4 5 6 7 8 9)) <- (1 2 3 4 5 6 7 8 9)
+     (1 2 3 4 5 6 7 8 9)
+     > ((self-compose (trace1 'cdr cdr) 2) '(0 1 2 3 4 5 6 7 8 9))
+     (cdr (0 1 2 3 4 5 6 7 8 9)) ->
+     (cdr (0 1 2 3 4 5 6 7 8 9)) <- (1 2 3 4 5 6 7 8 9)
+     (cdr (1 2 3 4 5 6 7 8 9)) ->
+     (cdr (1 2 3 4 5 6 7 8 9)) <- (2 3 4 5 6 7 8 9)
+     (2 3 4 5 6 7 8 9)
+     > ((self-compose (trace1 'cdr cdr) 6) '(0 1 2 3 4 5 6 7 8 9))
+     (cdr (0 1 2 3 4 5 6 7 8 9)) ->
+     (cdr (0 1 2 3 4 5 6 7 8 9)) <- (1 2 3 4 5 6 7 8 9)
+     (cdr (1 2 3 4 5 6 7 8 9)) ->
+     (cdr (1 2 3 4 5 6 7 8 9)) <- (2 3 4 5 6 7 8 9)
+     (cdr (2 3 4 5 6 7 8 9)) ->
+     (cdr (2 3 4 5 6 7 8 9)) <- (3 4 5 6 7 8 9)
+     (cdr (3 4 5 6 7 8 9)) ->
+     (cdr (3 4 5 6 7 8 9)) <- (4 5 6 7 8 9)
+     (cdr (4 5 6 7 8 9)) ->
+     (cdr (4 5 6 7 8 9)) <- (5 6 7 8 9)
+     (cdr (5 6 7 8 9)) ->
+     (cdr (5 6 7 8 9)) <- (6 7 8 9)
+     (6 7 8 9)
+     > ((self-compose (trace1 'increment 1+) 0) 10)
+     10
+     > ((self-compose (trace1 'increment 1+) 1) 10)
+     (increment 10) ->
+     (increment 10) <- 11
+     11
+     > ((self-compose (trace1 'increment 1+) 2) 10)
+     (increment 10) ->
+     (increment 10) <- 11
+     (increment 11) ->
+     (increment 11) <- 12
+     12
+     > ((self-compose (trace1 'increment 1+) 5) 10)
+     (increment 10) ->
+     (increment 10) <- 11
+     (increment 11) ->
+     (increment 11) <- 12
+     (increment 12) ->
+     (increment 12) <- 13
+     (increment 13) ->
+     (increment 13) <- 14
+     (increment 14) ->
+     (increment 14) <- 15
+     15
+     > 
+
+2. The following procedure encapsulates any given *binary* procedure
+   into a tracing procedure:
+
+   .. code-block:: scheme
+
+     (define trace2
+       (lambda (tag p)
+         (lambda (x y)
+           (begin
+             (printf "(~s ~s ~s) ->~n" tag x y)
+             (let ([result (p x y)])
+               (begin
+                 (printf "(~s ~s ~s) <- ~s~n" tag x y result)
+                 result))))))
+
+   Given a symbol and a binary procedure, ``trace2`` yields a
+   procedure that, when applied,
+
+   * prints information about its actual parameters,
+
+   * applies the given procedure to the given actual parameter,
+
+   * prints the result, and
+
+   * returns this result.
+
+   The following scenario illustrates ``trace2``.  It uses the
+   following auxiliary procedure:
+
+   .. code-block:: scheme
+
+     (define apply-a-binary-procedure-to-1-2-3
+       (lambda (p)
+         (let* ([r1 (p 1 1)]
+                [r2 (p 2 2)]
+                [r3 (p 3 3)])
+           (list r1 r2 r3))))
+
+   Applying ``apply-a-binary-procedure-to-1-2-3`` to ``+`` lists the
+   results of successively applying ``1+`` to ``1`` and ``1``, ``2``
+   and ``1``, and ``3`` and ``3``::
+
+     > (apply-a-binary-procedure-to-1-2-3 +)
+     (2 4 6)
+     > 
+
+   Applying ``apply-a-binary-procedure-to-1-2-3`` to a traced version
+   of ``+`` informs us about the successive applications of ``+`` to
+   ``1`` and ``1``, ``2`` and ``1``, and ``3`` and ``3``, and lists
+   their result::
+
+     > (apply-a-binary-procedure-to-1-2-3 (trace2 'add +))
+     (add 1 1) ->
+     (add 1 1) <- 2
+     (add 2 2) ->
+     (add 2 2) <- 4
+     (add 3 3) ->
+     (add 3 3) <- 6
+     (2 4 6)
+     > 
+
+Questions:
+
+* How would you write a procedure that encapsulates any given
+  *ternary* procedure (i.e., procedure of arity 3) into a tracing
+  procedure?  Can you illustrate your procedure with an example?
+
+* How would you write a procedure that encapsulates any given
+  *nullary* procedure (i.e., procedure of arity 0) into a tracing
+  procedure?  Can you illustrate your procedure with an example?
+
+
+.. index::
+   single: unit tests (resilience in)
+
+.. _resilience-in-unit-tests:
+
+Resilience in unit tests
+------------------------
+
+Today, Alfrothul the Resplendent, from Skagen, decides to improve
+Harald the Bold's unit-test procedures (in the section on
+:ref:`information-content-in-unit-tests`) even further.  He would like
+them to not stop at the first error, but to keep going through the
+remaining tests.  The problem, he figures, is in the ``and`` construct
+of Scheme, since it implements short-cut Boolean evaluation: it stops
+the first time it encounters ``#f``.  So Alfrothul implements a
+variadic conjunction procedure, so that (1) it can be applied to
+arbitrarily many tests and (2) all its arguments are evaluated:
+
+.. code-block:: scheme
+
+  (define and-all
+    (lambda bs_init
+      (letrec ([visit (lambda (bs)
+                        (or (null? bs)
+                            (and (car bs)
+                                 (visit (cdr bs)))))])
+        (visit bs_init))))
+
+He quickly tests it::
+
+  > (and-all (time #f) (time #f))
+  (time #f)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  (time #f)
+      no collections
+      0 ms elapsed cpu time
+      0 ms elapsed real time
+      0 bytes allocated
+  #f
+  > 
+
+And then he modifies ``try-candidate`` to not raise an error, but to
+issue a message and then return ``#f``:
+
+.. code-block:: scheme
+
+  (define try-candidate-transparently
+    (lambda (candidate input expected-output name)
+      (or (equal? (candidate input)
+                  expected-output)
+          (begin
+            (printf "~s: error for ~s~n" name input)
+            #f))))
+
+  (define test-fac-3.1
+    (lambda (candidate)
+      (and-all (try-candidate-transparently candidate 0 1 'test-fac-3.1)
+               (try-candidate-transparently candidate 1 1 'test-fac-3.1)
+               (try-candidate-transparently candidate 5 120 'test-fac-3.1)
+               (try-candidate-transparently candidate 6 (* 1 2 3 4 5 6) 'test-fac-3.1)
+               ;;;
+               )))
+
+He then tests his unit test::
+
+  > (test-fac-3.1 (lambda (x) x))
+  test-fac-3.1: error for 6
+  test-fac-3.1: error for 5
+  test-fac-3.1: error for 0
+  #f
+  > 
+
+.. epigraph::
+
+   | Oh, man.
+   | We are testing the tests now?
+
+Success.  (Well, the tests are not performed in the same order as
+specified in the arguments of ``and-all``, but then again `Mimer
+<http://en.wikipedia.org/wiki/Mímir>`_ mumbled
+something about the order of evaluation of actual parameters in
+applications, so that makes sense, and in any case it is irrelevant
+here: the order in which the tests are performed doesn't matter.)
+
+Though wait a second -- success, really?  I mean only 3 out of 4 tests
+failed.  Why not 4?  Oh, wait -- both the identity function and the
+factorial function map 1 to 1.  After all, a clock that has stopped
+indicates the right time of the day twice, every day.  Sometimes, like
+Loki, you get lucky.
+
+So yes, success.  Not only that, but the unit test is backwards
+compatible as well::
+
+  > (test-fac-3.1 fac)
+  #t
+  > (test-fac-3.1 fac_alt-lifted)
+  #t
+  > (test-fac-3.1 fac_alt)
+  #t
+  > 
+
+All in all Alfrothul feels pretty good.  Even Loki congratulated him,
+and that does not happen very often.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-5-sequencing.scm>`_
+  (latest version: 08 Sep 2015).
+
+
+Version
+-------
+
+Created
+[08 Sep 2015]

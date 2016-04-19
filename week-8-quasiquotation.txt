@@ -1,0 +1,1127 @@
+.. -*- mode: rst -*-
+
+Note for Week 8 about quasiquotation
+====================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+None.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-8-quasiquotation.scm>`_
+  (latest version: 15 Sep 2015).
+
+
+Goal
+----
+
+The goal of this lecture note is to introduce quasiquotation in
+Scheme and to touch upon program-generating programs and the topic of
+partial evaluation.
+
+
+.. index:: quotation (quasi)
+
+Core special form: quasiquotation
+---------------------------------
+
+So we can construct lists with ``cons``, ``list``, and ``append``.
+Quasiquotation is a short-hand for specifying these lists by writing
+them down as *templates* with placeholders specified with
+``unquote``.  If there are no occurrences of ``unquote``,
+``quasiquote`` behaves as ``quote`` as far as structural equality is
+concerned::
+
+  > (quasiquote (1 2 3 4))
+  (1 2 3 4)
+  > (quote (1 2 3 4))
+  (1 2 3 4)
+  > (equal? (quasiquote (1 2 3 4)) (quote (1 2 3 4)))
+  #t
+  > (eq? (quasiquote (1 2 3 4)) (quote (1 2 3 4)))
+  #f
+  > 
+
+The templates allow arbitrary sub-lists, even improper ones::
+
+  > (quasiquote (1 (+ 2 3) 4 . 5))
+  (1 (+ 2 3) 4 . 5)
+  > 
+
+In a template, an occurrence of ``unquote`` specifies a placeholder
+and how to fill it.  For example, unquoting ``(+ 2 3)`` entails
+
+* the expression ``(+ 2 3)`` to be evaluated and
+
+* the result of this evaluation to fit in the resulting list,
+
+without using explicit list constructors::
+
+  > (quasiquote (1 (unquote (+ 2 3)) 4 . 5))
+  (1 5 4 . 5)
+  > 
+
+Observe how ``(+ 2 3)`` has been evaluated and how its result fills
+the hole.  Here is the same computation, without quasiquote and
+unquote, but with explicit list constructors::
+
+  > (cons 1 (cons (+ 2 3) (cons 4 5)))
+  (1 5 4 . 5)
+  > 
+
+Arbitrary expressions can be unquoted::
+
+  > (quasiquote (1 (unquote (append '(10 20 30) '(40 50 60))) 4 . 5))
+  (1 (10 20 30 40 50 60) 4 . 5)
+  > 
+
+Observe how ``(append '(10 20 30) '(40 50 60))`` has been evaluated
+and how its result fills the hole.  Here is the same computation,
+without quasiquote and unquote, but with explicit list constructors::
+
+  > (cons 1 (cons (append '(10 20 30) '(40 50 60)) (cons 4 5)))
+  (1 (10 20 30 40 50 60) 4 . 5)
+  > 
+
+Often, the result of unquotation is a list that we want to see
+"spliced in" in the resulting list.  To this end, we use
+``unquote-splicing`` instead of ``unquote``::
+
+  > (quasiquote (1 (unquote-splicing (append '(10 20 30) '(40 50 60))) 4 . 5))
+  (1 10 20 30 40 50 60 4 . 5)
+  > 
+
+Observe how ``(append '(10 20 30) '(40 50 60))`` has been evaluated
+and how its result has been spliced in the hole.  Here is the same
+computation, without quasiquote and unquote, but with explicit list
+constructors::
+
+  > (cons 1 (append (append '(10 20 30) '(40 50 60)) (cons 4 5)))
+  (1 10 20 30 40 50 60 4 . 5)
+  > 
+
+.. epigraph::
+
+   | People who speak English
+   | sometimes do not understand each other too well
+   | due to the fact that they do not use punctuation marks
+   | when they talk,
+   | and that is why I invented phonetic punctuation.
+
+   -- `Victor Borge <http://en.wikipedia.org/wiki/Victor_Borge#Borge.27s_style>`_
+
+Finally, just like ``quote`` is abbreviated with the quote character,
+
+* ``quasiquote`` is abbreviated with the backquote character,
+
+* ``unquote`` is abbreviated with a comma, and
+
+* ``unquote-splicing`` is abbreviated with a comma followed by ``@``.
+
+The following scenario recapitulates the interactions above, this time
+using the abbreviations::
+
+  > `(1 (+ 2 3) 4 . 5)
+  (1 (+ 2 3) 4 . 5)
+  > `(1 ,(+ 2 3) 4 . 5)
+  (1 5 4 . 5)
+  > `(1 ,(append '(10 20 30) '(40 50 60)) 4 . 5)
+  (1 (10 20 30 40 50 60) 4 . 5)
+  > `(1 ,@(append '(10 20 30) '(40 50 60)) 4 . 5)
+  (1 10 20 30 40 50 60 4 . 5)
+  > 
+
+
+Desugaring a quasiquote-expression into list constructors
+---------------------------------------------------------
+
+The goal of the following three exercises is to desugar a
+quasiquote-expression into ``cons``, ``append``, and ``list``
+constructors.  Towards this end, here is a reference BNF:
+
+.. bnf:: quasiquotations
+   :noindex:
+   :namespace: quasiquotations
+
+   <quasiquote-expression> ::= (quasiquote <quasiquotation>)
+
+   <quasiquotation> ::= <number>
+                      | <boolean>
+                      | <character>
+                      | <string>
+                      | <symbol>
+                      | ()
+                      | (unquote <expression>)
+                      | (<quasiquotation-car> . <quasiquotation>)
+
+   <quasiquotation-car> ::= (unquote-splicing <expression>)
+                          | <quasiquotation>
+
+   <expression> ::= ...anything that Petite Chez Scheme accepts...
+
+NB. This grammar is ambiguous in that, for example, the expression
+``(quasiquote (unquote 333))`` has two derivations::
+
+  (quasiquote <quasiquotation>)
+                     |
+                     |
+             (unquote <expression>)
+                           |
+                        <number>
+                           |
+                          333
+
+  (quasiquote <quasiquotation>)
+                     |
+                     |
+   (<quasiquotation> . <quasiquotation>)
+           /                  \
+      <symbol>         (<quasiquotation> . <quasiquotation>)
+         |                     |                  |
+      unquote              <number>               ()
+                               |
+                              333
+
+For such ambiguous expressions, the first one takes precedence,
+and likewise for ``unquote-splicing``.
+
+The following unit-test procedure covers everything but
+unquote-splicing:
+
+* a number is desugared into itself;
+
+* a Boolean is desugared into itself;
+
+* a character is desugared into itself;
+
+* a string is desugared into itself;
+
+* a symbol is desugared into a quoted version of itself;
+
+* the empty list is desugared into a quoted version of itself;
+
+* an unquoted expression is desugared into this expression;
+
+* a compound expression is desugared into a call to ``cons`` where the
+  arguments are the desugared sub-expressions:
+
+.. code-block:: scheme
+
+  (define try-candidate-transparently
+    (lambda (candidate name-of-candidate input expected-output)
+      (let ([actual-output (candidate input)])
+        (or (equal? actual-output expected-output)
+            (begin
+              (printf "~s: error for ~s: ~s instead of ~s~n"
+                      name-of-candidate
+                      input
+                      actual-output
+                      expected-output)
+              #f)))))
+  
+  (define test-desugar-quasiquote-without-unquote-splicing
+    (lambda (candidate . optionals)
+      (let ([name-of-candidate (cond
+                                 [(null? optionals)
+                                  'test-desugar-quasiquote-without-unquote-splicing]
+                                 [(null? (cdr optionals))
+                                  (car optionals)]
+                                 [else
+                                  (errorf 'test-desugar-quasiquote-without-unquote-splicing
+                                          "too many arguments: ~s"
+                                          optionals)])])
+        (and-all (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote 42)
+                                              '42)
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote #t)
+                                              '#t)
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote #\a)
+                                              '#\a)
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote "hello world")
+                                              '"hello world")
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote x)
+                                              '(quote x))
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote ())
+                                              '(quote ()))
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote (unquote whatever))
+                                              'whatever)
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote (unquote (+ 1 2)))
+                                              '(+ 1 2))
+                 (try-candidate-transparently candidate
+                                              name-of-candidate  ;;; sorry for the two long lines below
+  '(quasiquote (42 #t #\a "hello world" x () (unquote whatever) (unquote (+ 1 2))))
+  '(cons 42 (cons #t (cons #\a (cons "hello world" (cons 'x (cons '() (cons whatever (cons (+ 1 2) '())))))))))
+                 (try-candidate-transparently candidate          ;;; sorry for the two long lines above
+                                              name-of-candidate
+                                              '(quasiquote (1 (+ 2 3) 4 . 5))
+                                              '(cons 1 (cons (cons '+ (cons 2 (cons 3 '()))) (cons 4 5))))
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote (1 (unquote (+ 2 3)) 4 . 5))
+                                              '(cons 1 (cons (+ 2 3) (cons 4 5))))
+                 ;;;
+                 ))))
+
+  (define test-desugar-quasiquote-without-unquote-splicing-corner-cases
+    (lambda (candidate . optionals)
+      (let ([name-of-candidate (cond
+                                 [(null? optionals)
+                                  'test-desugar-quasiquote-without-unquote-splicing-corner-cases]
+                                 [(null? (cdr optionals))
+                                  (car optionals)]
+                                 [else
+                                  (errorf 'test-desugar-quasiquote-without-unquote-splicing-corner-cases
+                                          "too many arguments: ~s"
+                                          optionals)])])
+        (and-all (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote quasiquote)
+                                              '(quote quasiquote))
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote (unquote lambda (+ 2 3)))
+                                              '(cons 'unquote (cons 'lambda (cons (cons '+ (cons 2 (cons 3 '()))) '()))))
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote (lambda unquote (+ 2 3)))
+                                              '(cons 'lambda (+ 2 3)))
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote (unquote unquote (+ 2 3)))
+                                              '(cons 'unquote (+ 2 3)))
+                 ;;;
+                 ))))
+
+
+Exercise 1
+----------
+
+Assume there are no unquote-splicing expressions and write a procedure
+that satisfies the two unit-test procedures above:
+
+.. code-block:: scheme
+
+  (define desugar-quasiquote-without-unquote-splicing
+    (lambda (v)
+      (errorf 'desugar-quasiquote-without-unquote-splicing
+              "not implemented yet")))
+
+
+Exercise 2
+----------
+
+Assume there may be unquote-splicing expressions and write a procedure
+that satisfies the two unit-test procedures above as well as the
+following one:
+
+.. code-block:: scheme
+
+  (define test-desugar-quasiquote-with-unquote-splicing
+    (lambda (candidate . optionals)
+      (let ([name-of-candidate (cond
+                                 [(null? optionals)
+                                  'test-desugar-quasiquote-with-unquote-splicing]
+                                 [(null? (cdr optionals))
+                                  (car optionals)]
+                                 [else
+                                  (errorf 'test-desugar-quasiquote-with-unquote-splicing
+                                          "too many arguments: ~s"
+                                          optionals)])])
+        (and-all (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote (1 (unquote-splicing x) 4 5))
+                                              '(cons 1 (append x (cons 4 (cons 5 '())))))
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote (1 (unquote-splicing (append '(10 20 30) '(40 50 60))) 4 . 5))
+                                              '(cons 1 (append (append '(10 20 30) '(40 50 60)) (cons 4 5))))
+                 ;;;
+                 ))))
+
+In a nutshell, when an unquote-splicing expression appears in a compound
+expression, this compound expression is desugared into a call to
+``append`` instead of into a call to ``cons``:
+
+.. code-block:: scheme
+
+  (define desugar-quasiquote-with-unquote-splicing
+    (lambda (v)
+      (errorf 'desugar-quasiquote-with-unquote-splicing
+              "not implemented yet")))
+
+
+Exercise 3
+----------
+
+Prettify your desugaring procedure so that it generates a variadic
+call to ``list`` rather than a chain of calls to ``cons``:
+
+.. code-block:: scheme
+
+  (define test-desugar-quasiquote-with-list-rather-than-cons
+    (lambda (candidate . optionals)
+      (let ([name-of-candidate (cond
+                                 [(null? optionals)
+                                  'test-desugar-quasiquote-with-list-rather-than-cons]
+                                 [(null? (cdr optionals))
+                                  (car optionals)]
+                                 [else
+                                  (errorf 'test-desugar-quasiquote-with-list-rather-than-cons
+                                          "too many arguments: ~s"
+                                          optionals)])])
+        (and-all (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote (42 #t #\a "hello world" x () (unquote whatever) (unquote (+ 1 2))))
+                                              '(list 42 #t #\a "hello world" 'x '() whatever (+ 1 2)))
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote (1 (unquote (+ 2 3)) 4 . 5))
+                                              '(cons 1 (cons (+ 2 3) (cons 4 5))))
+                 (try-candidate-transparently candidate
+                                              name-of-candidate
+                                              '(quasiquote (1 (unquote-splicing x) 4 5))
+                                              '(cons 1 (append x (list 4 5))))
+                 ;;;
+                 ))))
+
+  (define desugar-quasiquote-with-list-rather-than-cons
+    (lambda (v)
+      (errorf 'desugar-quasiquote-with-list-rather-than-cons
+              "not implemented yet")))
+
+
+Magritte-style procedures
+-------------------------
+
+Quasiquotation makes it possible to write Magritte-style procedures
+whose result is not a value but a syntactic representation of how to
+compute this value.  Take the factorial procedure for example:
+
+.. code-block:: scheme
+
+  (define fac_Magritte
+    (lambda (n_init)
+      (letrec ([visit (lambda (n)
+                        (if (= n 0)
+                            `1
+                            `(* ,n ,(visit (1- n)))))])
+        (if (and (integer? n_init)
+                 (not (negative? n_init)))
+            (visit n_init)
+            (errorf 'fac_Magritte
+                    "not a non-negative integer: ~s"
+                    n_init)))))
+
+Applying ``fac_Magritte`` to a natural number yields a syntactic
+representation of how to compute the factorial of this number::
+
+  > (fac_Magritte 0)
+  1
+  > (fac_Magritte 1)
+  (* 1 1)
+  > (fac_Magritte 2)
+  (* 2 (* 1 1))
+  > (fac_Magritte 3)
+  (* 3 (* 2 (* 1 1)))
+  > (fac_Magritte 4)
+  (* 4 (* 3 (* 2 (* 1 1))))
+  > (fac_Magritte 5)
+  (* 5 (* 4 (* 3 (* 2 (* 1 1)))))
+  > 
+
+`Cognoscenti <http://en.wiktionary.org/wiki/cognoscente#English>`_
+would anticipate the base case:
+
+.. code-block:: scheme
+
+  (define fac_Magritte-refined
+    (lambda (n_init)
+      (letrec ([visit (lambda (n)
+                        (if (= n 1)  ;;; <---***---
+                            `1
+                            `(* ,n ,(visit (1- n)))))])
+        (if (and (integer? n_init)
+                 (not (negative? n_init)))
+            (if (= n_init 0)         ;;; <---***---
+                `1
+                `,(visit n_init))
+            (errorf 'fac_Magritte-refined
+                    "not a non-negative integer: ~s"
+                    n_init)))))
+
+And indeed, applying ``fac_Magritte-refined`` to ``5`` yields the
+usual syntactic representation of factorial of 5::
+
+  > (fac_Magritte-refined 0)
+  1
+  > (fac_Magritte-refined 1)
+  1
+  > (fac_Magritte-refined 2)
+  (* 2 1)
+  > (fac_Magritte-refined 5)
+  (* 5 (* 4 (* 3 (* 2 1))))
+  > 
+
+
+Exercise 4
+----------
+
+Refine ``fac_Magritte-refined`` further to remove the trailing
+multiplication by ``1``::
+
+  > (fac_Magritte-re2fined 0)
+  1
+  > (fac_Magritte-re2fined 1)
+  1
+  > (fac_Magritte-re2fined 2)
+  2
+  > (fac_Magritte-re2fined 3)
+  (* 3 2)
+  > (fac_Magritte-re2fined 5)
+  (* 5 (* 4 (* 3 2)))
+  > 
+
+
+Exercise 5
+----------
+
+Modify ``fac_Magritte-refined`` to make it generate one variadic
+multiplication rather than nested dyadic multiplications::
+
+  > (fac_Magritte-with-a-variadic-multiplication 5)
+  (* 5 4 3 2 1)
+  > 
+
+
+Programs that generate other programs
+-------------------------------------
+
+A popular use of quasiquotation is to write program-generating
+programs, based on the representational coincidence between Scheme
+programs and Scheme lists:
+
+.. code-block:: scheme
+
+  (define make-representation-of-identity-procedure
+    (lambda (x)
+      `(lambda (,x)
+         ,x)))
+
+The following scenario illustrates this code-generating procedure::
+
+  > (make-representation-of-identity-procedure 'x)
+  (lambda (x) x)
+  > (make-representation-of-identity-procedure 'y)
+  (lambda (y) y)
+  > (make-representation-of-identity-procedure 'z)
+  (lambda (z) z)
+  > (make-representation-of-identity-procedure 't)
+  (lambda (t) t)
+  > (make-representation-of-identity-procedure "something wrong")
+  (lambda ("something wrong") "something wrong")
+  > 
+
+Food for thought: remember
+:ref:`exercise-observable-difference-for-the-identity-procedure` in
+`the second lecture note <week-2.html>`_?
+
+
+Programs that generate specialized programs
+-------------------------------------------
+
+.. epigraph::
+
+  | Alfrothul the Resplendent: Wow.  A curried candidate.  Like!
+  | Harald the Bold: An append procedure by any other name...
+  | Brynja the Systematic: The name "prepend" makes more sense here.
+
+A popular application of quasiquotation is to generate specialized
+programs.  For example, consider the following `curried procedure
+<week-8.html#currying-and-uncurrying>`_ that prepends its first
+argument to its second argument:
+
+* prepending the empty list to the empty list
+  should yield the empty list;
+
+* prepending the empty list to ``(1 2 3 4 5 6)``
+  should yield ``(1 2 3 4 5 6)``;
+
+* prepending ``(1)`` to ``(2 3 4 5 6)``
+  should yield ``(1 2 3 4 5 6)``;
+
+* prepending ``(1 2 3)`` to ``(4 5 6)``
+  should yield ``(1 2 3 4 5 6)``; and
+
+* prepending ``(1 2 3 4 5 6)`` to the empty list
+  should yield ``(1 2 3 4 5 6)``.
+
+.. code-block:: scheme
+
+  (define try-curried-candidate-transparently
+    (lambda (candidate input1 input2 expected-output name)
+      (or (equal? ((candidate input1) input2)
+                  expected-output)
+          (begin
+            (printf "~s: error for ~s and ~s~n" name input1 input2)
+            #f))))
+  
+  (define test-curried-prepend
+    (lambda (candidate)
+      (and-all (try-curried-candidate-transparently
+                candidate
+                '() '()
+                '()
+                'test-curried-prepend)
+               (try-curried-candidate-transparently
+                candidate
+                '() '(1 2 3 4 5 6)
+                '(1 2 3 4 5 6)
+                'test-curried-prepend)
+               (try-curried-candidate-transparently
+                candidate
+                '(1) '(2 3 4 5 6)
+                '(1 2 3 4 5 6)
+                'test-curried-prepend)
+               (try-curried-candidate-transparently
+                candidate
+                '(1 2 3) '(4 5 6)
+                '(1 2 3 4 5 6)
+                'test-curried-prepend)
+               (try-curried-candidate-transparently
+                candidate
+                '(1 2 3 4 5 6) '()
+                '(1 2 3 4 5 6)
+                'test-curried-prepend)
+               ;;;
+               )))
+
+Here is how to generate a representation of a procedure that prepends
+a given list to its argument:
+
+.. code-block:: scheme
+
+  (define curried-prepend_Magritte
+    (lambda (xs_init)
+      `(lambda (ys_init)
+         ,(letrec ([visit (lambda (xs)
+                            (if (null? xs)
+                                `ys_init
+                                `(cons ,(car xs) ,(visit (cdr xs)))))])
+            (visit xs_init)))))
+
+* Let us illustrate this code-generating procedure with the empty list::
+
+    > (curried-prepend_Magritte '())
+    (lambda (ys_init) ys_init)
+    > 
+  
+  The result is the representation of the identity procedure.
+  Applying this procedure to a list yields this list::
+  
+    > (define prepend_
+        (lambda (ys_init)
+          ys_init))
+    > (prepend_ '())
+    ()
+    > (prepend_ '(1 2 3 4 5 6))
+    (1 2 3 4 5 6)
+    > 
+
+* Let us illustrate this code-generating procedure with the list of
+  integers ``(1)``::
+
+    > (curried-prepend_Magritte '(1))
+    (lambda (ys_init) (cons 1 ys_init))
+    > 
+  
+  The result is the representation of a procedure.  Applying this
+  procedure to a list prepends ``(1)`` to this list::
+  
+    > (define prepend_1
+        (lambda (ys_init)
+          (cons 1 ys_init)))
+    > (prepend_1 '())
+    (1)
+    > (prepend_1 '(2 3 4 5 6))
+    (1 2 3 4 5 6)
+    > 
+
+* Let us illustrate this code-generating procedure with
+  a longer list, ``(1 2 3)``::
+
+    > (curried-prepend_Magritte '(1 2 3))
+    (lambda (ys_init)
+      (cons 1 (cons 2 (cons 3 ys_init))))
+    > 
+  
+  The result is the representation of a procedure.  Applying this
+  procedure to a list prepends ``(1 2 3)`` to this list::
+  
+    > (define prepend_123
+        (lambda (ys_init)
+          (cons 1 (cons 2 (cons 3 ys_init)))))
+    > (prepend_123 '())
+    (1 2 3)
+    > (prepend_123 '(4 5 6))
+    (1 2 3 4 5 6)
+    > 
+
+Food for thought:
+
+* What happens if the argument of ``curried-prepend_Magritte``
+  contains strings rather than numbers?
+
+* What happens if the argument of ``curried-prepend_Magritte``
+  is a list of symbols?
+
+* What happens if the argument of ``curried-prepend_Magritte``
+  is ``(ys_init ys_init ys_init)``?
+
+.. warning::
+
+  When generating programs containing binders such as
+  lambda-abstractions, let-expressions, etc., one should make sure
+  that the variables in the binders are fresh, i.e., do not already
+  occur in the environment.
+
+
+A program generator for the power procedure
+-------------------------------------------
+
+In the following example, we consider the binary version of the
+exponentiation function, which is based on the following equations::
+
+  for all natural numbers x: x^0 = 1
+
+  for all natural numbers x and n: x^(2 * (n + 1)) = (x^(n + 1))^2
+
+  for all natural numbers x, x^1 = x
+
+  for all natural numbers x and n: x^(2 * (n + 1) + 1) = (x^(n + 1))^2 * x
+
+In Scheme:
+
+.. code-block:: scheme
+
+  (define square
+    (lambda (x)
+      (* x x)))
+  
+  (define binary-power
+    (lambda (x n)
+      (letrec ([visit (lambda (i)
+                        (if (even? i)
+                            (if (= i 0)
+                                1
+                                (square (visit (quotient i 2))))
+                            (if (= i 1)
+                                x
+                                (* (square (visit (quotient i 2))) x))))])
+        (visit n))))
+
+This definition passes the unit test for the power procedure from `the
+section about exponentiating two natural numbers
+<week-2.html#exponentiating-two-natural-numbers>`_::
+
+  > (test-power binary-power)
+  #t
+  > 
+
+We can stage it into a code generator by peppering it with
+quasiquotes and unquotes.  The idea is to let the computation that
+depends on the exponent happen, and to generate residual code that
+will carry out the computation over the base element:
+
+.. code-block:: scheme
+
+  (define binary-power_gen
+    (lambda (x n)
+      `(lambda (,x)
+         ,(letrec ([visit (lambda (i)
+                            (if (even? i)
+                                (if (= i 0)
+                                    `1
+                                    `(square ,(visit (quotient i 2))))
+                                (if (= i 1)
+                                    x
+                                    `(* (square ,(visit (quotient i 2))) ,x))))])
+            (visit n)))))
+
+Here is the code generator in action::
+
+  > (binary-power_gen 'x 0)
+  (lambda (x) 1)
+  > (binary-power_gen 'x 1)
+  (lambda (x) x)
+  > (binary-power_gen 'x 2)
+  (lambda (x) (square x))
+  > (binary-power_gen 'x 3)
+  (lambda (x) (* (square x) x))
+  > (binary-power_gen 'x 4)
+  (lambda (x) (square (square x)))
+  > (binary-power_gen 'x 5)
+  (lambda (x) (* (square (square x)) x))
+  > (binary-power_gen 'x 6)
+  (lambda (x) (square (* (square x) x)))
+  > (binary-power_gen 'x 7)
+  (lambda (x) (* (square (* (square x) x)) x))
+  > (binary-power_gen 'x 8)
+  (lambda (x) (square (square (square x))))
+  > (binary-power_gen 'x 9)
+  (lambda (x) (* (square (square (square x))) x))
+  > (binary-power_gen 'x 10)
+  (lambda (x) (square (* (square (square x)) x)))
+  > 
+
+Question: What happens if we apply ``(lambda (x) (square (* (square
+(square x)) x)))`` to 2?
+
+
+Partial evaluation
+------------------
+
+.. index:: partial evaluation
+.. index:: analysis (binding-time)
+.. index:: binding times
+
+Quasiquotation has made it possible to stage the computation of
+exponentiation into a part that only depends on the exponent, and a
+part that depends on the base.  It gives us the expressive power not
+just to write a program generator, but write a *partial evaluator*,
+i.e., a program that specializes [the representation of] other
+programs with respect to part of their input or part of their context
+of use.  The partial evaluator needs to determine which part of the
+program should be computed at specialization time and which part
+should be residualized for run time.  Determining these *binding
+times* (specialization time and run time) can be done on the fly or in
+a preprocessing phase, the *binding-time analysis*.  (Binding-time
+analysis is a dependency analysis and another example of abstract
+interpretation.  Anyone who writes a program using quasiquotes has
+such dependencies in mind, and a binding-time analysis formalizes
+them.)
+
+.. index::
+   single: Jones, Neil D. (binding times)
+   single: Jones, Neil D. (binding-time analysis)
+   single: Muchnick, Steven (binding times)
+   single: partial evaluation (self-applicable)
+
+The concept of binding times is due to Neil Jones and `Steven Muchnick
+<http://en.wikipedia.org/wiki/Steven_Muchnick>`_ and was developed in
+in the mid 1970s.  The concept of binding-time analysis is due to Neil
+Jones and was developed in the late 1980s to tame self-applicable
+partial evaluation.
+
+Let us revisit the exercise about the tower of self-interpreters
+(:ref:`exercise-cost-of-interpretation` in `the first lecture note
+<week-1.html>`_) in the light of binding times:
+
+* an interpreter processes a source program in order to execute it,
+  whereas
+
+* a compiler processes a source program in order to emit a
+  representation of this execution as a target program, to be
+  subsequently processed on a run-time machine in order to be
+  executed.
+
+Roughly, a compiler is organized with a *front end* that deals with
+parsing the source program, a *middle end* that translates the parsed
+source program into a parsed target program, and a *back end* that
+unparses the target program.  An interpreter has a similar front end,
+and much of what this front end does depends on the structure of the
+source program.  A compiler removes this interpretive overhead once
+and for all.  It is a traditional exercise to stage an interpreter
+into (the front-end of) a compiler, using quasiquote and unquote, much
+as above we have staged ``binary-power`` into ``binary-power_gen``.
+This staging hinges on analyzing binding times in the interpreter.
+What only depends on the source program is called "compile time" and
+the rest is called "run time".
+
+In summary, quasiquotation gives us the expressive power to write
+program generators, and we turn our programs into program generators
+by peppering them with quasiquotes and unquotes.  This peppering is
+done in a stringently disciplined way -- a true art form that was
+turned into a science when Neil Jones designed binding-time analysis.
+
+
+Nested quasiquotation
+---------------------
+
+.. epigraph::
+
+   | Pile on many more layers
+   | and I'll be joining you there.
+
+   -- `Pink Floyd <http://en.wikipedia.org/wiki/Shine_On_You_Crazy_Diamond>`_
+
+* If one wants to write a program that generates a program generator,
+  one nests quasiquotes and unquotes.
+
+* If one wants to write a program that generates a program that
+  generates a program generator, one nests quasiquotes and unquotes even
+  further.
+
+It is an error to specify more unquotes than there are quasiquotes::
+
+  > (define foo 42)
+  > `foo
+  foo
+  > `,foo
+  42
+  > ``,foo
+  `,foo
+  > ``,,foo
+  `,42
+  > ``,,,foo
+  
+  Exception: misplaced aux keyword (unquote foo)
+  Type (debug) to enter the debugger.
+  > 
+
+Food for thought:
+
+* Grammatically, quasiquotation makes the Scheme grammar no longer
+  context-free: now the syntactic correctness of any expression
+  (should any one decide to write a syntax checker) cannot be in
+  general decided solely based on this expression.  If this expression
+  contains an occurrence of ``unquote`` or of ``unquote-splicing``, it
+  is only valid in a context where there is a ``quasiquote``.
+
+* Quasiquotation is a source of great expressive power in programs as
+  well as of sumptuous headaches for programmers.  Therefore, if there
+  is a question about quasiquote at the exam, it will only be a simple
+  one.
+
+
+.. _exercise-temporal-curry:
+
+Exercise 6
+----------
+
+As a continuation of the section on `currying and uncurrying
+<week-20.html#currying-and-uncurrying>`_, write the Magritte
+counterpart of the ``curry`` procedure that,
+
+* when applied to 0, returns the empty list;
+
+* when applied to 1, returns the representation of a procedure that,
+  when applied to a value ``v1``, returns a list containing ``v1``;
+
+* when applied to 2, returns the representation of a procedure that,
+  when applied to a value ``v1``, returns the representation of a
+  procedure that, when applied to a value ``v2``, returns a list
+  containing ``v1`` and ``v2``;
+
+* when applied to 3, returns the representation of a procedure that,
+  when applied to a value ``v1``, returns the representation of a
+  procedure that, when applied to a value ``v2``, returns the
+  representation of a procedure that, when applied to a value ``v3``,
+  returns a list containing ``v1``, ``v2``, and ``v3``;
+
+* etc.
+
+At first, restrict the values ``v1``, ``v2``, ``v3``, etc. to be
+integers.  At second, let them be symbols too.
+
+
+Exercise 6, clarified(?) and redirected
+---------------------------------------
+
+The Magritte counterpart of the ``curry`` procedure, when applied,
+yields the representation of a procedure that, when evaluated and applied,
+yields the representation of a procedure that, when evaluated and applied,
+yields the representation of a procedure that, when evaluated and applied,
+yields the representation of a procedure that, when evaluated and applied,
+...
+yields the representation of a procedure that, when evaluated and applied,
+yields a list of the elements that the successive procedures were applied to, 
+either in order or in reverse order, that is not too important.
+
+So:
+
+* This procedure, applied to ``0``,
+  returns an expression ``e0``
+  such that if we evaluate
+  ``(define p0 e0)``
+  then ``p0`` denotes the empty list.
+
+* This procedure, applied to ``1``,
+  returns an expression ``e1``
+  such that if we evaluate
+  ``(define p1 e1)``
+  then ``p1`` denotes a procedure that, applied to ``0``,
+  returns an expression ``e0``
+  such that if we evaluate
+  ``(define p0 e0)``
+  then ``p0`` denotes ``(1)``.
+
+* This procedure, applied to ``2``,
+  returns an expression ``e2``
+  such that if we evaluate
+  ``(define p2 e2)``
+  then ``p2`` denotes a procedure that, applied to ``1``,
+  returns an expression ``e1``
+  such that if we evaluate
+  ``(define p1 e1)``
+  then ``p1`` denotes a procedure that, applied to ``0``,
+  returns an expression ``e0``
+  such that if we evaluate
+  ``(define p0 e0)``
+  then ``p0`` denotes either ``(1 2)`` or ``(2 1)`` if you prefer,
+  that is not too important.
+
+* This procedure, applied to ``3``,
+  returns an expression ``e3``
+  such that if we evaluate
+  ``(define p3 e3)``
+  then ``p3`` denotes a procedure that, applied to ``2``,
+  returns an expression ``e2``
+  such that if we evaluate
+  ``(define p2 e2)``
+  then ``p2`` denotes a procedure that, applied to ``1``,
+  returns an expression ``e1``
+  such that if we evaluate
+  ``(define p1 e1)``
+  then ``p1`` denotes a procedure that, applied to ``0``,
+  returns an expression ``e0``
+  such that if we evaluate
+  ``(define p0 e0)``
+  then ``p0`` denotes either ``(1 2 3)`` or ``(3 2 1)`` if you prefer,
+  that is not too important.
+
+* This procedure, applied to ``4``,
+  returns an expression ``e4``
+  such that if we evaluate
+  ``(define p4 e4)``
+  then ``p4`` denotes a procedure that, applied to ``3``,
+  returns an expression ``e3``
+  such that if we evaluate
+  ``(define p3 e3)``
+  then ``p3`` denotes a procedure that, applied to ``2``,
+  returns an expression ``e2``
+  such that if we evaluate
+  ``(define p2 e2)``
+  then ``p2`` denotes a procedure that, applied to ``1``,
+  returns an expression ``e1``
+  such that if we evaluate
+  ``(define p1 e1)``
+  then ``p1`` denotes a procedure that, applied to ``0``,
+  returns an expression ``e0``
+  such that if we evaluate
+  ``(define p0 e0)``
+  then ``p0`` denotes either ``(1 2 3 4)`` or ``(4 3 2 1)`` if you prefer,
+  that is not too important.
+
+* This procedure, applied to ``5``,
+  returns an expression ``e5``
+  such that if we evaluate
+  ``(define p5 e5)``
+  then ``p5`` denotes a procedure that, applied to ``4``,
+  returns an expression ``e4``
+  such that if we evaluate
+  ``(define p4 e4)``
+  then ``p4`` denotes a procedure that, applied to ``3``,
+  returns an expression ``e3``
+  such that if we evaluate
+  ``(define p3 e3)``
+  then ``p3`` denotes a procedure that, applied to ``2``,
+  returns an expression ``e2``
+  such that if we evaluate
+  ``(define p2 e2)``
+  then ``p2`` denotes a procedure that, applied to ``1``,
+  returns an expression ``e1``
+  such that if we evaluate
+  ``(define p1 e1)``
+  then ``p1`` denotes a procedure that, applied to ``0``,
+  returns an expression ``e0``
+  such that if we evaluate
+  ``(define p0 e0)``
+  then ``p0`` denotes either ``(1 2 3 4 5)`` or ``(5 4 3 2 1)`` if you prefer,
+  that is not too important.
+
+This is not a simple exercise, and nested quasiquotation will not be at the
+exam.  Many other exercises in the lecture notes should be
+considered before this one, for example, `the preliminary one about
+the n-ary version of Curry
+<week-8.html#exercise-n-ary-curry>`_.
+
+A more fruitful exercise at this stage would be to adjust the Scheme
+syntax checker in two successive versions:
+
+* Version 1 issues a meaningful error message before returning ``#f``.
+
+  Example for the basic imperative langage::
+
+    > (is-expression? (make-binary-operation 'blah 1 2))
+    is-binary-operator? -- illegal input: blah
+    #f
+    > (is-command? (make-sequence 1 2))
+    is-command? -- ill-formed input: 1
+    #f
+    > 
+
+* Version 2 keeps syntax-checking after the first error, and issues as
+  many meaningful error messages as it encounters syntax errors, before
+  returning ``#f``.
+
+  Example for the basic imperative langage::
+
+    > (is-expression? (make-binary-operation 'blah 1 2))
+    is-binary-operator? -- illegal input: blah
+    is-expression? -- ill-formed input: 1
+    is-expression? -- ill-formed input: 2
+    #f
+    > (is-command? (make-sequence 1 2))
+    is-command? -- ill-formed input: 1
+    is-command? -- ill-formed input: 2
+    #f
+    > 
+
+This exercise would be considerably less mind-boggling, and it would
+consolidate what you have learned in these lectyre notes.  There will
+be plenty of time later and in another course to understand nested
+quasiquotation, but it would be good to really understand syntax
+checking (and structural recursion) here and now.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-8-quasiquotation.scm>`_
+  (latest version: 15 Sep 2015).
+
+
+Version
+-------
+
+Created
+[15 Sep 2015]

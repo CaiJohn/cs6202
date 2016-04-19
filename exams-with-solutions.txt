@@ -1,0 +1,35 @@
+.. -*- mode: rst -*-
+
+.. _sec-exams-with-solutions:
+
+Exams with solutions
+====================
+
+* `2015, August <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-August-2015.pdf>`_
+
+* `2015, June <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-June-2015.pdf>`_
+
+* `2014, June <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-June-2014.pdf>`_
+
+* `2013, June <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-June-2013.pdf>`_
+
+* `2012, August <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-August-2012.pdf>`_
+
+* `2012, June <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-June-2012.pdf>`_
+
+* `2011, August <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-August-2011.pdf>`_
+
+* `2011, June <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-June-2011.pdf>`_
+
+* `2010, August <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-August-2010.pdf>`_
+
+* `2010, June <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-June-2010.pdf>`_
+
+* `2009, August <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-August-2009.pdf>`_
+
+* `2009, June <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-June-2009.pdf>`_
+
+* `2008, August <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-August-2008.pdf>`_
+
+* `2008, June <http://users-cs.au.dk/danvy/dProgSprog15/Supplementary-material/dProgSprog-exams-2008-2014-with-solutions/exam-dProgSprog-June-2008.pdf>`_
+

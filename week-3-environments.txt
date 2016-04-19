@@ -1,0 +1,345 @@
+.. -*- mode: rst -*-
+
+Note for Week 3 about environments
+==================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+.. epigraph::
+
+   | `Aw... <https://en.wiktionary.org/wiki/aw>`_
+
+None.
+
+
+Resources
+---------
+
+* The Scheme code for
+  `the present lecture note about environments
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3-environments.scm>`_
+  (latest version: 25 Aug 2015).
+
+
+Goal
+----
+
+.. epigraph::
+
+  | The environment is everything that isn't me.
+
+  -- `Albert Einstein <http://en.wikipedia.org/wiki/Albert_Einstein>`_
+
+The goal of this lecture note is to study *environments*, which are
+artifacts for binding names to their denotation.
+
+In mathematics, one often consider expressions with unknowns such as
+(x + y)^2, i.e., the square of the sum of x and y.  We can reason
+about this expression, e.g., with `the binomial expansion theorem
+<https://en.wikipedia.org/wiki/Binomial_theorem>`_ from elementary
+algebra.  We can also compute this expression *in a given
+environment*.  For example, in the environment where x denotes 0 and y
+denotes 0, evaluating (x + y)^2 yields 0, and in the environment where
+x denotes 3 and y denotes 6, evaluating (x + y)^2 yields 81.
+
+So what is an environment?  It is a collection of bindings that
+associate names and the denotation of these names.  An environment can
+be empty, or it can be the extension of another environment with a new
+binding of a name to a denotation -- which is (what a surprise) an
+inductive characterization.
+
+In the rest of this note, we first characterize an environment as an
+abstract data type, we set up a unit test that captures our
+expectations about how an environment should behave, and we present
+two representations of environments: as *association lists* and as
+*functions*.
+
+Next week we will consider expressions with variables (namely regular
+expressions Boolean expressions).  We will interpret any given
+expression in an environment that binds each of its variables to a
+denotation.
+
+
+.. index:: abstract data type
+.. index:: environment (abstract data type)
+
+.. _section-about-environments:
+
+Environments
+------------
+
+An environment is an abstract data type, i.e., a *functionality* with
+*operators*.
+
+* The functionality: an environment maps *names* to *denotables*.  It
+  represents an ordered collection of bindings that can be *extended*
+  and *consulted*.  If an environment is extended several times with a
+  binding of the same name to different values, consulting the
+  environment with that name yields the value in the latest binding.
+
+  An analogy: Scheme programs operate in an environment.  This
+  environment can be extended with, e.g., let-expressions.  In the
+  course of the evaluation of a Scheme expression, a variable is
+  evaluated by looking it up in the current environment::
+
+    > (let ([x 10])
+        (let ([x 100])
+          x))
+    100
+    >
+
+* The operators: a representation of the *empty environment*, the
+  ability to *extend* an environment with a new binding of a name to a
+  denotable, and the ability to *look up* a given name in a given
+  environment to find its associated denotable, if this name is bound
+  in this environment.
+
+  .. index:: environment (empty)
+
+  * The representation of the empty environment is denoted by the
+    Scheme name ``mt``.  (If you wonder about the name "mt", just say
+    it aloud a few times, as in "mt environment, mt environment", and
+    then re-read the previous sentence.  (Note: getting stuck here in
+    wonder is no reason not to read the rest of this lecture note.))
+
+  .. index:: environment (extension)
+
+  * The ability to extend an environment with a new binding is
+    provided by a Scheme procedure ``extend`` that, given a name, a
+    denotable, and an environment, yields the corresponding extended
+    environment.
+
+  .. index:: environment (lookup)
+
+  * The ability to find the denotable associated to a given
+    name in a given environment is provided by a Scheme procedure
+    ``lookup`` that, given a name, an environment, and two procedures,
+    applies the first procedure to the denotable, if it exists, and
+    otherwise applies the second procedure to the name.
+
+We start by setting up a unit test in the style of Harald the Bold
+(see the section about :ref:`information-content-in-unit-tests`):
+
+.. code-block:: scheme
+
+  (define test-env
+    (lambda (mt extend lookup)
+      (and ;;; first test:
+           (or (lookup 'x
+                       mt
+                       (lambda (denotable)
+                         #f)
+                       (lambda (name)
+                         #t))
+               (errorf 'test-env "empty environment"))
+           ;;; second test:
+           (or (lookup 'x
+                       (extend 'x 42 mt)
+                       (lambda (denotable)
+                         (= denotable 42))
+                       (lambda (name)
+                         #f))
+               (errorf 'test-env "lookup 42"))
+           ;;; third test:
+           (or (lookup 'x
+                       (extend 'x 43 (extend 'x 42 mt))
+                       (lambda (denotable)
+                         (= denotable 43))
+                       (lambda (name)
+                         #f))
+               (errorf 'test-env "lookup 43"))
+           ;;; fourth test:
+           (or (lookup 'y
+                       (extend 'x 43 (extend 'x 42 mt))
+                       (lambda (denotable)
+                         #f)
+                       (lambda (name)
+                         #t))
+               (errorf 'test-env "undeclared name"))
+           ;;; add more tests here
+           )))
+
+Procedure ``test-env`` is parameterized by the three operators, and
+runs a conjunction of 4 tests, all of which must yield ``#t``:
+
+1. The first test checks that the empty environment binds no names.
+   To this end, the name ``x`` is looked up in the empty environment.
+   If it is found, ``(lambda (denotable) #f)`` is applied to the
+   corresponding denotable and yields ``#f``; otherwise, ``(lambda
+   (name) #t)`` is applied to ``x`` and yields ``#t``.
+
+2. The second test checks that looking up a bound name yields the
+   corresponding denotable.  To this end, ``x`` is looked up in an
+   environment where it denotes ``42``.  If it is found, ``(lambda
+   (denotable) (= denotable 42))`` is applied and verifies whether its
+   actual parameter is indeed ``42``; otherwise, ``(lambda (name)
+   #f)`` is applied to ``x`` and yields ``#f``.
+
+3. The third test checks that looking up a bound name yields the
+   denotable corresponding to its latest binding.  To this end, ``x``
+   is looked up in an environment where it denotes ``43`` and where
+   this binding shadows a previous binding of ``x`` to ``42``.  If
+   ``x`` is found, ``(lambda (denotable) (= denotable 43))`` is
+   applied and verifies whether its actual parameter is indeed ``43``;
+   otherwise, ``(lambda (name) #f)`` is applied to ``x`` and yields
+   ``#f``.
+
+4. The fourth test checks that a name that is not bound in a given
+   environment yields no denotable.
+
+
+.. index:: environment (as association list)
+
+.. _environments-as-association-lists:
+
+Environments as association lists
+---------------------------------
+
+.. index:: lists (association)
+
+An *association list* (or *A-list* for short) is a proper list of
+pairs, where each pair holds a name and a denotable:
+
+.. bnf:: association list
+   :noindex:
+   :namespace: association-list
+
+   <association-list> ::= ()
+                        | ((<name> . <denotable>) . <association-list>)
+
+   <name> ::= a Scheme symbol, for example
+
+   <denotable> ::= ...some Scheme value...
+
+Let us represent environments as A-lists:
+
+* The empty environment is represented by the empty list:
+
+  .. code-block:: scheme
+
+    (define alist-mt
+      '())
+
+* Extending an environment is achieved by cons'ing a new pair in
+  front of a given A-list:
+
+  .. code-block:: scheme
+
+    (define alist-extend
+      (lambda (name denotable environment)
+        (cons (cons name denotable)
+              environment)))
+
+* Looking up a given name is achieved by recursively traversing the
+  given A-list:
+
+  .. code-block:: scheme
+
+    (define alist-lookup
+      (lambda (name environment found not-found)
+        (letrec ([visit (lambda (e)
+                          (if (null? e)
+                              (not-found name)
+                              (let ([binding (car e)])
+                                (if (equal? name (car binding))
+                                    (found (cdr binding))
+                                    (visit (cdr e))))))])
+          (visit environment))))
+
+  (Note how each recursive call to ``visit`` matches the inductive
+  definition of association lists: ``visit`` is structurally
+  recursive.)
+
+Thus equipped, we can run the unit test::
+
+  > (test-env alist-mt alist-extend alist-lookup)
+  #t
+  >
+
+
+.. index:: environment (as function)
+
+Environments as functions
+-------------------------
+
+Let us represent environments as functions that are given a name and
+what to do with the corresponding denotable, if there is one.
+
+* The empty environment is represented by a procedure that is given a
+  name, a procedure ``found``, and a procedure ``not-found``, and that
+  unconditionally applies ``not-found``:
+
+  .. code-block:: scheme
+
+    (define function-mt
+      (lambda (name found not-found)
+        (not-found name)))
+
+* Looking up a given name in a given environment is achieved by
+  applying the environment to this name:
+
+  .. code-block:: scheme
+
+    (define function-lookup
+      (lambda (name environment found not-found)
+        (environment name found not-found)))
+
+* Extending a given environment with a new name and a new denotable is
+  achieved by returning a procedure that, when applied to a name, will
+  check whether this name is the new name, and otherwise will look up
+  this name in the given environment:
+
+  .. code-block:: scheme
+
+    (define function-extend
+      (lambda (new-name new-denotable given-environment)
+        (lambda (name found not-found)
+          (if (equal? name new-name)
+              (found new-denotable)
+              (function-lookup name given-environment found not-found)))))
+
+Again, let us run the unit test::
+
+  > (test-env function-mt function-extend function-lookup)
+  #t
+  >
+
+
+Checkpoint
+----------
+
+We have studied a programming-language artifact: environments.  Next
+week we shall investigate the BNF of regular expressions, the BNF of
+arithmetic expressions, the BNF of Boolean expressions , and how to
+implement each of them.  In particular, we shall study two
+interpreters for Boolean expressions.  These Boolean expressions
+contain variables, and the two interpreters are therefore equipped
+with an environment to hold the denotations of these variables.
+
+
+Resources
+---------
+
+* The Scheme code for
+  `the present lecture note about environments
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-3-environments.scm>`_
+  (latest version: 25 Aug 2015).
+
+
+Version
+-------
+
+Duplicated the section about Resources at the beginning of this file
+[27 Aug 2015]
+
+Created
+[25 Aug 2015]

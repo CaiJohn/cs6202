@@ -1,0 +1,121 @@
+.. -*- mode: rst -*-
+
+Fictional characters
+====================
+
+
+Main characters
+---------------
+
+* Alfrothul the Resplendent, from Skagen
+
+* Brynja the Systematic, from a Viking tribe of Southern Jutland
+
+* Harald the Bold, from a Viking tribe of Eastern Jutland
+
+* Loki the Mischievous
+
+
+Recurring characters in Denmark
+-------------------------------
+
+* Algot the Intrepid
+
+* Anders and Sander
+
+* Ankjær the Implementor
+
+* Archibald the Software Architect
+
+* Arnketil the Cyclist, from Herning
+
+* Àskell the Functional
+
+* Edit the Practical, from Funen
+
+* Finnr the Finder
+
+* Foo the Bard
+
+* Hagar the Hefty, from Randers
+
+* Harald the Valiant
+
+* Heimdal the White
+
+* Mimer
+
+* Olaf the Plucky, from a Viking tribe of Western Jutland
+
+* Egon Olsen, from Valby
+
+* Sigbjørn the Fearless
+
+* Sigtryg the Square, from a Viking tribe of Central Jutland, next to a lake
+
+* Thorbjørn the Pragmatic
+
+* Thorbjørn the Seller, from Silkeborg
+
+* Ve and Vili
+
+* Vigfus the Concatenator
+
+
+Recurring characters abroad
+---------------------------
+
+* Calvin
+
+* Hobbes
+
+* Alastor "Mad Eye" Moody
+
+* Pinocchio
+
+* Rantanplan
+
+
+Others
+------
+
+* Nicolas Bourbaki
+
+* Cordelia Chase
+
+* Arthur Dent
+
+* Lieutenant Doolittle
+
+* The Dude
+
+* Esmeralda and Yoshiki
+
+* Fletcher Gull
+
+* Xander Harris
+
+* Yvonne Jensen
+
+* Princess Leia
+
+* Lex Luthor
+
+* Captain Malcolm Reynolds
+
+* Will Robinson
+
+* Willow Rosenberg
+
+* Hari Seldon
+
+* Luke Skywalker
+
+* Jack Sparrow (i.e., *Captain* Jack Sparrow)
+
+* Han Solo
+
+* Buffy Summers
+
+* The Terminator
+

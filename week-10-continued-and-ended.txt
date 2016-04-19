@@ -1,0 +1,729 @@
+.. -*- mode: rst -*-
+
+Note for Week 10, continued and ended
+=====================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+None, but feel free to draw inspiration about them for your term project.
+
+
+Resources
+---------
+
+* The Scheme code for `the previous lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-10-self-interpreter-with-solutions.scm>`_,
+  including solutions
+  (latest version: 04 Nov 2015).
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-10-self-interpreter-continued-and-ended.scm>`_
+  (latest version: 31 Oct 2015).
+
+* The `zip file
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/interpreters-for-Scheme.zip>`_
+  containing a revised version of the three Scheme interpreters: one for a
+  call-by-value version of our subset of Scheme, one for a
+  call-by-name version of our subset of Scheme, and one for a
+  call-by-need version of our subset of Scheme
+  (latest version: 31 Oct 2015).
+
+
+.. index::
+   single: Reynolds, John C. (evaluation-order dependence)
+
+Call by what again?
+-------------------
+
+The previous lecture note concluded with the following question:
+
+* Do you think the meta-circular interpreter specifies a call-by-value
+  or a call-by-name version of Scheme?
+
+In his historical paper "Definitional Interpreters for Higher-Order
+Programming Languages" (1972), John Reynolds pointed out that the
+meta-circular interpreter specifies no such thing.  Instead, it
+*inherits* the evaluation order of the underlying interpreter.  Let us
+successively illustrate this point with the call-by-value, call-by-name,
+and call-by-need Scheme interpreters from a few weeks ago.  Our running
+example will be the following one:
+
+.. code-block:: scheme
+
+  ((lambda (x y z) (+ z z)) (time 1) (time 10) (time 100))
+
+* In call by value, three time-expressions will witness the evaluation of
+  each actual parameter when the lambda-abstraction is applied.
+
+* In call by name, two time-expressions will witness the evaluation of
+  the third actual parameter each time ``z`` is evaluated.
+
+* In call by need, one time-expression will witness the evaluation of the
+  third actual parameter the first time ``z`` is evaluated.
+
+
+Call by value
+-------------
+
+In the following scenario, we
+
+* load the call-by-value interpreter,
+
+* start it,
+
+* visualize the evaluation of the running example,
+
+* load the meta-circular interpreter, and
+
+* interpret the running example::
+
+    > (load "interpreter-for-Scheme-with-call-by-value.scm")
+    > (start-the-interpreter "value> ")
+    There we go again, in call by value.
+    value> ((lambda (x y z) (+ z z)) (time 1) (time 10) (time 100))
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    200
+    value> (load "week-10-self-interpreter-with-solutions.scm")
+    value> (time (interpret '((lambda (x y z) (+ z z)) (time 1) (time 10) (time 100))))
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        8896 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        8896 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        8896 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        44 ms elapsed cpu time
+        54 ms elapsed real time
+        3232144 bytes allocated
+    200
+    value> (exit)
+    "So long."
+    > 
+
+In both cases (evaluation of the running example and interpretation of
+the running example), three time-expressions witnessed the evaluation of
+each actual parameter when the lambda-abstraction was applied, which is
+characteristic of call by value.
+
+
+Exercise 1
+----------
+
+Assuming an underlying interpreter that is call by value, does the
+meta-circular interpreter evaluate sub-expressions, in an application,
+from left to right or from right to left?
+
+
+Call by name
+------------
+
+In the following scenario, we
+
+* load the call-by-name interpreter,
+
+* start it,
+
+* visualize the evaluation of the running example,
+
+* load the meta-circular interpreter, and
+
+* interpret the running example::
+
+    > (load "interpreter-for-Scheme-with-call-by-name.scm")
+    > (start-the-interpreter "name> ")
+    There we go again, in call by name.
+    name> ((lambda (x y z) (+ z z)) (time 1) (time 10) (time 100))
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    200
+    name> (load "week-10-self-interpreter-with-solutions.scm")
+    name> (time (interpret '((lambda (x y z) (+ z z)) (time 1) (time 10) (time 100))))
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        1 ms elapsed real time
+        60240 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        1 ms elapsed cpu time
+        1 ms elapsed real time
+        60240 bytes allocated
+    (time (_eval (car es) ...))
+        2 collections
+        200 ms elapsed cpu time, including 1 ms collecting
+        201 ms elapsed real time, including 1 ms collecting
+        17717136 bytes allocated, including 16632480 bytes reclaimed
+    200
+    name> (exit)
+    "So long."
+    > 
+
+In both cases (evaluation of the running example and interpretation of
+the running example), two time-expressions witnessed the evaluation of
+the third actual parameter each time ``z`` was evaluated, which is
+characteristic of call by name.
+
+.. epigraph::
+
+  | Harald (lost in thought): So this actual parameter consumes the same space, twice.
+
+
+Call by need
+------------
+
+In the following scenario, we
+
+* load the call-by-need interpreter,
+
+* start it,
+
+* visualize the evaluation of the running example,
+
+* load the meta-circular interpreter, and
+
+* interpret the running example::
+
+    > (load "interpreter-for-Scheme-with-call-by-need.scm")
+    > (start-the-interpreter "need> ")
+    There we go again, in call by need.
+    need> ((lambda (x y z) (+ z z)) (time 1) (time 10) (time 100))
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        0 bytes allocated
+    200
+    need> (load "week-10-self-interpreter-with-solutions.scm")
+    need> (time (interpret '((lambda (x y z) (+ z z)) (time 1) (time 10) (time 100))))
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        10848 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        43 ms elapsed cpu time
+        83 ms elapsed real time
+        3198896 bytes allocated
+    200
+    need> (exit)
+    "So long."
+    > 
+
+In both cases (evaluation of the running example and interpretation of
+the running example), one time-expression witnessed the evaluation of the
+third actual parameter the first time ``z`` was evaluated, which is
+characteristic of call by need.
+
+
+Pile on many more layers
+------------------------
+
+What if we were running a tower of meta-circular interpreters on top of
+each of the call-by-value, call-by-name, and call-by-need interpreters?
+
+.. epigraph::
+
+  | Vigfus (poetically): ...and I'll be joining you there.
+
+
+Exercise 2
+----------
+
+Write a procedure ``make-tower`` such that
+
+* applying it to ``0`` yields the same result as evaluating
+
+  .. code-block:: scheme
+
+    '((lambda (x y z) (+ z z)) (time 1) (time 10) (time 100))
+
+* applying it to ``1`` yields the same result as evaluating
+
+  .. code-block:: scheme
+
+    (list representation-of-interpret
+          (list 'quote
+                '((lambda (x y z) (+ z z)) (time 1) (time 10) (time 100))))
+
+* applying it to ``2`` yields the same result as evaluating
+
+  .. code-block:: scheme
+
+    (list representation-of-interpret
+          (list 'quote
+                (list representation-of-interpret
+                      (list 'quote
+                            '((lambda (x y z) (+ z z)) (time 1) (time 10) (time 100))))))
+
+* applying it to ``3`` yields the same result as evaluating
+
+  .. code-block:: scheme
+
+    (list representation-of-interpret
+          (list 'quote
+                (list representation-of-interpret
+                      (list 'quote
+                            (list representation-of-interpret
+                                  (list 'quote
+                                        '((lambda (x y z) (+ z z)) (time 1) (time 10) (time 100))))))))
+
+* etc.
+
+
+Solution to Exercise 2
+----------------------
+
+See the Scheme code for `this lecture note
+<http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-10-self-interpreter-continued-and-ended.scm>`_.
+
+
+Call by value, piled on
+-----------------------
+
+In the following scenario, we
+
+* load the call-by-value interpreter,
+
+* start it,
+
+* load the meta-circular interpreter and the definition of ``make-tower``, and
+
+* successively interpret the running example on top of a tower of height
+  0, 1, 2, and 3::
+
+    > (load "interpreter-for-Scheme-with-call-by-value.scm")
+    > (start-the-interpreter "value> ")
+    There we go again, in call by value.
+    value> (load "week-10-self-interpreter-with-solutions.scm")
+    value> (load "week-10-self-interpreter-continued-and-ended.scm")
+    value> (time (interpret (make-tower 0)))
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        8896 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        8896 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        8896 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        44 ms elapsed cpu time
+        54 ms elapsed real time
+        3232144 bytes allocated
+    200
+    value> (time (interpret (make-tower 1)))
+    (time (_eval (car es) ...))
+        no collections
+        29 ms elapsed cpu time
+        29 ms elapsed real time
+        2418752 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        31 ms elapsed cpu time
+        41 ms elapsed real time
+        2418752 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        28 ms elapsed cpu time
+        28 ms elapsed real time
+        2418752 bytes allocated
+    (time (_eval (car es) ...))
+        10 collections
+        997 ms elapsed cpu time, including 4 ms collecting
+        1021 ms elapsed real time, including 4 ms collecting
+        83883136 bytes allocated, including 83968944 bytes reclaimed
+    200
+    value> (time (interpret (make-tower 2)))
+    (time (_eval (car es) ...))
+        12 collections
+        1165 ms elapsed cpu time, including 1 ms collecting
+        1167 ms elapsed real time, including 2 ms collecting
+        98111632 bytes allocated, including 101107968 bytes reclaimed
+    (time (_eval (car es) ...))
+        11 collections
+        1146 ms elapsed cpu time, including 4 ms collecting
+        1149 ms elapsed real time, including 4 ms collecting
+        98111376 bytes allocated, including 92677136 bytes reclaimed
+    (time (_eval (car es) ...))
+        12 collections
+        1147 ms elapsed cpu time, including 2 ms collecting
+        1148 ms elapsed real time, including 2 ms collecting
+        98111632 bytes allocated, including 101041392 bytes reclaimed
+    (time (_eval (car es) ...))
+        362 collections
+        35919 ms elapsed cpu time, including 67 ms collecting
+        35984 ms elapsed real time, including 63 ms collecting
+        3043075952 bytes allocated, including 3050113056 bytes reclaimed
+    200
+    value> (time (interpret (make-tower 3)))
+    (time (_eval (car es) ...))
+        692 collections
+        69349 ms elapsed cpu time, including 140 ms collecting
+        69401 ms elapsed real time, including 121 ms collecting
+        5824268208 bytes allocated, including 5823226336 bytes reclaimed
+    (time (_eval (car es) ...))
+        692 collections
+        66603 ms elapsed cpu time, including 120 ms collecting
+        66646 ms elapsed real time, including 126 ms collecting
+        5824268208 bytes allocated, including 5823286784 bytes reclaimed
+    (time (_eval (car es) ...))
+        692 collections
+        67165 ms elapsed cpu time, including 139 ms collecting
+        67209 ms elapsed real time, including 145 ms collecting
+        5824268208 bytes allocated, including 5823339024 bytes reclaimed
+    (time (_eval (car es) ...))
+        20466 collections
+        2000854 ms elapsed cpu time, including 3859 ms collecting
+        2031387 ms elapsed real time, including 3910 ms collecting
+        172225375696 bytes allocated, including 172223452816 bytes reclaimed
+    200
+    value> (exit)
+    "So long."
+    > 
+
+In all cases, three time-expressions witnessed the evaluation of each
+actual parameter when the lambda-abstraction was applied, which is
+characteristic of call by value.
+
+
+Call by name, piled on
+----------------------
+
+In the following scenario, we
+
+* load the call-by-name interpreter,
+
+* start it,
+
+* load the meta-circular interpreter and the definition of ``make-tower``, and
+
+* successively interpret the running example on top of a tower of height
+  0, 1, and 2::
+
+    > (load "interpreter-for-Scheme-with-call-by-name.scm")
+    > (start-the-interpreter "name> ")
+    There we go again, in call by name.
+    name> (load "week-10-self-interpreter-with-solutions.scm")
+    name> (load "week-10-self-interpreter-continued-and-ended.scm")
+    name> (time (interpret (make-tower 0)))
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        1 ms elapsed real time
+        60240 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        1 ms elapsed cpu time
+        1 ms elapsed real time
+        60240 bytes allocated
+    (time (_eval (car es) ...))
+        2 collections
+        200 ms elapsed cpu time, including 1 ms collecting
+        201 ms elapsed real time, including 1 ms collecting
+        17717136 bytes allocated, including 16632480 bytes reclaimed
+    200
+    name> (time (interpret (make-tower 1)))
+    (time (_eval (car es) ...))
+        8 collections
+        730 ms elapsed cpu time, including 1 ms collecting
+        730 ms elapsed real time, including 2 ms collecting
+        70152064 bytes allocated, including 67313664 bytes reclaimed
+    (time (_eval (car es) ...))
+        9 collections
+        727 ms elapsed cpu time, including 3 ms collecting
+        728 ms elapsed real time, including 3 ms collecting
+        70152320 bytes allocated, including 75739696 bytes reclaimed
+    (time (_eval (car es) ...))
+        1249 collections
+        107896 ms elapsed cpu time, including 287 ms collecting
+        107998 ms elapsed real time, including 252 ms collecting
+        10507078576 bytes allocated, including 10512016352 bytes reclaimed
+    200
+    name> (time (interpret (make-tower 2)))
+    (time (_eval (car es) ...))
+        18606 collections
+        2023553 ms elapsed cpu time, including 2507 ms collecting
+        2024420 ms elapsed real time, including 2474 ms collecting
+        78301161968 bytes allocated, including 78301640336 bytes reclaimed
+    (time (_eval (car es) ...))
+        18606 collections
+        2026089 ms elapsed cpu time, including 2634 ms collecting
+        2027045 ms elapsed real time, including 2555 ms collecting
+        78301161968 bytes allocated, including 78301649232 bytes reclaimed
+    (time (_eval (car es) ...))
+        2616711 collections
+        285115347 ms elapsed cpu time, including 363928 ms collecting
+        285246006 ms elapsed real time, including 356227 ms collecting
+        11012335048784 bytes allocated, including 11012333628000 bytes reclaimed
+    200
+    name> (exit)
+    "So long."
+    > 
+
+In all cases, two time-expressions witnessed the evaluation of
+the third actual parameter each time ``z`` was evaluated, which is
+characteristic of call by name.
+
+.. epigraph::
+
+  | Harald: See how this actual parameter consumes the same space, twice, at height 0?
+  | Alfrothul (observant): And again at height 2, but only nearly so at height 1.
+  | Brynja: Never mind that, guys -- did you see how long it took, overall, at height 2?
+
+
+Call by need, piled on
+----------------------
+
+In the following scenario, we
+
+* load the call-by-need interpreter,
+
+* start it,
+
+* load the meta-circular interpreter and the definition of ``make-tower``, and
+
+* successively interpret the running example on top of a tower of height
+  0, 1, 2, and 3::
+
+    > (load "interpreter-for-Scheme-with-call-by-need.scm")
+    > (start-the-interpreter "need> ")
+    There we go again, in call by need.
+    need> (load "week-10-self-interpreter-with-solutions.scm")
+    need> (load "week-10-self-interpreter-continued-and-ended.scm")
+    need> (time (interpret (make-tower 0)))
+    (time (_eval (car es) ...))
+        no collections
+        0 ms elapsed cpu time
+        0 ms elapsed real time
+        10848 bytes allocated
+    (time (_eval (car es) ...))
+        no collections
+        43 ms elapsed cpu time
+        83 ms elapsed real time
+        3198896 bytes allocated
+    200
+    need> (time (interpret (make-tower 1)))
+    (time (_eval (car es) ...))
+        1 collection
+        33 ms elapsed cpu time, including 1 ms collecting
+        40 ms elapsed real time, including 1 ms collecting
+        2599040 bytes allocated, including 8414016 bytes reclaimed
+    (time (_eval (car es) ...))
+        9 collections
+        942 ms elapsed cpu time, including 8 ms collecting
+        1331 ms elapsed real time, including 7 ms collecting
+        74339280 bytes allocated, including 75344656 bytes reclaimed
+    200
+    need> (time (interpret (make-tower 2)))
+    (time (_eval (car es) ...))
+        12 collections
+        1257 ms elapsed cpu time, including 3 ms collecting
+        1299 ms elapsed real time, including 2 ms collecting
+        100818144 bytes allocated, including 101112672 bytes reclaimed
+    (time (_eval (car es) ...))
+        310 collections
+        32774 ms elapsed cpu time, including 88 ms collecting
+        36475 ms elapsed real time, including 86 ms collecting
+        2612793328 bytes allocated, including 2612254496 bytes reclaimed
+    200
+    need> (time (interpret (make-tower 3)))
+    (time (_eval (car es) ...))
+        453 collections
+        47916 ms elapsed cpu time, including 116 ms collecting
+        52617 ms elapsed real time, including 120 ms collecting
+        3816655568 bytes allocated, including 3817532544 bytes reclaimed
+    (time (_eval (car es) ...))
+        11629 collections
+        1241856 ms elapsed cpu time, including 2807 ms collecting
+        1359477 ms elapsed real time, including 3218 ms collecting
+        97994847840 bytes allocated, including 97999840816 bytes reclaimed
+    200
+    need> (exit)
+    "So long."
+    > 
+
+In all cases, one time-expression witnessed the evaluation of the third
+actual parameter the first time ``z`` was evaluated, which is
+characteristic of call by need.
+
+.. epigraph::
+
+  | Hagar (lost in thought): So call by need is really more efficient than call by name.
+
+
+Checkpoint
+----------
+
+We have verified that the evaluation order of the meta-circular
+interpreter is determined by the evaluation order of the interpreter that
+runs it.
+
+
+Exercise 3
+----------
+
+Extend the meta-circular interpreter with enough predefined arithmetic
+expressions so that you can implement the factorial function.
+
+
+Exercise 4
+----------
+
+Extend the meta-circular interpreter with characters and with
+``string-ref``.
+
+
+Exercise 5
+----------
+
+Go for monastic minimalism, cut down the features of the subset of
+Scheme, and scale down the unit tests and the meta-circular interpreter
+to fit.  For example,
+
+* the interpreter does not use booleans, so strike them out of the BNF;
+
+* cond-expressions are a luxury: strike them out of the BNF and replace them with
+  if-expressions in the interpreter;
+
+* let-expressions are a luxury: strike them out of the BNF and replace them with
+  the application of a lambda-abstraction in the interpreter;
+
+* thanks to Currying, there is no need for procedures that take more than
+  one argument: strike them out and replace them with curried procedures
+  and curried applications.
+
+What else could you cut down?
+
+
+Exercise 6
+----------
+
+* Go for more comfort and allow procedures of arbitrary arity:
+
+  .. bnf:: subset of Scheme with fixed arity
+     :noindex:
+     :namespace: subset-of-Scheme-with-fixed-arity
+  
+     <expression> ::= ...
+                    | <lambda-abstraction>
+                    | <application>
+    
+     <lambda-abstraction> ::= (lambda ({<variable>}*) <expression>)
+  
+     <application> ::= (<operator> {<operand>}*)
+
+* Adapt the unit tests.
+
+* Adapt the meta-circular interpreter.
+
+
+Exercise 7
+----------
+
+* Go for more comfort and allow let- and letrec-expressions to declare
+  arbitrarily many variables:
+
+  .. bnf:: subset of Scheme with arbitrary arity
+     :noindex:
+     :namespace: subset-of-Scheme-with-arbitrary-arity
+  
+     <expression> ::= ...
+                    | (let ({[<variable> <expression>]}*) <expression>)
+                    | (letrec ({[<variable> <lambda-abstraction>]}*) <expression>)
+    
+* Adapt the unit tests.
+
+* Adapt the meta-circular interpreter.
+
+
+Exercise 8
+----------
+
+Scheme features a predefined procedure, ``eval``, that when applied to
+the representation of an expression, evaluates this expression in the
+toplevel environment and returns the resulting value.  This predefined
+procedure implements an interpreter for Scheme.  Extend the meta-circular
+interpreter with a predefined procedure, ``interpret``, that when applied
+to the representation of an expression, evaluates this expression in the
+*current* environment and returns the resulting value.
+
+
+Resources
+---------
+
+* The Scheme code for `the previous lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-10-self-interpreter-with-solutions.scm>`_,
+  including solutions
+  (latest version: 04 Nov 2015).
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-10-self-interpreter-continued-and-ended.scm>`_
+  (latest version: 31 Oct 2015).
+
+* The `zip file
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/interpreters-for-Scheme.zip>`_
+  containing a revised version of the three Scheme interpreters: one for a
+  call-by-value version of our subset of Scheme, one for a
+  call-by-name version of our subset of Scheme, and one for a
+  call-by-need version of our subset of Scheme
+  (latest version: 31 Oct 2015).
+
+
+Version
+-------
+
+Adjusted the Scheme code for the previous lecture note including
+solutions
+[04 Nov 2015]
+
+Created
+[31 Oct 2015]

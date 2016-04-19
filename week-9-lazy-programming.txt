@@ -1,0 +1,1067 @@
+.. -*- mode: rst -*-
+
+Note for Week 9 about lazy programming
+======================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+* :ref:`exercise-twice-the-stream`:
+  doubling up the elements of a stream
+
+* :ref:`exercise-map1_stream`:
+  mapping a procedure over a stream
+
+* :ref:`exercise-merge-streams`:
+  merging vs. concatenating streams
+
+* :ref:`exercise-lazy-list-ref-head`:
+  list-ref and list-head over proper lazy lists
+
+* :ref:`exercise-samefringe-for-proper-trees`:
+  the samefringe problem for nested proper lists
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-9-lazy-programming.scm>`_
+  (latest version: 03 Oct 2015).
+
+
+Goal
+----
+
+The goal of this lecture note is to introduce the notion of demand-driven
+computation.  This notion is illustrated with streams (never-ending,
+i.e., infinite lists whose tails are constructed on demand) and lazy
+lists (finite or infinite lists whose tails are constructed on demand).
+To this end, we first show how zero-ary procedures can be used to delay a
+computation.
+
+
+Warmup
+------
+
+The following Scheme procedure implements Boolean conjunction:
+
+.. code-block:: scheme
+
+  (define conjunction
+    (lambda (b1 b2)
+      (if b1
+          (if b2
+              #t
+              #f)
+          #f)))
+
+In Scheme, the actual parameters, in a procedure call, are evaluated
+at the point of call, i.e., before the procedure is applied --
+something we can visualize by providing arguments that have an
+observable effect::
+
+  > (conjunction (begin
+                   (printf "hello~n")
+                   #f)
+                 (begin
+                   (printf "hello~n")
+                   #f))
+  hello
+  hello
+  #f
+  > 
+
+As this scenario illustrates, both arguments are evaluated at the
+point of call.
+
+To implement Boolean conjunction, however, there is no need to
+evaluate both of its arguments if they have no observable effects: if
+the first one we evaluate is ``#f``, we know that the result will be
+``#f``, whichever Boolean the other argument evaluates to, because
+``#f`` is an absorbing element for Boolean conjunction.  In other
+words, if either argument evaluates to ``#f``, there is no need to
+evaluate the other argument.
+
+Likewise, to implement Boolean disjunction, there is no need to
+evaluate both of its arguments if they have no observable effects:
+since ``#t`` is absorbing, if one argument evaluates to ``#t``, we
+know that the result will be ``#t``, whichever Boolean the other
+argument evaluates to.
+
+Wouldn't it be nice if we could delay the evaluation of these
+arguments until the point where they are needed (if they are needed at
+all)?
+
+
+.. index:: thunk
+
+Thunks
+------
+
+A *thunk* is a parameterless procedure, i.e., a procedure of arity 0.
+Thunks make it simple to delay a computation::
+
+  > (begin
+      (printf "hello~n")
+      #f)
+  hello
+  #f
+  > (define say-hello
+      (lambda ()
+        (begin
+          (printf "hello~n")
+          #f)))
+  > say-hello
+  #<procedure>
+  > (say-hello)
+  hello
+  #f
+  > (say-hello)
+  hello
+  #f
+  > 
+
+In this scenario, the printing of ``hello`` is delayed until
+``say-hello`` is applied.
+
+
+Delayed evaluation
+------------------
+
+We can delay the evaluation of the actual parameters of a procedure by
+wrapping each of them into a thunk.  Subsequently, we can force these
+thunks at the point where their result is required:
+
+.. code-block:: scheme
+
+  (define force!
+    (lambda (thunk)
+      (thunk)))
+
+  (define conjunction_alt
+    (lambda (delayed-b1 delayed-b2)
+      (if (force! delayed-b1)
+          (if (force! delayed-b2)
+              #t
+              #f)
+          #f)))
+
+This way, the delayed actual parameters are only forced when they are
+needed.  In the present case, only one of the two conjuncts is
+evaluated::
+
+  > (conjunction_alt (lambda ()
+                       (begin
+                         (printf "hello~n")
+                         #f))
+                     (lambda ()
+                       (begin
+                         (printf "hello~n")
+                         #f)))
+  hello
+  #f
+  > 
+
+
+Unit-test paraphernalia
+-----------------------
+
+The rest of this lecture note uses variadic (and undelayed) Boolean
+conjunction and a procedure to test whether applying a candidate to
+some given input yields a value that is equal to some expected output:
+
+.. code-block:: scheme
+
+  (define and-all
+    (lambda bs_init
+      (letrec ([visit (lambda (bs)
+                        (or (null? bs)
+                            (and (car bs)
+                                 (visit (cdr bs)))))])
+        (visit bs_init))))
+  
+  (define test-candidate
+    (lambda (name candidate expected-output . input)
+      (or (equal? (apply candidate input)
+                  expected-output)
+          (begin
+            (printf "~s: error for ~s~n" name input)
+            #f))))
+
+
+.. index:: streams
+
+Streams
+-------
+
+.. epigraph::
+
+  | LuthorCorp does not believe in finite solutions.
+
+  -- `Lex Luthor <http://en.wikipedia.org/wiki/Smallville>`_
+
+Using thunks, we can construct *streams*: pairs whose cdr is a thunk
+such that forcing this thunk will construct the next pair in the
+stream, on demand.  Intuitively:
+
+.. bnf:: streams
+   :noindex:
+   :namespace: streams
+
+   <stream> ::= (cons <value> (lambda () <stream>))
+
+For example, the following procedure yields the stream of natural
+numbers:
+
+.. code-block:: scheme
+
+  (define stream-of-natural-numbers
+    (letrec ([produce (lambda (current-natural-number)
+                        (cons current-natural-number
+                              (lambda ()
+                                (produce (1+ current-natural-number)))))])
+      (produce 0)))
+
+Food for thought:
+
+* The local procedure ``produce`` is declared to be recursive, and it
+  actually calls itself.  But it only has an inductive case.  In other
+  words, it has no base case.  So unlike all the recursive procedures
+  seen so far, its recursion has no stopping condition.  In fact, its
+  argument is not decreasing (not that it matters because there is no
+  base case).  So unlike all the recursive procedures seen so far,
+  ``produce`` is not structurally recursive.
+
+  .. epigraph::
+  
+    | Oh, my.
+    | Cons in a recursive procedure with no base case.
+    | Now we *really* are creating an onion out of nothing.
+
+  To summarize: ``produce`` has no base case and it is not
+  structurally recursive.  It is like this procedure is designed to
+  diverge -- except that it does not, thanks to the thunk that delays
+  the recursive call.  What it does is to yield a list-like data
+  structure that is constructed on demand, and that can be accessed
+  arbitrarily far.
+
+Let us analyze the definition of ``stream-of-natural-numbers``:
+
+* ``stream-of-natural-numbers`` denotes a pair, whose car is ``0`` and
+  whose cdr is a thunk::
+
+    > stream-of-natural-numbers
+    (0 . #<procedure>)
+    > (car stream-of-natural-numbers)
+    0
+    > (cdr stream-of-natural-numbers)
+    #<procedure>
+    > 
+
+* Forcing this thunk yields another pair, whose car is ``1`` and
+  whose cdr is another thunk::
+
+    > (force! (cdr stream-of-natural-numbers))
+    (1 . #<procedure>)
+    > 
+
+* Forcing this other thunk yields a third pair, whose car is ``2`` and
+  whose cdr is a third thunk.  Forcing this third thunk yields a
+  fourth pair, whose car is ``3`` and whose cdr is a fourth thunk::
+
+    > (force! (cdr (force! (cdr stream-of-natural-numbers))))
+    (2 . #<procedure>)
+    > (force! (cdr (force! (cdr (force! (cdr stream-of-natural-numbers))))))
+    (3 . #<procedure>)
+    > 
+
+All in all, ``stream-of-natural-numbers`` enumerates the successive
+natural numbers and it does so on demand.
+
+Let us program with streams.  To start with, let us define a procedure
+that, given a stream ``s`` and a natural number ``n`` to index this
+stream, returns the ``n``'th element of ``s``.  For example, when
+applied to the stream of natural numbers, this procedure should map an
+index to itself:
+
+.. code-block:: scheme
+
+  (define test-stream-ref
+    (lambda (candidate)
+      (and-all (test-candidate 'stream-ref
+                               candidate
+                               0
+                               stream-of-natural-numbers
+                               0)
+               (test-candidate 'stream-ref
+                               candidate
+                               10
+                               stream-of-natural-numbers
+                               10)
+               (let ([i (random 100)])
+                 (test-candidate 'stream-ref
+                                 candidate
+                                 i
+                                 stream-of-natural-numbers
+                                 i))
+               ;;; add more tests here
+               )))
+
+Programmatically (see :ref:`exercise-proper-list-ref-head-tail` in
+`the lecture note about lists and defensive programmming
+<week-3-lists-and-defensive-programming.html>`_), ``stream-ref``
+pretty much looks like ``list-ref``, in that it traverses the given
+stream and decrements the given index until this index reaches zero.
+Unlike ``list-ref``, however, it does not check whether the stream is
+long enough, because being infinite it is always long enough:
+
+.. code-block:: scheme
+
+  (define stream-ref
+    (lambda (s_init n_init)
+      (letrec ([visit (lambda (s n)
+                        (if (zero? n)
+                            (car s)
+                            (visit (force! (cdr s))
+                                   (1- n))))])
+        (if (and (integer? n_init)
+                 (not (negative? n_init)))
+            (visit s_init n_init)
+            (errorf 'stream-ref
+                    "not a non-negative integer: ~s"
+                    n_init)))))
+
+Let us test this procedure::
+
+  > (test-stream-ref stream-ref)
+  #t
+  > 
+
+Success.
+
+Likewise, let us define a procedure that maps the ``n`` first elements of
+a stream to the corresponding list of ``n`` elements:
+
+.. code-block:: scheme
+
+  (define test-stream-head
+    (lambda (candidate)
+      (and-all (test-candidate 'stream-head
+                               candidate
+                               (iota 0)
+                               stream-of-natural-numbers
+                               0)
+               (test-candidate 'stream-head
+                               candidate
+                               (iota 10)
+                               stream-of-natural-numbers
+                               10)
+               (let ([i (random 100)])
+                 (test-candidate 'stream-head
+                                 candidate
+                                 (iota i)
+                                 stream-of-natural-numbers
+                                 i))
+               ;;; add more tests here
+               )))
+  
+  (define stream-head
+    (lambda (s_init n_init)
+      (letrec ([visit (lambda (s n)
+                        (if (zero? n)
+                            '()
+                            (cons (car s)
+                                  (visit (force! (cdr s))
+                                         (1- n)))))])
+        (if (and (integer? n_init)
+                 (not (negative? n_init)))
+            (visit s_init n_init)
+            (errorf 'stream-head
+                    "not a non-negative integer: ~s"
+                    n_init)))))
+
+Let us test this procedure::
+
+  > (stream-head stream-of-natural-numbers 10)
+  (0 1 2 3 4 5 6 7 8 9)
+  > (test-stream-ref stream-ref)
+  #t
+  > 
+
+Success.
+
+More generally, we can define a *stream maker*: a procedure that given
+a seed (an initial value) and an "endo-procedure" (i.e., a unary
+procedure with the same type of argument and type of result), yields a
+stream of the successive applications of the endo-procedure to the
+seed:
+
+.. code-block:: scheme
+
+  (define make-stream
+    (lambda (seed next)
+      (letrec ([produce (lambda (current)
+                          (cons current
+                                (lambda ()
+                                  (produce (next current)))))])
+        (produce seed))))
+
+For example, using an endo-procedure that adds ``2`` to its argument,
+we can define the stream of even natural numbers and the stream of odd
+natural numbers.  One starts with ``0`` and the other starts with
+``1``:
+
+.. code-block:: scheme
+
+  (define stream-of-even-natural-numbers
+    (make-stream 0
+                 (lambda (n)
+                   (+ n 2))))
+
+  (define stream-of-odd-natural-numbers
+    (make-stream 1
+                 (lambda (n)
+                   (+ n 2))))
+
+Let us verify that a prefix of ``stream-of-even-natural-numbers`` is
+indeed a list of successive even natural numbers, and that a prefix of
+``stream-of-odd-natural-numbers`` is indeed a list of successive odd
+natural numbers::
+
+  > (stream-head stream-of-even-natural-numbers 10)
+  (0 2 4 6 8 10 12 14 16 18)
+  > (stream-head stream-of-odd-natural-numbers 10)
+  (1 3 5 7 9 11 13 15 17 19)
+  > 
+
+
+Exercise 0
+----------
+
+Define the stream of natural numbers using ``make-stream``.
+
+
+.. _exercise-twice-the-stream:
+
+Exercise 1
+----------
+
+The goal of this exercise is to write a procedure ``twice-the-stream``
+that maps a stream of numbers to another stream where each successive
+number in the input is multiplied by two.  Your procedure should pass
+the following unit test:
+
+.. code-block:: scheme
+
+  (define test-twice-the-stream
+    (lambda (candidate)
+      (and (equal? (stream-head (candidate stream-of-natural-numbers)
+                                10)
+                   '(0 2 4 6 8 10 12 14 16 18))
+           (equal? (stream-head (candidate stream-of-even-natural-numbers)
+                                10)
+                   '(0 4 8 12 16 20 24 28 32 36))
+           (equal? (stream-head (candidate stream-of-odd-natural-numbers)
+                                10)
+                   '(2 6 10 14 18 22 26 30 34 38))
+           ;;; etc.
+           )))
+
+Warm-up questions:
+
+* What should be the result of evaluating
+  ``(twice-the-stream (twice-the-stream stream-of-natural-numbers))``,
+  do you think?
+  Expand the unit test with this example.
+
+* What is the result of evaluating
+  ``(twice-the-stream (twice-the-stream (twice-the-stream stream-of-natural-numbers)))``,
+  do you think?
+  Expand the unit test with this example.
+
+* What is the result of evaluating ``(twice-the-stream (make-stream 0 (lambda (n) n)))``,
+  do you think?
+  Expand the unit test with this example.
+
+* What is the result of evaluating ``(twice-the-stream (make-stream 1 (lambda (n) n)))``,
+  do you think?
+  Expand the unit test with this example.
+
+* What is the result of evaluating ``(twice-the-stream (make-stream 2 (lambda (n) n)))``,
+  do you think?
+  Expand the unit test with this example.
+
+(Hint: apply ``stream-head`` to the result, and justify what you see.)
+
+Key question:
+
+* Implement ``twice-the-stream``.
+
+
+.. _exercise-map1_stream:
+
+Exercise 2
+----------
+
+`Earlier on <week-6-map.html#mapping-procedure-over-proper-lists>`_, we
+considered a ``map1`` procedure over proper lists:
+
+a. Define an analogue procedure, ``map1_stream``, that operates over a
+   stream instead of over a proper list.
+
+b. Define ``twice-the-stream`` (see :ref:`exercise-twice-the-stream`)
+   in terms of ``map1_stream`` and verify that your definition passes
+   the unit test for ``twice-the-stream``.
+
+
+.. _exercise-dilute-stream:
+
+Exercise 3
+----------
+
+The goal of this exercise is to write a procedure ``dilute-stream``
+that maps a stream of numbers to another stream where each second
+element of the given stream is absent.  Your procedure should pass the
+following unit test:
+
+.. code-block:: scheme
+
+  (define test-dilute-stream
+    (lambda (candidate)
+      (and (equal? (stream-head (candidate stream-of-natural-numbers)
+                                10)
+                   '(0 2 4 6 8 10 12 14 16 18))
+           (equal? (stream-head (candidate stream-of-even-natural-numbers)
+                                10)
+                   '(0 4 8 12 16 20 24 28 32 36))
+           (equal? (stream-head (candidate stream-of-odd-natural-numbers)
+                                10)
+                   '(1 5 9 13 17 21 25 29 33 37))
+           ;;; etc.
+           )))
+
+Warm-up questions:
+
+* What should be the result of evaluating ``(dilute-stream
+  (make-stream 0 (lambda (n) n)))``,
+  do you think?
+  Expand the unit test with this example.
+
+* What should be the result of evaluating ``(dilute-stream
+  (make-stream 1 (lambda (n) n)))``,
+  do you think?
+  Expand the unit test with this example.
+
+* What should be the result of evaluating ``(dilute-stream
+  (make-stream 2 (lambda (n) n)))``,
+  do you think?
+  Expand the unit test with this example.
+
+(Hint: apply ``stream-head`` to the result, and justify what you see.)
+
+Key question:
+
+* implement ``dilute-stream``.
+
+
+.. _exercise-merge-streams:
+
+Exercise 4
+----------
+
+a. Define a procedure ``merge-streams`` that merges two streams and
+   that passes the following unit test:
+ 
+   .. code-block:: scheme
+ 
+     (define test-merge-streams
+       (lambda (candidate)
+         (and (equal? (stream-head (candidate stream-of-even-natural-numbers
+                                              stream-of-odd-natural-numbers)
+                                   10)
+                      '(0 1 2 3 4 5 6 7 8 9))
+              (equal? (stream-head (candidate stream-of-odd-natural-numbers
+                                              stream-of-even-natural-numbers)
+                                   10)
+                      '(1 0 3 2 5 4 7 6 9 8))
+              ;;; etc.
+              )))
+
+b. Define a procedure ``append_stream`` that concatenates two streams
+   the way ``append`` and ``append_proper-list`` concatenate two proper
+   lists::
+ 
+     > (append '(1 2 3) '(4 5 6))
+     (1 2 3 4 5 6)
+     > 
+
+   (Hint: be logical.)
+
+
+The inner workings of streams
+-----------------------------
+
+As usual, Petite Chez Scheme's tracing facilities help us visualize
+the inner working of streams.  The following definition is the stream
+maker as above (i.e., a procedure that given an initial value and an
+endo-procedure, yields a stream of the successive applications of the
+endo-procedure to the seed), where the local procedure ``produce`` is
+traced:
+
+.. code-block:: scheme
+
+  (define make-traced-stream
+    (lambda (seed next)
+      (letrec ([produce (trace-lambda produce (current)
+                          (cons current
+                                (lambda ()
+                                  (produce (next current)))))])
+        (produce seed))))
+
+The following scenario illustrates the demand-driven nature of
+computing with lazy data structures: the stream is only constructed to
+the extent that we need something in it; otherwise, it remains latent:
+a potentiality that is unrealized yet, and that will never be fully
+realized (since there are infinitely many natural numbers).  In the
+scenario,
+
+* we first define a traced stream of natural numbers; the result is a
+  pair whose car is ``0`` and whose cdr is a thunk::
+
+    > (define traced-stream-of-natural-numbers
+        (make-traced-stream 0 1+))
+    |(produce 0)
+    |(0 . #<procedure>)
+    > 
+
+* we then probe this traced stream to list its 5 first elements::
+
+    > (stream-head traced-stream-of-natural-numbers 5)
+    |(produce 1)
+    |(1 . #<procedure>)
+    |(produce 2)
+    |(2 . #<procedure>)
+    |(produce 3)
+    |(3 . #<procedure>)
+    |(produce 4)
+    |(4 . #<procedure>)
+    |(produce 5)
+    |(5 . #<procedure>)
+    (0 1 2 3 4)
+    > 
+
+* we finally probe this traced stream to list its 3 first elements::
+
+    > (stream-head traced-stream-of-natural-numbers 3)
+    |(produce 1)
+    |(1 . #<procedure>)
+    |(produce 2)
+    |(2 . #<procedure>)
+    |(produce 3)
+    |(3 . #<procedure>)
+    (0 1 2)
+    > 
+
+In both cases, the trace indicates that the stream is constructed on
+demand.
+
+
+.. index:: lists (lazy)
+
+Lazy lists
+----------
+
+A lazy list is a list that may or may not be finite and whose cdrs are
+constructed on demand, like those of a stream.  Intuitively:
+
+.. bnf:: lazy-list
+   :noindex:
+   :namespace: lazy-list
+
+   <proper-lazy-list> ::= '()
+                        | (cons <value> (lambda () <proper-lazy-list>))
+
+   <improper-lazy-list> ::= <any-value-but-the-empty-list-or-a-pair>
+                        | (cons <value> (lambda () <improper-lazy-list>))
+
+.. epigraph::
+
+   | Vigfus: `HA! <week-3-lists-and-defensive-programming.html#vigfus-and-sigtryg>`_
+
+
+.. _exercise-lazy-list-ref-head:
+
+Exercise 5
+----------
+
+* Define a procedure ``lazy-list-ref`` that is an analogue of
+  ``list-ref`` and of ``stream-ref``, but for proper lazy lists.
+
+* Define a procedure ``lazy-list-head`` that is an analogue of
+  ``list-head`` and of ``stream-head``, but for proper lazy lists.
+
+.. epigraph::
+
+  | Harald (shocked): But they know THAT!
+
+Start by writing a unit test.
+
+
+Exercise 6
+----------
+
+Define a procedure ``lazy-prefix`` that given a stream and an index,
+returns a proper lazy list containing a prefix of the stream.
+
+(Hint: take some inspiration in the definition of ``stream-head``,
+which yields a proper list.  Here, ``lazy-prefix`` yields a lazy
+proper list.)
+
+
+Exercise 7
+----------
+
+The goal of this exercise is to write a procedure
+``twice-the-lazy-list`` that maps a proper lazy list of numbers to
+another proper lazy list of numbers where each successive number in
+the input is multiplied by two.
+
+
+Exercise 8
+----------
+
+Define a procedure ``map1_lazy-list`` that maps a procedure over the
+elements of a proper lazy list and that yields the proper lazy list of
+the results, in the same order.
+
+
+.. index:: samefringe
+
+.. _the-samefringe-problem:
+
+A concrete example of using lazy lists: the samefringe problem
+--------------------------------------------------------------
+
+The following problem is a classic.  Given two binary trees represented
+as nested lists of integers, check whether traversing them depth-first
+and from left to right gives the same series of integers.
+
+The grammar for binary trees reads as follows:
+
+.. bnf:: proper binary trees
+   :namespace: proper-binary-trees
+   :noindex:
+
+   <binary-tree> ::= <number>
+                   | (<car-of-binary-tree> . <cdr-of-binary-tree>)
+
+   <car-of-binary-tree> ::= <binary-tree>
+
+   <cdr-of-binary-tree> ::= ()
+                          | <binary-tree>
+
+The challenge to solving the samefringe problem is that the two trees
+are not necessarily structured in the same way.  For example, the
+first tree could be ``(1 (2))`` and the second could be ``((1) 2)``.
+Therefore their recursive descent cannot be synchronized.
+
+Here is a unit-test procedure enumerating typical cases:
+
+.. code-block:: scheme
+
+  (define test-samefringe
+    (lambda (candidate)
+      (and-all ;;; positive:
+               (test-candidate 'samefringe
+                               candidate
+                               #t
+                               1
+                               1)
+               (test-candidate 'samefringe
+                               candidate
+                               #t
+                               1
+                               '(((1))))
+               (test-candidate 'samefringe
+                               candidate
+                               #t
+                               '(((1)) . 2)
+                               '(1 ((2))))
+               (test-candidate 'samefringe
+                               candidate
+                               #t
+                               '(((1) 2) 3)
+                               '(1 2 . 3))
+               ;;; negative:
+               (test-candidate 'samefringe
+                               candidate
+                               #f
+                               1
+                               2)
+               (test-candidate 'samefringe
+                               candidate
+                               #f
+                               '(((1) 2) 3)
+                               '(1 0 . 3))
+               (test-candidate 'samefringe
+                               candidate
+                               #f
+                               '(((1) 2) (3 . 4))
+                               '(1 2 3))
+               )))
+
+A naive solution consists in (1) flattening the two given trees into
+two lists of numbers, using an accumulator, and then (2) comparing
+these lists:
+
+.. code-block:: scheme
+
+  (define flatten-binary-tree
+    (lambda (binary-tree)
+      (letrec ([visit (lambda (bt a)
+                        (cond
+                          [(number? bt)
+                           (cons bt a)]
+                          [(pair? bt)
+                           (visit (car bt)
+                                  (if (null? (cdr bt))
+                                      a
+                                      (visit (cdr bt) a)))]
+                          [else
+                           (errorf 'flatten-binary-tree
+                                   "not a binary tree of integers: ~s"
+                                   bt)]))])
+        (visit binary-tree '()))))
+  
+  (define samefringe-naive
+    (lambda (binary-tree-1 binary-tree-2)
+      (equal? (flatten-binary-tree binary-tree-1)
+              (flatten-binary-tree binary-tree-2))))
+
+Let us verify that this definition passes the unit test::
+
+  > (test-samefringe samefringe-naive)
+  #t
+  > 
+
+Success.
+
+However, the two trees could be large, and they could differ early in
+the comparison.  But the cost of this naive solution is proportional
+to the size of the two trees.
+
+A more economical solution is to flatten the two given trees into two
+lazy lists of numbers, and then to compare these lazy lists,
+incrementally:
+
+.. code-block:: scheme
+
+  (define flatten-binary-tree-lazily
+    (lambda (binary-tree)
+      (letrec ([visit (lambda (bt thunk)
+                        (cond
+                          [(number? bt)
+                           (cons bt thunk)]
+                          [(pair? bt)
+                           (visit (car bt)
+                                  (if (null? (cdr bt))
+                                      thunk
+                                      (lambda ()
+                                        (visit (cdr bt) thunk))))]
+                          [else
+                           (errorf 'flatten-binary-tree-lazily
+                                   "not a binary tree of integers: ~s"
+                                   bt)]))])
+        (visit binary-tree (lambda () '())))))
+  
+  (define samefringe
+    (lambda (binary-tree-1 binary-tree-2)
+      (letrec ([compare (lambda (p1 p2)
+                          (and (= (car p1) (car p2))
+                               (let ([r1 (force! (cdr p1))]
+                                     [r2 (force! (cdr p2))])
+                                 (if (null? r1)
+                                     (null? r2)
+                                     (and (pair? r2)
+                                          (compare r1 r2))))))])
+        (compare (flatten-binary-tree-lazily binary-tree-1)
+                 (flatten-binary-tree-lazily binary-tree-2)))))
+
+This definition also passes the unit test::
+
+  > (test-samefringe samefringe)
+  #t
+  > 
+
+Success.
+
+
+.. _exercise-tracing-samefringe:
+
+Exercise 9
+----------
+
+Trace ``compare``, the local procedure in the definition of
+``samefringe``, and visualize on an example that lazy lists make it
+possible to "pay as you go": as soon as two leaves differ, the
+comparison stops, and so the rest of the lazy lists is not constructed.
+In other words, the common case [namely that the two fringes differ]
+is optimized, not the exceptional case [namely that the two fringes
+coincide].
+
+Trace ``flatten-binary-tree``, the auxiliary procedure used in the
+definition of ``samefringe-naive``, and visualize on the same example
+as above that both input trees are entirely flattened before they
+are compared.
+
+
+.. _exercise-samefringe-for-proper-trees:
+
+Exercise 10
+-----------
+
+Adjust the grammar for binary trees so that a binary tree contains only
+proper lists.  So for example, ``(1 2 3)`` and ``(((1) ((2 3) 4)))``
+are acceptable binary trees, but ``(1 2 . 3)`` and ``(((1) ((2 . 3)
+4)))`` are not.
+
+Solve the samefringe problem for these "proper" binary trees.  To this
+end:
+
+* adjust the unit test above to proper binary trees;
+
+* adapt the list-based solution and run it through the unit test;
+
+* adapt the lazy-list-based solution and run it through the unit test.
+
+
+Coda
+----
+
+Harald: I kind of like this idea of demand-driven computation.  It
+sounds economical.
+
+Loki: Actually, that's how I read the lecture notes, and yes, it is
+economical.
+
+Harald: Beg pardon?  That's how you read the lecture notes?
+
+Loki: Well yes: I first look at the mandatory exercises.  If there
+isn't any, then there is no need to read the lecture note, which is a
+big time saver, considering how many other lectures I am following
+this term.
+
+Harald (stunned): You don't read the lecture note?  But what if there
+is a question about it at the exam?
+
+Loki (definite): There can't be any, because thanks to modern teaching
+methods, the exam has to be aligned with the mandatory exercises.  If we
+don't have a mandatory exercise about something, that something cannot be
+at the exam.
+
+Harald (appalled): That simple, eh.  OK...  After all, most lecture
+notes do have mandatory exercises.
+
+Loki: Yes they do.  But the demand-driven idea still applies: I look
+at the mandatory exercises, and if I can solve them there and then, I
+am done, which is good because remember the many other lectures I am
+following this term?
+
+Harald (floundering): But er...  Does that happen often?  I mean can
+you solve the mandatory exercises without reading the lecture note?
+These exercises are supposed to test our understanding of the material
+presented in the lecture note.
+
+Loki (sauntering): Right, and that's where the demand-driven idea is
+useful: you identify what you don't know in the exercise, and then you
+grope for it in the lecture notes.  Usually you find what you need a
+bit before the text of the exercise.  And then you're done.
+
+Harald: And what if what you need requires something that was
+explained much earlier in the note?
+
+Loki: Harald, that's exactly the idea of being demand-driven: every
+time you find something you don't know, you look earlier in the note.
+Just use the search facility of your browser, and look backward.
+
+Harald: Usually I use the index for that.
+
+Loki: Right.  Because not everything is defined earlier in the current
+lecture note: some things are defined in a previous lecture note.  If
+you have already read the definition in that other lecture note, you
+are done.  If you haven't, then you go read it.  If you find it
+unclear, it always comes with some examples: read them too.  And if
+you find something else you don't know, keep looking backward for
+definitions until you find one you have read already.  I tell you,
+demand-driven reading is a great idea.  Jumping forward and only
+looking backward when you need it is so much quicker.  Quite many
+times you don't need to look backward at all.
+
+Harald: But aren't you missing, like, the narrative, and the side
+notes?  Do you even follow the Wikipedia pointers?
+
+.. epigraph::
+
+  | Life can only be understood backward;
+  | but it must be lived forward.
+
+  -- `Søren Kierkegaard <https://en.wikipedia.org/wiki/S%C3%B8ren_Kierkegaard>`_
+
+Loki: Details, Harald, details.  Don't mind the small stuff: jump
+forward and only look backward if it is needed.
+
+Brynja (jumping in): I'd rather mind.  These particular lecture notes are
+not the Internet: they are constructed inductively and so they are made
+to be read forward, even though they come with an index for direct
+access.
+
+Loki (astute): But then it shouldn't make any difference if you read
+them forward or backward, should it?  If the lecture notes are well
+written, then you and I will learn just as much.  I'd rather first see
+why we need to learn what we are instructed to learn.
+
+Brynja: True.  But still, the exercises in the lecture notes are part
+of the lecture notes, so they don't tell you why we need to learn what
+we are instructed to learn -- and neither does the exam.  We will only
+realize that once this course is over.  If we need it then, then we'll
+already know it: `forewarned is forearmed
+<https://en.wiktionary.org/wiki/forewarned_is_forearmed>`_.
+
+Loki: And if we don't need it?
+
+Brynja: Even so.  Someone who graduated is supposed to have a modicum
+of, you know, knowledge?
+
+.. epigraph::
+
+  | Culture is what remains
+  | when you have forgotten everything.
+
+  -- `Émile Henriot <https://en.wikipedia.org/wiki/%C3%89mile_Henriot_%28writer%29>`_
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-9-lazy-programming.scm>`_
+  (latest version: 03 Oct 2015).
+
+
+Version
+-------
+
+Added the goal section and the coda
+[04 Oct 2015]
+
+Created
+[03 Oct 2015]

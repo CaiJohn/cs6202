@@ -1,0 +1,912 @@
+.. -*- mode: rst -*-
+
+Note for Week 6 about the map procedure
+=======================================
+
+.. seealso::
+
+   `The Scheme Programming Language`__
+     by `R. Kent Dybvig <http://en.wikipedia.org/wiki/Kent_Dybvig>`_
+
+.. __: http://www.scheme.com/tspl4/
+
+
+Mandatory exercises
+-------------------
+
+None.
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-map.scm>`_
+  (latest version: 15 Sep 2015).
+
+
+Goal
+----
+
+.. epigraph::
+
+  | Arnketil the Cyclist: Man, we are covering a lot of territory, aren't we.
+  | Àskell the Functional: Er...  You realize it's `not the same <https://en.wikipedia.org/wiki/Map%E2%80%93territory_relation>`_, right?
+
+The goal of this lecture note is to introduce a common program
+abstraction: the Scheme procedure ``map`` that applies a given
+procedure to each element of a given proper list, and yields the
+proper list of the results.
+
+
+Exercise 1
+----------
+
+Define a procedure ``map1_times_10`` that, given a proper list of
+numbers, multiplies each of these numbers by ``10`` and returns the
+list of the resulting numbers, in the same order:
+
+.. code-block:: scheme
+
+  (define test-map1_times_10
+    (lambda (candidate)
+      (and (equal? (candidate '())
+                   '())
+           (equal? (candidate '(0))
+                   '(0))
+           (equal? (candidate '(10 100))
+                   '(100 1000))
+           (equal? (candidate '(1 2 3 4 5))
+                   '(10 20 30 40 50))
+           ;;; etc.
+           )))
+
+
+Exercise 2
+----------
+
+Define a procedure ``map1_list1`` that, given a proper list of values,
+puts each of these values in a singleton list and returns the list of
+resulting singleton lists, in the same order:
+
+.. code-block:: scheme
+
+  (define test-map1_list1
+    (lambda (candidate)
+      (and (equal? (candidate '())
+                   '())
+           (equal? (candidate '(0))
+                   '((0)))
+           (equal? (candidate '(10 100))
+                   '((10) (100)))
+           (equal? (candidate '(1 2 3 4 5))
+                   '((1) (2) (3) (4) (5)))
+           ;;; etc.
+           )))
+
+
+Exercise 3
+----------
+
+Define a procedure ``map1_symbol?`` that, given a proper list of values,
+tests whether each of these values is a symbol and returns the list of
+resulting Booleans, in the same order:
+
+.. code-block:: scheme
+
+  (define test-map1_symbol?
+    (lambda (candidate)
+      (and (equal? (candidate '())
+                   '())
+           (equal? (candidate '(a 1 #f "foo" () (hello . world)))
+                   '(#t #f #f #f #f #f))
+           ;;; etc.
+           )))
+
+
+Exercise 4
+----------
+
+Define a procedure ``map1_swap`` that, given a proper list of dotted
+pairs, maps each dotted pair into another dotted pair where the car
+and the cdr are swapped and returns the list of resulting dotted
+pairs, in the same order:
+
+.. code-block:: scheme
+
+  (define test-map1_swap
+    (lambda (candidate)
+      (and (equal? (candidate '())
+                   '())
+           (equal? (candidate '((a . 1)))
+                   '((1 . a)))
+           (equal? (candidate '((a . 1) (b . 2)))
+                   '((1 . a) (2 . b)))
+           (equal? (candidate '((a . 1) (b . 2) (c . 3)))
+                   '((1 . a) (2 . b) (3 . c)))
+           ;;; etc.
+           )))
+
+
+.. index:: map
+
+.. _mapping-procedure-over-proper-lists:
+
+Mapping procedures over proper lists
+------------------------------------
+
+Often enough, we want to apply a procedure pointwise over each element
+of a proper list and collect the results in a new list, in the same
+order.  This programming pattern is captured in the following ``map1``
+procedure:
+
+.. code-block:: scheme
+
+  (define test-map1
+    (lambda (candidate)
+      (and (equal? (candidate (lambda (n)
+                                (* n 10))
+                              '(1 2 3 4 5))
+                   '(10 20 30 40 50))
+           (equal? (candidate list
+                              '(1 2 3 4 5))
+                   '((1) (2) (3) (4) (5)))
+           (equal? (candidate symbol?
+                              '(a 1 #f "foo" () (hello . world)))
+                   '(#t #f #f #f #f #f))
+           (equal? (candidate (lambda (v)
+                                (cons (cdr v) (car v)))
+                              '())
+                   '())
+           (equal? (candidate (lambda (v)
+                                (cons (cdr v) (car v)))
+                              '((a . 1) (b . 2) (c . 3)))
+                   '((1 . a) (2 . b) (3 . c)))
+           ;;; etc.
+           )))
+  
+  (define map1
+    (lambda (p vs)
+      (letrec ([visit (lambda (ws)
+                        (cond
+                          [(null? ws)
+                           '()]
+                          [(pair? ws)
+                           (cons (p (car ws))
+                                 (visit (cdr ws)))]
+                          [else
+                           (errorf 'map1
+                                   "not a proper list: ~s"
+                                   ws)]))])
+        (if (procedure? p)
+            (visit vs)
+            (errorf 'map1
+                    "not a procedure: ~s"
+                    p)))))
+
+This definition passes the unit test::
+
+  > (test-map1 map1)
+  #t
+  > 
+
+Incidentally, the procedure ``map`` is predefined in Petite Chez
+Scheme::
+
+  > (test-map1 map)
+  #t
+  > 
+
+
+.. index:: palindromes
+
+.. _exercise-palindromes:
+
+Exercise 5
+----------
+
+A proper list is a *palindrome* if it is structurally equal to its
+converse.  The goal of this exercise is to write a procedure testing
+whether its argument is a palindrome:
+
+.. code-block:: scheme
+
+  (define test-palindrome?
+    (lambda (candidate)
+      (and (equal? (candidate '())
+                   #t)
+           (equal? (candidate '(1))
+                   #t)
+           (equal? (candidate '(1 1))
+                   #t)
+           (equal? (candidate '(1 2 1))
+                   #t)
+           (equal? (candidate '(1 2 2 1))
+                   #t)
+           (equal? (candidate '(1 2 3 2 1))
+                   #t)
+           (equal? (candidate '(1 2 3 3 2 1))
+                   #t)
+           (let* ([ns (map (lambda (zero)
+                             (random 100))
+                           (make-list 100 0))]
+                  [ms (reverse ns)])
+             (and (equal? (candidate (append ms ns))
+                          #t)
+                  (equal? (candidate (append ms (list (random 1000)) ns))
+                          #t)))
+           ;;;
+           )))
+
+(Reminder: ``random`` is a predefined procedure in Petite Chez Scheme
+that expects a positive integer and yields a random integer between 0
+and that positive integer.  See `this other lecture note
+<week-5-random-programming.html>`_ for more about this predefined
+procedure.)
+
+0. How would you construct a palindrome?
+
+1. Write a procedure that, given a proper list, returns a palindrome
+   that is twice as long as the given proper list.  Use this procedure
+   to extend the unit-test procedure above.
+
+2. Write a procedure that, given a proper list, returns a list of two
+   distinct palindromes, each of which is twice as long as the given
+   proper list.  Use this procedure to extend the unit-test procedure
+   above.
+
+3. Write a procedure that, given a proper list, returns a list of four
+   distinct palindromes, each of which is four times as long as the
+   given proper list.  Use this procedure to extend the unit-test
+   procedure above.
+
+4. The 3 previous procedures yield palindromes whose length is even.
+   How would you adjust them so that they yield palindromes whose
+   length is odd?
+
+5. The following Scheme procedure transliterates the definition of a
+   palindrome to test whether a proper list is a palindrome:
+
+   .. code-block:: scheme
+
+     (define palindrome?_v0
+       (lambda (vs)
+         (equal? vs (reverse vs))))
+
+   And it passes the unit test too::
+
+     > (test-palindrome? palindrome?_v0)
+     #t
+     > 
+
+   The space complexity of ``palindrome?_v0`` is linear because it
+   copies the input list, and its time complexity is also linear
+   because it traverses the input list twice and the converse of the
+   input list once.
+
+   Write as many versions of this procedure as you care.  What is
+   their complexity?
+
+   If you manage to write a procedure that operates in constant space
+   and in linear time, pray contact the author of these notes.
+
+
+.. index:: map-append
+
+.. _mapping-procedure-over-proper-lists-continued:
+
+Mapping procedures over proper lists, continued
+-----------------------------------------------
+
+Occasionally, the mapped procedure returns a list.  Instead of a list
+of lists, we might want the *concatenation* of all these lists into a
+flat list.  This programming pattern is captured in the following
+map-like procedure:
+
+.. code-block:: scheme
+
+  (define test-map1-append
+    (lambda (candidate)
+      (and (equal? (candidate (lambda (v)
+                                (list v v))
+                              '())
+                   '())
+           (equal? (candidate (lambda (v)
+                                (list v v))
+                              '(1 2 3 4 5))
+                   '(1 1 2 2 3 3 4 4 5 5))
+           ;;;
+           )))
+  
+  (define map1-append
+    (lambda (p vs)
+      (letrec ([visit (lambda (ws)
+                        (if (null? ws)
+                            '()
+                            (append (p (car ws))
+                                    (visit (cdr ws)))))])
+        (visit vs))))
+
+This definition passes the unit test::
+
+  > (test-map1-append map1-append)
+  #t
+  > 
+
+Occasionally too, the mapped procedure is a predicate (i.e., it
+returns a Boolean).  Instead of a list of Booleans, we might want the
+*conjunction* of all these Booleans into a Boolean.  This programming
+pattern is captured in the following map-like procedure for unary
+procedures:
+
+.. code-block:: scheme
+
+  (define test-andmap1
+    (lambda (candidate)
+      (and (equal? (candidate number? '())
+                   #t)  ;;; <------******------ why not #f?
+           (equal? (candidate number? '(1 2 3))
+                   #t)
+           (equal? (candidate number? '(1 "2" 3))
+                   #f)
+           ;;;
+           )))
+
+  (define andmap1
+    (lambda (p vs)
+      (letrec ([visit (lambda (ws)
+                        (if (null? ws)
+                            #t
+                            (and (p (car ws))
+                                 (visit (cdr ws)))))])
+        (visit vs))))
+
+This definition passes the unit test::
+
+  > (test-andmap1 andmap1)
+  #t
+  > 
+
+Incidentally, the procedure ``andmap`` is predefined in Petite Chez
+Scheme::
+
+  > (test-andmap1 andmap)
+  #t
+  > 
+
+
+.. _exercise-ormap1:
+
+Exercise 6
+----------
+
+Define a map-like procedure that is to ``andmap1`` what ``or`` is to ``and``.
+
+.. code-block:: scheme
+
+  (define test-ormap1
+      (lambda (candidate)
+        (and (equal? (candidate number? '())
+                     #f)  ;;; <------******------ why not #t?
+             (equal? (candidate number? '(1 2 3))
+                     #t)
+             (equal? (candidate number? '("1" "2" 3))
+                     #t)
+             (equal? (candidate number? '("1" "2" "3"))
+                     #f)
+             ;;;
+             )))
+
+Incidentally, the procedure ``ormap`` is predefined in Petite Chez
+Scheme::
+
+  > (test-ormap1 ormap)
+  #t
+  > 
+
+
+Exercise 7
+----------
+
+Define a map-like procedure for dyadic procedures, ``map2``, that
+operates over two proper lists, pointwise:
+
+.. code-block:: scheme
+
+  (define test-map2
+      (lambda (candidate)
+        (and (equal? (candidate +
+                                '()
+                                '())
+                     '())
+             (equal? (candidate +
+                                '(1 2 3 4)
+                                '(10 20 30 40))
+                     '(11 22 33 44))
+             (equal? (candidate cons
+                                '(1 2 3 4)
+                                '(10 20 30 40))
+                     '((1 . 10) (2 . 20) (3 . 30) (4 . 40)))
+             (equal? (candidate cons
+                                '(x y z)
+                                '(10 20 30))
+                     '((x . 10) (y . 20) (z . 30)))
+             (equal? (candidate list
+                                '(x y z)
+                                '(10 20 30))
+                     '((x 10) (y 20) (z 30)))
+             ;;;
+             )))
+
+What do you do if one of the lists is shorter than the other?
+What do you do if one of the lists is longer than the other?
+
+Incidentally, the predefined procedure ``map`` of Petite Chez Scheme
+handles procedures of any arity and therefore it passes the unit
+test::
+
+  > (test-map2 map)
+  #t
+  > 
+
+So as a guideline, you might want to see what ``map`` does when given
+a dyadic procedure and two lists of differing lengths.
+
+
+Exercise 8
+----------
+
+Define an andmap-like procedure for dyadic procedures, ``andmap2``,
+that operates over two proper lists.
+
+What do you do if one of the lists is shorter than the other?
+What do you do if one of the lists is longer than the other?
+
+Incidentally, the predefined procedure ``andmap`` of Petite Chez
+Scheme handles procedures of any arity and therefore it will pass your
+unit test.  Again, as a guideline, you might want to see what
+``andmap`` does when given a dyadic procedure and two lists of
+differing lengths.
+
+
+Exercise 9
+----------
+
+Define an ormap-like procedure for triadic procedures, ``ormap3`` that
+operates over three proper lists.
+
+What do you do if one of the lists is shorter than the others?
+What do you do if one of the lists is longer than the others?
+
+Incidentally, the predefined procedure ``ormap`` of Petite Chez Scheme
+handles procedures of any arity and therefore it will pass your unit
+test.
+
+
+The map procedure in Petite Chez Scheme
+---------------------------------------
+
+So in Petite Chez Scheme, the map procedure handles procedures of any
+arity.  It is therefore variadic.  (Just pause for a second here: why
+is the resident map procedure necessarily variadic?)
+
+Here is it in action::
+
+  > (map list '(1 2 3 4) '(10 20 30 40) '(100 200 300 400) '(a b c d))
+  ((1 10 100 a) (2 20 200 b) (3 30 300 c) (4 40 400 d))
+  > 
+
+
+Recursive programming: computing the Cartesian product of several sets
+----------------------------------------------------------------------
+
+The Cartesian product of two sets is the set of all the possible pairs
+of elements of these two sets.  So for each element of the first set,
+there are as many pairs as there are elements in the second set: these
+pairs contain this element and all the elements of the second set.
+Programming the Cartesian product of two sets (represented as the list
+of their elements, without repetition, as in
+:ref:`exercise-set-normalize` in `Week 3
+<week-3-lists-and-defensive-programming.html>`_) is thus an exercise
+in enumeration:
+
+.. code-block:: scheme
+
+  (define test-cartesian-product-2
+    (lambda (candidate)
+      (and (equal? (candidate '() '())
+                   '())
+           (equal? (candidate '(a) '())
+                   '())
+           (equal? (candidate '() '(x))
+                   '())
+           (equal? (candidate '(a) '(x))
+                   '((a x)))
+           (equal? (candidate '(a b) '(x))
+                   '((a x) (b x)))
+           (equal? (candidate '(a) '(x y))
+                   '((a x) (a y)))
+           (equal? (candidate '(a b) '(x y))
+                   '((a x) (a y) (b x) (b y)))
+           (equal? (candidate '(a b) '(x y z))
+                   '((a x) (a y) (a z) (b x) (b y) (b z)))
+           (equal? (candidate '(a b c d) '(x y))
+                   '((a x) (a y) (b x) (b y) (c x) (c y) (d x) (d y)))
+           ;;;
+           )))
+
+  (define cartesian-product-2
+    (lambda (xs ys)
+      (map1-append (lambda (x)
+                     (map1-append (lambda (y)
+                                    (list (list x y)))
+                                  ys))
+                   xs)))
+
+This definition passes the unit test::
+
+  > (test-cartesian-product-2 cartesian-product-2)
+  #t
+  > 
+
+Likewise, it is very simple to program the Cartesian product of three
+sets:
+
+.. code-block:: scheme
+
+  (define test-cartesian-product-3
+    (lambda (candidate)
+      (and (equal? (candidate '() '() '())
+                   '())
+           (equal? (candidate '(x y) '(a b c) '(1 2 3 4 5 6 7))
+                   '((x a 1) (x a 2) (x a 3) (x a 4) (x a 5) (x a 6) (x a 7)
+                     (x b 1) (x b 2) (x b 3) (x b 4) (x b 5) (x b 6) (x b 7)
+                     (x c 1) (x c 2) (x c 3) (x c 4) (x c 5) (x c 6) (x c 7)
+                     (y a 1) (y a 2) (y a 3) (y a 4) (y a 5) (y a 6) (y a 7)
+                     (y b 1) (y b 2) (y b 3) (y b 4) (y b 5) (y b 6) (y b 7)
+                     (y c 1) (y c 2) (y c 3) (y c 4) (y c 5) (y c 6) (y c 7)))
+           ;;;
+           )))
+
+  (define cartesian-product-3
+    (lambda (xs ys zs)
+      (map1-append (lambda (x)
+                     (map1-append (lambda (y)
+                                    (map1-append (lambda (z)
+                                                   (list (list x y z)))
+                                                 zs))
+                                  ys))
+                   xs)))
+
+This definition passes the unit test::
+
+  > (test-cartesian-product-3 cartesian-product-3)
+  #t
+  > 
+
+
+.. _exercise-cartesian-product-4:
+
+Exercise 10
+-----------
+
+Write a procedure that computes the Cartesian product of four sets.
+Remember to write a unit-test procedure too.
+
+
+Exercise 11
+-----------
+
+* Modify ``cartesian-product-2`` so that it uses ``map1-append`` once
+  and ``map1`` once.  Verify that it passes the unit test.
+
+* Modify ``cartesian-product-3`` so that it uses ``map1-append`` twice
+  and ``map1`` once.  Verify that it passes the unit test.
+
+* Does your solution of :ref:`exercise-cartesian-product-4` use only
+  ``map1-append`` or also ``map1``?
+
+
+.. _enumerating-boolean-environments:
+
+Recursive programming: enumerating Boolean environments
+-------------------------------------------------------
+
+Today, Olaf the Plucky, from a Viking tribe of Western Jutland,
+decides to automate the testing of his normalizer for Boolean
+expressions, in :ref:`exercise-negational-normal-forms` of
+`Week 4 <week-4-boolean-expressions.html>`_:
+
+.. code-block:: scheme
+
+  (define test-the-negational-normalization
+    (lambda (expression environment)
+      (boolean=? (evaluate-boolean-expression expression
+                                              environment)
+                 (evaluate-boolean-expression_nnf (normalize-boolean-expression expression)
+                                                  environment))))
+
+To this end, Olaf wants to program a procedure that takes a list of
+variables and that returns all the possible environments binding these
+variables to a Boolean.  The way Olaf figures it, if the input list
+contains one variable, say ``z``, there will be two possible
+environments: ``((z . #t))`` and ``((z . #f))``, assuming they are
+represented as A-lists.  And if the input list contains two variables,
+say ``y`` and ``z``, then there will be four possible environments:
+
+* ``((y . #t) (z . #t))``
+
+* ``((y . #t) (z . #f))``
+
+* ``((y . #f) (z . #t))``
+
+* ``((y . #f) (z . #f))``
+
+By the same line of reasoning, if the input list contains zero
+variables, then there will be one possible environment, namely the
+empty list.  And of course if the input list contains three variables,
+say ``x``, ``y``, and ``z``, then there will be eight possible
+environments:
+
+* ``((x . #t) (y . #t) (z . #t))``
+
+* ``((x . #t) (y . #t) (z . #f))``
+
+* ``((x . #t) (y . #f) (z . #t))``
+
+* ``((x . #t) (y . #f) (z . #f))``
+
+* ``((x . #f) (y . #t) (z . #t))``
+
+* ``((x . #f) (y . #t) (z . #f))``
+
+* ``((x . #f) (y . #f) (z . #t))``
+
+* ``((x . #f) (y . #f) (z . #f))``
+
+In fact, Olaf realizes, the inductive case pretty much writes itself:
+if the procedure maps the tail of a list of variables to a list of
+environments, then it should map this list of variables to twice as
+many environments -- the environments where the first variable is
+bound to ``#t``, and the environments where the first variable is
+bound to ``#f``.  So there he is:
+
+.. code-block:: scheme
+
+  (define all-possible-environments
+    (lambda (xs)
+      (if (null? xs)
+          (list '())
+          (let ([es (all-possible-environments (cdr xs))])
+            (append (map (lambda (e)
+                           (cons (cons (car xs) #t) e))
+                         es)
+                    (map (lambda (e)
+                           (cons (cons (car xs) #f) e))
+                         es))))))
+
+Thus equipped, Olaf can pluckily automate the testing of his
+normalizer for Boolean expressions.  Given a Boolean expression and a
+non-empty list of names, he can enumerate all the possible Boolean
+environments and check that in each of them, interpreting the given
+expression gives the same result as (1) compiling it into normal form
+and (2) interpreting this normal form:
+
+.. code-block:: scheme
+
+  (define test-nnf*
+    (lambda (expression names)
+      (let ([results (map (lambda (environment)
+                            (test-nnf expression environment))
+                          (all-possible-environments names))])
+        (andmap1 (lambda (result)
+                   (or (equal? (car results) result)
+                       (errorf 'test-nnf*
+                               "differing results: ~s and ~s"
+                               (car results)
+                               result)))
+                 (cdr results)))))
+
+
+Exercise 12
+-----------
+
+Be plucky and write a unit-test procedure for Olaf.
+
+
+.. index:: powerset
+
+.. _computing-the-powerset-of-a-set:
+
+Recursive programming: computing the powerset of a set
+------------------------------------------------------
+
+The powerset of a set is the set of its subsets.  So the powerset of
+the empty set is a set containing the empty set, and the power set of
+a singleton set is a set containing both this set and the empty set.
+As for the powerset of a 2-elements set, it contains 4 subsets: the
+full set, the empty set, and two singleton sets.  And the powerset of
+a 3-elements set contains 8 subsets.  So if a set has size n, the size
+of its powerset is the power of 2 to the n.  Representing sets as in
+:ref:`exercise-set-normalize` in `Week 3
+<week-3-lists-and-defensive-programming.html>`_, i.e., as a list of
+their elements, without repetition, we can see how they "double" up in
+size:
+
+.. code-block:: scheme
+
+  (define test-powerset
+    (lambda (candidate)
+      (and (equal? (candidate '())
+                   '(()))
+           (equal? (candidate '(z))
+                   '((z) ()))
+           (equal? (candidate '(y z))
+                   '((y z) (y) (z) ()))
+           (equal? (candidate '(x y z))
+                   '((x y z) (x y) (x z) (x) (y z) (y) (z) ()))
+           ;;;
+           )))
+
+The second half of the next powerset is always the previous powerset.
+As for the first half, it is like the second half, but with a new
+element prepended to it.  Based on this inductive characterization,
+the code pretty much writes itself:
+
+.. code-block:: scheme
+
+  (define powerset
+    (lambda (xs)
+      (letrec ([visit (lambda (ys)
+                        (if (null? ys)
+                            (list '())
+                            (let ([zss (visit (cdr ys))])
+                              (append (map1 (lambda (zs)
+                                              (cons (car ys) zs))
+                                            zss)
+                                      zss))))])
+        (visit xs))))
+
+And it passes the unit test too::
+
+  > (test-powerset powerset)
+  #t
+  > 
+
+
+Variation on computing the powerset of a set
+--------------------------------------------
+
+In the definition of ``powerset`` above, observe how the result of
+``map1`` is the first argument of ``append``.  That is silly: ``map1``
+allocates a fresh list of results and ``append`` copies it.  So let us
+fuse this composition of procedures into a procedure where no
+intermediate list is allocated:
+
+.. code-block:: scheme
+
+  (define test-append_map1
+    (lambda (candidate)
+      (and (equal? (candidate 1- '(1 2 3) '(10 20 30))
+                   (append (map1 1- '(1 2 3)) '(10 20 30)))
+           ;;;
+           )))
+
+  (define append_map1
+    (lambda (p vs rest)
+      (letrec ([visit (lambda (ws)
+                        (if (null? ws)
+                            rest
+                            (cons (p (car ws))
+                                  (visit (cdr ws)))))])
+        (visit vs))))
+
+This definition satisfies the property that for all procedures ``p``
+and for all lists ``vs`` and ``rest``, evaluating ``(append_map1 p vs
+rest)`` gives the same result as evaluating ``(append (map1 p vs)
+rest)``::
+
+  > (test-append_map1 append_map1)
+  #t
+  > 
+
+We can now revisit the definition of ``powerset``:
+
+.. code-block:: scheme
+
+  (define powerset_revisited
+    (lambda (xs)
+      (letrec ([visit (lambda (ys)
+                        (if (null? ys)
+                            (list '())
+                            (let ([zss (visit (cdr ys))])
+                              (append_map1 (lambda (zs)
+                                             (cons (car ys) zs))
+                                           zss
+                                           zss))))])
+        (visit xs))))
+
+We can also test it::
+
+  > (test-powerset powerset_revisited)
+  #t
+  > 
+
+And finally we can measure it:
+
+.. code-block:: scheme
+
+  (define measure-powerset
+    (lambda (vs)
+      (let* ([ps (time (powerset vs))]
+             [ps_r (time (powerset_revisited vs))])
+        (equal? ps ps_r))))
+
+The revisited version is more efficient, since it does not
+systematically allocate intermediate lists to only copy them::
+
+  > (measure-powerset '(a b c d e f g h i j k l m n))
+  (time (powerset vs))
+      no collections
+      6 ms elapsed cpu time
+      6 ms elapsed real time
+      627696 bytes allocated
+  (time (powerset_revisited vs))
+      no collections
+      4 ms elapsed cpu time
+      4 ms elapsed real time
+      264192 bytes allocated
+  #t
+  > 
+
+.. index::
+   single: Burge, William H. (loop fusion)
+   single: Landin, Peter (loop fusion)
+.. index:: loop fusion
+
+Since `Peter Landin`__ and `William Burge`__, this kind of
+optimization over intermediate lists is known as *loop fusion*.  Here
+is another similar optimization: when two procedures ``p1`` and ``p2``
+are pure and total (i.e., they make no side effects and they always
+terminate), the expressions
+
+.. code-block:: scheme
+
+    (map1 p2 (map1 p1 vs))
+
+and
+
+.. code-block:: scheme
+
+    (map1 (lambda (v) (p2 (p1 v))) vs)
+
+are equivalent but the second one is more efficient to compute since
+computing it does not generate an intermediate list.
+(Question: do you agree?)
+
+.. __: http://en.wikipedia.org/wiki/Peter_Landin
+.. __: http://www.informatik.uni-trier.de/~ley/pers/hd/b/Burge:William_H=.html
+
+.. index::
+   single: Wadler, Philip (deforestation)
+.. index:: deforestation
+
+`Phil Wadler`__ generalized this optimization from lists to trees and
+named it *deforestation*.
+
+.. __: http://en.wikipedia.org/wiki/Philip_Wadler
+
+
+Resources
+---------
+
+* The Scheme code for `this lecture note
+  <http://users-cs.au.dk/danvy/CS6202/Supplementary-material/week-6-map.scm>`_
+  (latest version: 15 Sep 2015).
+
+
+Version
+-------
+
+Created
+[15 Sep 2015]

@@ -1,0 +1,350 @@
+.. -*- mode: rst -*-
+
+Note for Week 6 about designing programming languages
+=====================================================
+
+.. index::
+   single: Schmidt, David A.
+
+.. seealso::
+
+   `The Structure of Typed Programming Languages`
+     by `David A. Schmidt <http://www.cis.ksu.edu/~schmidt>`_,
+     The MIT Press, 1994
+
+
+Mandatory exercises
+-------------------
+
+None.
+
+
+Goal
+----
+
+.. epigraph::
+
+   | Programming languages should not be designed
+   | by piling feature on top of feature.
+
+   -- after the `RnRS
+      <http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-3.html>`_ reports
+
+The goal of this lecture note is to review David Schmidt's
+language-extension principles for a basic imperative language.
+
+
+A prototypical imperative language
+----------------------------------
+
+An imperative language reflects the
+`Von Neuman architecture <http://en.wikipedia.org/wiki/Von_Neumann_architecture>`_:
+a memory and a processor sequentially executing instructions
+that are stored in the memory.
+Together, the processor and the memory define a **state**.
+The syntactic units of an imperative program implement a state change.
+Executing a program amounts to performing a series of state changes.
+
+Here is the syntax of a prototypical imperative language:
+
+.. bnf:: basic imperative language
+   :noindex:
+   :namespace: bil
+
+      <literal> ::= true | false | 0 | 1 | -1 | 2 | -2 | ... | MAXINT | MININT
+    <operator1> ::= not
+    <operator2> ::= + | - | * | / | and | or | < | <= | = | > | >=
+     <location> ::= loc0 | loc1 | loc2 | ... | locN
+   <expression> ::= @<location>
+                  | <literal>
+                  | <operator1> <expression>
+                  | <expression> <operator2> <expression>
+      <command> ::= <location> := <expression>
+                  | <command> ; <command>
+                  | if <expression> then <command> else <command>
+                  | while <expression> do <command>
+                  | { <command> }
+      <program> ::= <command>
+
+where N+1 is the size of the store (i.e., of the available memory).
+
+A program is a command, indicating the imperative nature of this
+programming language.  The store can be updated at a given location
+(the assignment command, represented with the infix ``:=``); commands
+can be executed one after another (the sequencing command, represented
+with the infix ``;``), selectively (the conditional command,
+represented with the mixfix ``if ... then ... else ...``, repeatedly
+(the repetition command, represented with the mixfix ``while ... do
+...``), and in a grouped way (the block command, represented with the
+braces).  An expression can be a reference in the store, a literal, a
+unary operation, or a binary operation.  A literal can be a Boolean or
+a fix-sized integer.  The operators are enumerated in the BNF.
+
+.. _concrete-syntax-of-factorial-in-the-basic-imperative-language:
+
+This programming language is minimalistic, and it gives rise to terse
+programs.  For example, here is how to compute the factorial of a
+given natural number (here: 5) in this programming language (reminder:
+the factorial of 5 is 1 * 2 * 3 * 4 * 5, i.e., 120)::
+
+  loc0 := 5;
+  loc1 := 1;
+  loc2 := 1;
+  while @loc1 <= @loc0 do {
+    loc2 := @loc2 * @loc1;
+    loc1 := @loc1 + 1
+  };
+  loc0 := @loc2
+
+This program starts by storing the input number at Location 0.  It
+yields the resulting factorial number at Location 0, and uses
+Locations 1 and 2 in the course of the computation.
+
+
+Exercise 1
+----------
+
+Simulate, by hand, a run of this program.
+What result does it give?
+
+NB. The program above is implemented in the syntax of the basic
+imperative language of `the previous lecture note
+<week-6-basic-imperative-language_a-syntax-checker.html>`_ as a
+unit test for `its interpreter
+<../Supplementary-material/week-6-basic-imperative-language_an-interpreter.scm>`_.
+Therefore you can correlate your simulation by
+
+1. loading `the syntax checker <../Supplementary-material/week-6-basic-imperative-language_a-syntax-checker.scm>`_;
+
+2. loading `the interpreter <../Supplementary-material/week-6-basic-imperative-language_an-interpreter.scm>`_
+   after tracing ``visit`` in ``run-command``; and
+
+3. interpreting the factorial program in a store of size at least 3,
+   as in the following scenario::
+
+     > (run-program (make-factorial-program 5) 3)
+     ...
+     (120 6 120)
+     > 
+
+
+Expressiveness
+--------------
+
+.. index::
+   single: Perlis, Alan (the Turing tar pit)
+
+.. epigraph::
+
+    | Beware of the Turing tar pit
+    | in which everything is possible
+    | but nothing of interest is easy.
+
+    -- `Alan Perlis`__'s `programming epigram`__ #54
+
+.. __: http://en.wikipedia.org/wiki/Alan_Perlis
+.. __: http://www.cs.yale.edu/homes/perlis-alan/quotes.html
+
+
+Why do we find this prototypical imperative language to be not very
+expressive?  One answer is that it does not let us *abstract*
+syntactic entities, giving them names (definition) and referring to
+them using these names (use).  Let us extend the language with this
+ability to *define* and to *use* abstractions.  We want to be able to
+abstract each of the non-terminals in the grammar, i.e., literals,
+operators, locations, expressions, and commands.  To this end, let us
+introduce a new non-terminal for declarations, be them parallel,
+sequential, or grouped, and a new non-terminal for names.  To be
+consistent, we need to also have the ability to name declarations as
+well as to name names, since names and declarations form new
+non-terminals in the grammar.  And finally, let us extend each grammar
+production with the ability to invoke named entities.  The resulting
+BNF reads as follows:
+
+.. bnf:: extended basic imperative language
+   :noindex:
+   :namespace: ebil
+
+          <name> ::= concatenated letters not starting with a digit
+                   | <name>
+       <literal> ::= true | false | 0 | 1 | -1 | 2 | -2 | ...
+                   | <name>
+     <operator1> ::= not
+                   | <name>
+     <operator2> ::= + | - | * | / | and | or | < | <= | = | > | >=
+                   | <name>
+      <location> ::= loc0 | loc1 | loc2 | ... | locN
+                   | <name>
+    <expression> ::= @<location>
+                   | <literal>
+                   | <operator1> <expression>
+                   | <expression> <operator2> <expression>
+                   | <name>
+       <command> ::= <location> := <expression>
+                   | <command> ; <command>
+                   | if <expression> then <command> else <command>
+                   | while <expression> do <command>
+                   | { <command> }
+                   | <name>
+   <declaration> ::= <name> = <name>
+                   | <name> = <literal>
+                   | <name> = <operator1>
+                   | <name> = <operator2>
+                   | <name> = <location>
+                   | <name> = <expression>
+                   | <name> = <command>
+                   | <name> = <declaration>
+                   | <declaration> , <declaration>
+                   | <declaration> ; <declaration>
+                   | { <declaration> }
+                   | <name>
+       <program> ::= block <declaration> in <command> end
+
+Revisiting the example above, here is a more abstract way to compute
+the factorial of a given number (here: 5) in this BNF::
+
+  block {
+    input = 5,
+    ref_n = loc0,
+    ref_i = loc1,
+    ref_x = loc2
+  } ; {
+    val_n = @ref_n,
+    val_i = @ref_i,
+    val_x = @ref_x
+  }
+  in ref_n := input;
+     ref_i := 1;
+     ref_x := 1;
+     while val_i <= val_n do {
+       ref_x := val_x * val_i;
+       ref_i := val_i + 1
+     };
+     ref_n := val_x
+  end
+
+No expressive power has been gained with this more convenient
+notation: the original program is regained by replacing names by their
+definiens and eliminating the block.
+
+A next step is to *parameterize* named entities, and a last step is to
+allow declarations to occur not just globally but in each syntactic
+category.
+
+
+Analysis
+--------
+
+.. index::
+   single: Feynman, Richard P. (about knowing something)
+
+.. epigraph::
+
+    | I learned very early the difference between
+    | knowing the name of something
+    | and knowing something.
+
+    -- `Richard P. Feynman <https://en.wikipedia.org/wiki/Richard_Feynman>`_
+
+Analyzing the resulting programming language, we can observe that most
+of the named and parameterized abstractions of syntactic units
+correspond to known concepts in programming languages:
+
+- the abstraction of a *name* is an **alias**;
+
+- the abstraction of a *literal* is a **constant**;
+
+- the abstraction of a *location* is a **variable**;
+
+- the parameterized abstraction of an *expression* is a **function**;
+
+- the parameterized abstraction of a *command* is a **procedure** (or
+  again a **method**);
+
+- the parameterized abstraction of a *declaration* is a **module**; and
+
+- should we have type annotations, e.g., for parameters,
+  the parameterized abstraction of such a *type* is a **class**.
+
+Also, local declarations pave the way to **objects**.
+
+Re2visiting the example above, here is a more usual way to compute
+the factorial of a given number (here: 5) in the final BNF, spreading
+a little bit of syntactic sugar::
+
+  block constant input = 5
+        var n = input
+        var i = 1
+        var x = 1
+  in while i <= n do {
+       x := x * i;
+       i := i + 1
+     };
+     n := x
+  end
+
+Again, no expressive power has been gained with this more convenient
+notation: the original program is regained by replacing names by their
+definiens and eliminating the block.
+
+.. index::
+   single: expression (syntactic unit, revisited)
+
+.. index::
+   single: command (syntactic unit, revisited)
+
+These abstractions (alias, constant, variable, etc.)  determine the
+taxonomy of programming languages: languages whose main syntactic unit
+is the *expression* are **functional languages**; languages whose main
+syntactic unit is the *command* are **procedural languages** (among
+imperative languages); languages whose main syntactic unit is the
+*declaration* are **modular languages**; and languages whose main
+syntactic unit is the *type* are **class-based languages** (among
+object-oriented languages).
+All these concepts were latent in the prototypical, not
+very expressive imperative language we started with.
+
+.. index::
+   single: Orwell, George (expressiveness)
+
+.. index::
+   single: Perlis, Alan (low-level programming language)
+
+.. epigraph::
+
+    | A programming language is low level
+    | when its programs require attention to the irrelevant.
+
+    -- `Alan Perlis`__'s `programming epigram`__ #8
+
+.. __: http://en.wikipedia.org/wiki/Alan_Perlis
+.. __: http://www.cs.yale.edu/homes/perlis-alan/quotes.html
+
+
+Let us paraphrase `George Orwell`__ again, with a mix of `Alan Turing`__
+and `John McCarthy`__:
+in the programming-language landscape,
+all languages are expressively equal;
+however, some are more convenient than others.
+
+
+.. _a-convenient-and-expressive-notation:
+
+Coda
+----
+
+We are thus led to tune the opening sentence of the lecture ("A
+programming language is a notation to express computations.") into the
+following value judgment: *a good programming language is a convenient
+and expressive notation for a given notion of computation*.
+
+.. __: http://en.wikipedia.org/wiki/George_Orwell
+.. __: http://en.wikipedia.org/wiki/Alan_Turing
+.. __: http://en.wikipedia.org/wiki/John_McCarthy_(computer_scientist)
+
+
+Version
+-------
+
+Created
+[15 Sep 2015]
